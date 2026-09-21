@@ -35,6 +35,8 @@ export function LetterEditor({
   const [videoModalOpen, setVideoModalOpen] = useState(false);
   const [stampModalOpen, setStampModalOpen] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const [crinkleTrigger, setCrinkleTrigger] = useState(0);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const activeStamp = getVintageStamp(letterData.stampId || 'airmail-1928');
@@ -362,50 +364,117 @@ export function LetterEditor({
                 />
               </div>
 
-              {/* Main Letter Body Textarea with paper-crinkle micro-interaction & hover effect */}
+              {/* Main Letter Body Textarea with tactile paper-crinkle micro-interaction, whileTap, and onFocus deformation */}
               <motion.div
+                key={crinkleTrigger}
                 animate={
                   isTyping
                     ? {
-                        scale: [1, 1.002, 0.999, 1],
-                        y: [0, -1, 0.4, 0],
+                        scale: [1, 1.0025, 0.9985, 1],
+                        rotate: [0, -0.22, 0.18, -0.06, 0],
+                        skewX: [0, 0.25, -0.15, 0],
+                        y: [0, -1.2, 0.4, 0],
                         boxShadow: [
-                          '0 2px 8px rgba(44, 36, 31, 0.05)',
-                          '0 8px 18px rgba(44, 36, 31, 0.12)',
-                          '0 2px 8px rgba(44, 36, 31, 0.05)',
+                          '0 2px 8px rgba(44, 36, 31, 0.06)',
+                          '0 8px 20px rgba(44, 36, 31, 0.14)',
+                          '0 2px 8px rgba(44, 36, 31, 0.06)',
                         ],
                       }
-                    : { scale: 1, y: 0, boxShadow: '0 2px 8px rgba(44, 36, 31, 0.05)' }
+                    : isFocused
+                    ? {
+                        scale: [1, 0.996, 1.0035, 1.001],
+                        rotate: [0, -0.28, 0.16, 0],
+                        skewX: [0, 0.3, -0.18, 0],
+                        y: -1.5,
+                        boxShadow: '0 12px 28px -4px rgba(44, 36, 31, 0.16), 0 2px 6px rgba(44, 36, 31, 0.08)',
+                      }
+                    : {
+                        scale: 1,
+                        rotate: 0,
+                        skewX: 0,
+                        y: 0,
+                        boxShadow: '0 2px 8px rgba(44, 36, 31, 0.05)',
+                      }
                 }
+                whileTap={{
+                  scale: 0.993,
+                  rotate: -0.22,
+                  skewX: 0.2,
+                  y: 1.5,
+                  boxShadow: '0 2px 4px rgba(44, 36, 31, 0.08)',
+                  transition: { duration: 0.08, ease: 'easeOut' },
+                }}
                 whileHover={{
                   y: -2,
-                  boxShadow: '0 8px 20px rgba(44, 36, 31, 0.12)',
+                  scale: 1.002,
+                  boxShadow: '0 8px 22px rgba(44, 36, 31, 0.13)',
                   transition: { duration: 0.25, ease: [0.22, 1, 0.36, 1] },
+                }}
+                transition={{
+                  duration: 0.35,
+                  ease: [0.22, 1, 0.36, 1],
                 }}
                 className="relative rounded-lg p-0.5 transition-all"
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-[11px] font-mono tracking-widest uppercase text-[#7E6E62] flex items-center gap-2">
                     <span>LETTER BODY</span>
-                    {isTyping && (
+                    {isTyping ? (
                       <span className="text-[9px] text-[#886C3E] italic font-serif animate-pulse">
                         • parchment reacting to quill...
                       </span>
-                    )}
+                    ) : isFocused ? (
+                      <span className="text-[9px] text-[#5A2528] italic font-serif">
+                        • paper settled under nib
+                      </span>
+                    ) : null}
                   </label>
                   <span className="text-[10px] font-mono text-[#7E6E62]">
                     {words} words • {letterData.letterBody.length} chars
                   </span>
                 </div>
-                <div className="relative group">
+
+                <div className="relative group overflow-hidden rounded">
+                  {/* Subtle paper fiber & micro-crease texture that flexes on focus/tap */}
+                  <motion.div
+                    className="pointer-events-none absolute inset-0 z-10 mix-blend-multiply transition-opacity duration-300"
+                    animate={{
+                      opacity: isFocused || isTyping ? 0.08 : 0.02,
+                      scale: isFocused ? [1, 1.01, 1] : 1,
+                    }}
+                    style={{
+                      backgroundImage: `repeating-linear-gradient(135deg, rgba(44,36,31,0.35) 0px, transparent 1px, transparent 14px), repeating-linear-gradient(45deg, rgba(90,37,40,0.25) 0px, transparent 1px, transparent 18px)`,
+                    }}
+                  />
+
+                  {/* Tactile paper crease sheen on top boundary */}
+                  <motion.div
+                    className="pointer-events-none absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#D8C4A9] to-transparent z-10"
+                    animate={{
+                      opacity: isFocused ? 0.9 : 0.3,
+                      scaleX: isFocused ? [0.7, 1.05, 1] : 0.7,
+                    }}
+                    transition={{ duration: 0.35 }}
+                  />
+
                   <textarea
                     id="letter-body-textarea"
                     rows={12}
                     value={letterData.letterBody}
                     onChange={handleBodyChange}
+                    onFocus={() => {
+                      setIsFocused(true);
+                      setCrinkleTrigger((prev) => prev + 1);
+                    }}
+                    onBlur={() => setIsFocused(false)}
                     placeholder="Take your time. Write what deserves to be preserved..."
-                    className="w-full p-4 bg-[#FAF6EE] border border-[#D8C4A9] rounded font-serif text-base sm:text-lg text-[#2C241F] leading-relaxed focus:outline-none focus:border-[#5A2528] resize-y transition-all hover:border-[#886C3E]/70 focus:bg-[#FFFDF9]"
+                    className={`w-full p-4 bg-[#FAF6EE] border rounded font-serif text-base sm:text-lg text-[#2C241F] leading-relaxed resize-y transition-all outline-none ${
+                      isFocused
+                        ? 'border-[#5A2528] bg-[#FFFDF9] ring-2 ring-[#5A2528]/15 shadow-inner'
+                        : 'border-[#D8C4A9] hover:border-[#886C3E]/70 focus:border-[#5A2528]'
+                    }`}
                   />
+
                   {/* Physical tactile watermark note */}
                   <div className="absolute right-3.5 bottom-3.5 pointer-events-none opacity-40 text-[9px] font-mono tracking-widest uppercase text-[#886C3E]">
                     TACTILE VELLUM
