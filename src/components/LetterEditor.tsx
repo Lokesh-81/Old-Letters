@@ -36,6 +36,7 @@ export function LetterEditor({
   const [stampModalOpen, setStampModalOpen] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [isTapping, setIsTapping] = useState(false);
   const [crinkleTrigger, setCrinkleTrigger] = useState(0);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -126,7 +127,15 @@ export function LetterEditor({
           <motion.div
             id="stationery-live-sheet"
             animate={
-              isTyping
+              isTapping
+                ? {
+                    scale: 0.993,
+                    rotate: -0.35,
+                    skewX: 0.15,
+                    y: 1.5,
+                    boxShadow: '0 14px 24px -6px rgba(44, 36, 31, 0.18)',
+                  }
+                : isTyping
                 ? {
                     rotate: [0, -0.3, 0.25, -0.15, 0],
                     scale: [1, 1.0035, 0.999, 1],
@@ -137,6 +146,13 @@ export function LetterEditor({
                       '0 20px 32px -10px rgba(44, 36, 31, 0.15)',
                     ],
                   }
+                : isFocused
+                ? {
+                    scale: 1.008,
+                    rotate: -0.45,
+                    y: -3,
+                    boxShadow: '0 28px 48px -8px rgba(44, 36, 31, 0.22)',
+                  }
                 : {
                     rotate: 0,
                     scale: 1,
@@ -144,6 +160,11 @@ export function LetterEditor({
                     boxShadow: '0 20px 32px -10px rgba(44, 36, 31, 0.15)',
                   }
             }
+            whileTap={{
+              scale: 0.994,
+              rotate: -0.3,
+              transition: { duration: 0.1, ease: 'easeOut' },
+            }}
             whileHover={{
               y: -4,
               rotate: 0.25,
@@ -457,16 +478,29 @@ export function LetterEditor({
                     transition={{ duration: 0.35 }}
                   />
 
-                  <textarea
+                  <motion.textarea
                     id="letter-body-textarea"
                     rows={12}
                     value={letterData.letterBody}
                     onChange={handleBodyChange}
+                    whileTap={{
+                      scale: 0.994,
+                      rotate: -0.22,
+                      skewX: 0.15,
+                      y: 1.2,
+                      transition: { duration: 0.08, ease: 'easeOut' },
+                    }}
+                    onTapStart={() => setIsTapping(true)}
+                    onTap={() => setIsTapping(false)}
+                    onTapCancel={() => setIsTapping(false)}
                     onFocus={() => {
                       setIsFocused(true);
                       setCrinkleTrigger((prev) => prev + 1);
                     }}
-                    onBlur={() => setIsFocused(false)}
+                    onBlur={() => {
+                      setIsFocused(false);
+                      setIsTapping(false);
+                    }}
                     placeholder="Take your time. Write what deserves to be preserved..."
                     className={`w-full p-4 bg-[#FAF6EE] border rounded font-serif text-base sm:text-lg text-[#2C241F] leading-relaxed resize-y transition-all outline-none ${
                       isFocused
