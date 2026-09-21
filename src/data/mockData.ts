@@ -330,6 +330,7 @@ export const INITIAL_LETTER: LetterData = {
   trackingCode: 'A7X29Q',
   categoryId: 'love',
   templateId: 'cream-letter',
+  stampId: 'airmail-1928',
   toName: 'Ananya',
   toAddress: 'The Old Quarter, Florence',
   fromName: 'Lokesh',

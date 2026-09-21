@@ -1,4 +1,5 @@
 import React from 'react';
+import { getVintageStamp, StampMotifIcon } from './StampSelection';
 
 interface PostmarkProps {
   city?: string;
@@ -113,43 +114,71 @@ interface PostalStampProps {
   subject?: string;
   accentColor?: string;
   className?: string;
+  stampId?: string;
+  onClick?: () => void;
+  title?: string;
 }
 
 export function PostageStamp({
-  denomination = '12c',
-  subject = 'HERITAGE POST',
-  accentColor = '#5A2528',
+  denomination,
+  subject,
+  accentColor,
   className = '',
+  stampId,
+  onClick,
+  title,
 }: PostalStampProps) {
+  const vintage = stampId ? getVintageStamp(stampId) : null;
+  const effectiveDenom = vintage ? vintage.denomination : (denomination || '12c');
+  const effectiveSubject = vintage ? vintage.name : (subject || 'HERITAGE POST');
+  const effectiveColor = vintage ? vintage.color : (accentColor || '#5A2528');
+  const effectiveBg = vintage ? vintage.paperBg : '#FAF7F0';
+
   return (
     <div
-      className={`relative w-16 h-20 bg-[#FAF7F0] border border-amber-900/30 p-1 shadow-sm select-none shrink-0 ${className}`}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      title={title}
+      className={`relative w-16 h-20 border border-amber-900/30 p-1 shadow-sm select-none shrink-0 transition-transform ${
+        onClick ? 'cursor-pointer hover:scale-105 active:scale-95 group' : ''
+      } ${className}`}
       style={{
-        // Perforated edge illusion
-        boxShadow: '0 2px 8px rgba(44, 36, 31, 0.08)',
+        backgroundColor: effectiveBg,
+        boxShadow: '0 2px 8px rgba(44, 36, 31, 0.12)',
       }}
     >
       <div
-        className="w-full h-full border border-amber-900/20 flex flex-col justify-between p-1 bg-amber-50/40"
-        style={{ color: accentColor }}
+        className="w-full h-full border flex flex-col justify-between p-1"
+        style={{
+          borderColor: `${effectiveColor}40`,
+          backgroundColor: `${effectiveBg}cc`,
+          color: effectiveColor,
+        }}
       >
-        <div className="flex justify-between items-center text-[7px] font-mono font-bold tracking-widest uppercase">
-          <span>AIRMAIL</span>
-          <span>{denomination}</span>
+        <div className="flex justify-between items-center text-[7px] font-mono font-bold tracking-widest uppercase leading-none">
+          <span className="truncate max-w-[40px]">{vintage?.country || 'AIRMAIL'}</span>
+          <span>{effectiveDenom}</span>
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center my-1 border border-dashed border-amber-900/20 bg-white/70">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="1.2">
-            <circle cx="12" cy="12" r="9" strokeDasharray="2 2" />
-            <path d="M12 7V17M7 12H17" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-          <span className="text-[6px] tracking-tighter uppercase font-mono mt-1 opacity-70">
-            {subject}
+        <div className="flex-1 flex flex-col items-center justify-center my-0.5 border border-dashed border-current/25 bg-white/70 overflow-hidden">
+          {vintage ? (
+            <div className="transform scale-75 origin-center">
+              <StampMotifIcon motif={vintage.motif} color={effectiveColor} />
+            </div>
+          ) : (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={effectiveColor} strokeWidth="1.2">
+              <circle cx="12" cy="12" r="9" strokeDasharray="2 2" />
+              <path d="M12 7V17M7 12H17" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          )}
+          <span className="text-[5px] tracking-tighter uppercase font-mono mt-0.5 opacity-80 truncate max-w-[50px] text-center">
+            {effectiveSubject}
           </span>
         </div>
 
-        <div className="text-[6px] font-mono text-center tracking-wider opacity-60">
+        <div className="text-[5.5px] font-mono text-center tracking-wider opacity-60 leading-none">
           OFFICIAL POST
         </div>
       </div>

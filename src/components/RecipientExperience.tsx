@@ -328,7 +328,10 @@ export function RecipientExperience({
 
                 <div className="flex items-center gap-3">
                   <Postmark city="OLD-LETTERS" date={letterData.postedDate} />
-                  <PostageStamp denomination="25c" accentColor={template.sealColor} />
+                  <PostageStamp
+                    stampId={letterData.stampId || 'airmail-1928'}
+                    accentColor={template.sealColor}
+                  />
                 </div>
               </div>
 

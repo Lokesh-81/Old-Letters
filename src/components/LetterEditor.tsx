@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { LetterData, StationeryTemplate } from '../types';
 import { STATIONERY_TEMPLATES, LETTER_CATEGORIES } from '../data/mockData';
 import { Postmark, PostageStamp, WaxSeal } from './PostalDecorations';
+import { StampSelection, getVintageStamp } from './StampSelection';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Image as ImageIcon,
@@ -12,6 +13,7 @@ import {
   Minimize2,
   Trash2,
   Check,
+  Bookmark,
 } from 'lucide-react';
 
 interface LetterEditorProps {
@@ -31,6 +33,11 @@ export function LetterEditor({
   const [showInspirations, setShowInspirations] = useState(false);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [videoModalOpen, setVideoModalOpen] = useState(false);
+  const [stampModalOpen, setStampModalOpen] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const activeStamp = getVintageStamp(letterData.stampId || 'airmail-1928');
 
   const template =
     STATIONERY_TEMPLATES.find((t) => t.id === letterData.templateId) ||
@@ -46,7 +53,22 @@ export function LetterEditor({
 
   const handleBodyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     onChangeLetter({ letterBody: e.target.value });
+    setIsTyping(true);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+    }, 450);
   };
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const samplePrompts = [
     'Describe the physical memory of a place you shared together.',
@@ -99,16 +121,57 @@ export function LetterEditor({
             </span>
           </div>
 
-          <div
+          <motion.div
             id="stationery-live-sheet"
-            className={`w-full min-h-[580px] p-8 sm:p-10 rounded-sm shadow-2xl relative transition-all duration-300 flex flex-col justify-between border border-black/10 ${template.paperTextureClass}`}
+            animate={
+              isTyping
+                ? {
+                    rotate: [0, -0.3, 0.25, -0.15, 0],
+                    scale: [1, 1.0035, 0.999, 1],
+                    y: [0, -1.5, 0.8, 0],
+                    boxShadow: [
+                      '0 20px 32px -10px rgba(44, 36, 31, 0.15)',
+                      '0 26px 42px -8px rgba(44, 36, 31, 0.24)',
+                      '0 20px 32px -10px rgba(44, 36, 31, 0.15)',
+                    ],
+                  }
+                : {
+                    rotate: 0,
+                    scale: 1,
+                    y: 0,
+                    boxShadow: '0 20px 32px -10px rgba(44, 36, 31, 0.15)',
+                  }
+            }
+            whileHover={{
+              y: -4,
+              rotate: 0.25,
+              scale: 1.004,
+              boxShadow: '0 28px 46px -8px rgba(44, 36, 31, 0.24)',
+              transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] },
+            }}
+            transition={{
+              duration: 0.38,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+            className={`w-full min-h-[580px] p-8 sm:p-10 rounded-sm relative transition-colors duration-300 flex flex-col justify-between border border-black/10 overflow-hidden ${template.paperTextureClass}`}
             style={{
               backgroundColor: template.paperBg,
               color: template.inkColor,
             }}
           >
+            {/* Subtle paper-crinkle sheen reaction on typing */}
+            <motion.div
+              className="pointer-events-none absolute inset-0 rounded-sm mix-blend-soft-light transition-opacity duration-300 z-10"
+              animate={{
+                opacity: isTyping ? 0.45 : 0,
+              }}
+              style={{
+                backgroundImage: `radial-gradient(ellipse at 50% 35%, rgba(255,255,255,0.9) 0%, transparent 70%), repeating-linear-gradient(45deg, rgba(44,36,31,0.02) 0px, rgba(44,36,31,0.02) 1px, transparent 1px, transparent 4px)`,
+              }}
+            />
+
             {/* Top postal header */}
-            <div className="flex items-start justify-between border-b border-black/10 pb-4 mb-6">
+            <div className="flex items-start justify-between border-b border-black/10 pb-4 mb-6 relative z-10">
               <div>
                 <div className="text-[9px] font-mono tracking-widest uppercase opacity-60">
                   DISPATCH REF: {letterData.trackingCode} // {category.name.toUpperCase()}
@@ -119,7 +182,19 @@ export function LetterEditor({
               </div>
               <div className="flex items-center gap-3">
                 <Postmark date={letterData.postedDate || '21 SEP 2026'} city="OLD-LETTERS" />
-                <PostageStamp denomination="25c" accentColor={template.sealColor} />
+                <div
+                  onClick={() => setStampModalOpen(true)}
+                  className="relative group cursor-pointer"
+                  title="Click to browse and affix vintage postage stamps"
+                >
+                  <PostageStamp
+                    stampId={letterData.stampId || 'airmail-1928'}
+                    accentColor={template.sealColor}
+                  />
+                  <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity bg-[#241D18] text-[#FAF8F5] text-[8px] font-mono px-2 py-0.5 rounded shadow-sm z-20 pointer-events-none uppercase tracking-wider">
+                    AFFIX STAMP ✎
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -199,7 +274,7 @@ export function LetterEditor({
 
               <WaxSeal size="md" color={template.sealColor} initial="PO" />
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {/* RIGHT: Writing Controls & Postal Add-ons */}
@@ -287,25 +362,56 @@ export function LetterEditor({
                 />
               </div>
 
-              {/* Main Letter Body Textarea */}
-              <div>
+              {/* Main Letter Body Textarea with paper-crinkle micro-interaction & hover effect */}
+              <motion.div
+                animate={
+                  isTyping
+                    ? {
+                        scale: [1, 1.002, 0.999, 1],
+                        y: [0, -1, 0.4, 0],
+                        boxShadow: [
+                          '0 2px 8px rgba(44, 36, 31, 0.05)',
+                          '0 8px 18px rgba(44, 36, 31, 0.12)',
+                          '0 2px 8px rgba(44, 36, 31, 0.05)',
+                        ],
+                      }
+                    : { scale: 1, y: 0, boxShadow: '0 2px 8px rgba(44, 36, 31, 0.05)' }
+                }
+                whileHover={{
+                  y: -2,
+                  boxShadow: '0 8px 20px rgba(44, 36, 31, 0.12)',
+                  transition: { duration: 0.25, ease: [0.22, 1, 0.36, 1] },
+                }}
+                className="relative rounded-lg p-0.5 transition-all"
+              >
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[11px] font-mono tracking-widest uppercase text-[#7E6E62]">
-                    LETTER BODY
+                  <label className="text-[11px] font-mono tracking-widest uppercase text-[#7E6E62] flex items-center gap-2">
+                    <span>LETTER BODY</span>
+                    {isTyping && (
+                      <span className="text-[9px] text-[#886C3E] italic font-serif animate-pulse">
+                        • parchment reacting to quill...
+                      </span>
+                    )}
                   </label>
                   <span className="text-[10px] font-mono text-[#7E6E62]">
                     {words} words • {letterData.letterBody.length} chars
                   </span>
                 </div>
-                <textarea
-                  id="letter-body-textarea"
-                  rows={12}
-                  value={letterData.letterBody}
-                  onChange={handleBodyChange}
-                  placeholder="Take your time. Write what deserves to be preserved..."
-                  className="w-full p-4 bg-[#FAF6EE] border border-[#D8C4A9] rounded font-serif text-base sm:text-lg text-[#2C241F] leading-relaxed focus:outline-none focus:border-[#5A2528] resize-y"
-                />
-              </div>
+                <div className="relative group">
+                  <textarea
+                    id="letter-body-textarea"
+                    rows={12}
+                    value={letterData.letterBody}
+                    onChange={handleBodyChange}
+                    placeholder="Take your time. Write what deserves to be preserved..."
+                    className="w-full p-4 bg-[#FAF6EE] border border-[#D8C4A9] rounded font-serif text-base sm:text-lg text-[#2C241F] leading-relaxed focus:outline-none focus:border-[#5A2528] resize-y transition-all hover:border-[#886C3E]/70 focus:bg-[#FFFDF9]"
+                  />
+                  {/* Physical tactile watermark note */}
+                  <div className="absolute right-3.5 bottom-3.5 pointer-events-none opacity-40 text-[9px] font-mono tracking-widest uppercase text-[#886C3E]">
+                    TACTILE VELLUM
+                  </div>
+                </div>
+              </motion.div>
 
               {/* Sender & Signature row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -339,13 +445,41 @@ export function LetterEditor({
               </div>
             </div>
 
-            {/* Postal Tools: Add Photograph, Voice Note, Video Note */}
+            {/* Postal Tools: Add Stamp, Photograph, Super-8 Film */}
             <div className="mt-8 pt-6 border-t border-[#E3D7C5]">
-              <div className="text-[11px] font-mono tracking-widest uppercase text-[#886C3E] mb-3">
-                POSTAL ENCLOSURES (OPTIONAL)
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-mono tracking-widest uppercase text-[#886C3E]">
+                  POSTAL ENCLOSURES & PHILATELY
+                </span>
+                <span className="text-[10px] font-mono text-[#7E6E62]">
+                  OPTIONAL ARTIFACTS
+                </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Stamp Tool button */}
+                <button
+                  id="tool-stamp-btn"
+                  onClick={() => setStampModalOpen(true)}
+                  className="p-3.5 rounded-lg border text-left flex flex-col justify-between transition-all bg-[#FAF6EE] border-[#5A2528] shadow-xs hover:shadow-sm group"
+                >
+                  <div className="flex items-center justify-between">
+                    <Bookmark className="w-4 h-4 text-[#5A2528]" />
+                    <span className="text-[9px] font-mono uppercase bg-[#5A2528]/10 text-[#5A2528] px-1.5 py-0.5 rounded font-bold">
+                      {activeStamp.denomination}
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <div className="font-serif text-sm font-medium text-[#241D18] truncate">
+                      {activeStamp.name}
+                    </div>
+                    <div className="text-[10px] font-mono text-[#7E6E62] flex items-center justify-between mt-0.5">
+                      <span>Affixed Stamp</span>
+                      <span className="text-[#5A2528] group-hover:underline">Change ✎</span>
+                    </div>
+                  </div>
+                </button>
+
                 {/* Photo tool */}
                 <button
                   id="tool-photo-btn"
@@ -559,6 +693,20 @@ export function LetterEditor({
           </div>
         </div>
       )}
+
+      {/* MODAL: Philatelic Vintage Stamp Vault */}
+      <AnimatePresence>
+        {stampModalOpen && (
+          <StampSelection
+            selectedStampId={letterData.stampId || 'airmail-1928'}
+            onSelectStamp={(stampId) => {
+              onChangeLetter({ stampId });
+            }}
+            onClose={() => setStampModalOpen(false)}
+            mode="modal"
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

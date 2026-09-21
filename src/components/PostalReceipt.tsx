@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { LetterData } from '../types';
 import { Postmark, PostageStamp, WaxSeal } from './PostalDecorations';
+import { getVintageStamp } from './StampSelection';
 import { motion } from 'motion/react';
 import {
   Copy,
@@ -115,6 +116,13 @@ export function PostalReceipt({
           </div>
 
           <div className="flex justify-between items-center py-1 border-b border-black/5">
+            <span className="text-[#7E6E62] tracking-wider uppercase">AFFIXED STAMP</span>
+            <span className="font-serif text-xs font-semibold text-[#241D18]">
+              {getVintageStamp(letterData.stampId).name} ({getVintageStamp(letterData.stampId).denomination})
+            </span>
+          </div>
+
+          <div className="flex justify-between items-center py-1 border-b border-black/5">
             <span className="text-[#7E6E62] tracking-wider uppercase">DATE POSTED</span>
             <span className="text-[#2C241F]">{letterData.postedDate}</span>
           </div>
@@ -150,6 +158,7 @@ export function PostalReceipt({
 
           <div className="flex items-center gap-3">
             <Postmark city="DISPATCH" date={letterData.postedDate} />
+            <PostageStamp stampId={letterData.stampId || 'airmail-1928'} />
             <WaxSeal size="sm" color="#5A2528" initial="PO" />
           </div>
         </div>

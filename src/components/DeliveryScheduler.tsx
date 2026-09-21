@@ -184,7 +184,10 @@ export function DeliveryScheduler({
 
               <div className="flex items-center gap-3">
                 <Postmark date={letterData.postedDate} city="OLD-LETTERS" />
-                <PostageStamp denomination="25c" accentColor={template.sealColor} />
+                <PostageStamp
+                  stampId={letterData.stampId || 'airmail-1928'}
+                  accentColor={template.sealColor}
+                />
               </div>
             </div>
 

@@ -66,6 +66,7 @@ export interface LetterData {
   trackingCode: string;
   categoryId: string;
   templateId: string;
+  stampId?: string;
   toName: string;
   toAddress: string;
   fromName: string;
