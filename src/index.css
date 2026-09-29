@@ -1,83 +1,70 @@
 @import "tailwindcss";
 
 @theme {
-  --font-serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
-  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-script: "Caveat", "Brush Script MT", cursive;
-  --font-mono: "Courier Prime", "Courier New", monospace;
+  --font-serif: "Cormorant Garamond", "Newsreader", Georgia, serif;
+  --font-display: "Cormorant Garamond", Georgia, serif;
+  --font-editorial: "Newsreader", Georgia, serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-typewriter: "Courier Prime", monospace;
 
-  --color-parchment-50: #FAF8F5;
-  --color-parchment-100: #F5EFE6;
-  --color-parchment-200: #EADBCE;
-  --color-parchment-300: #D8C4A9;
-  --color-parchment-400: #C4AC8D;
-  --color-parchment-500: #B29572;
-
-  --color-ink-950: #191411;
-  --color-ink-900: #241D18;
-  --color-ink-800: #2C241F;
-  --color-ink-700: #423730;
-  --color-ink-600: #5E5046;
-  --color-ink-500: #7E6E62;
-
-  --color-burgundy-900: #3F191B;
-  --color-burgundy-800: #5A2528;
-  --color-burgundy-700: #783236;
-  --color-burgundy-600: #964045;
-
-  --color-brass-600: #886C3E;
-  --color-brass-500: #A88955;
-  --color-brass-400: #C2A26C;
-
-  --color-postal-800: #464F38;
-  --color-postal-700: #5B6648;
-  --color-postal-600: #6E7B58;
+  --color-paper-50: #ffffff;
+  --color-paper-100: #faf9f7;
+  --color-paper-200: #f4f2ec;
+  --color-paper-300: #eae4da;
+  --color-ink-950: #0f1112;
+  --color-ink-900: #141618;
+  --color-ink-800: #222528;
+  --color-ink-700: #383c40;
+  --color-wine-900: #421319;
+  --color-wine-800: #5c1d24;
+  --color-brass-500: #9e7b3b;
+  --color-brass-400: #b38b42;
 }
 
-/* Tactile post office paper textures & physical effects */
-.bg-grain {
-  background-image: radial-gradient(rgba(44, 36, 31, 0.05) 1px, transparent 0);
-  background-size: 24px 24px;
+@layer utilities {
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+  .perspective-1500 {
+    perspective: 1500px;
+  }
+  .perspective-2000 {
+    perspective: 2000px;
+  }
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+
+  /* Sophisticated physical paper elevation shadows */
+  .shadow-paper-sm {
+    box-shadow: 0 2px 8px -2px rgba(20, 22, 24, 0.06), 0 1px 3px rgba(20, 22, 24, 0.04);
+  }
+  .shadow-paper-md {
+    box-shadow: 0 12px 30px -10px rgba(20, 22, 24, 0.09), 0 4px 10px -2px rgba(20, 22, 24, 0.05);
+  }
+  .shadow-paper-lg {
+    box-shadow: 0 25px 60px -15px rgba(20, 22, 24, 0.12), 0 8px 20px -4px rgba(20, 22, 24, 0.06);
+  }
+  .shadow-paper-3d {
+    box-shadow: 0 35px 70px -20px rgba(20, 22, 24, 0.18), 0 10px 25px -5px rgba(20, 22, 24, 0.08);
+  }
 }
 
-.airmail-border {
-  background: repeating-linear-gradient(
-    -45deg,
-    #964045,
-    #964045 14px,
-    #FAF8F5 14px,
-    #FAF8F5 20px,
-    #375A7F 20px,
-    #375A7F 34px,
-    #FAF8F5 34px,
-    #FAF8F5 40px
-  );
-}
-
-.wax-seal-shadow {
-  box-shadow: 0 4px 14px -1px rgba(66, 27, 29, 0.45), 0 2px 6px -1px rgba(0, 0, 0, 0.25), inset 0 1px 2px rgba(255, 255, 255, 0.3), inset 0 -2px 4px rgba(0, 0, 0, 0.4);
-}
-
-.paper-shadow {
-  box-shadow: 0 10px 30px -5px rgba(36, 29, 24, 0.08), 0 4px 12px -2px rgba(36, 29, 24, 0.04), 0 1px 2px 0 rgba(36, 29, 24, 0.04);
-}
-
-.envelope-shadow {
-  box-shadow: 0 20px 40px -10px rgba(36, 29, 24, 0.16), 0 8px 16px -4px rgba(36, 29, 24, 0.08);
-}
-
-/* Custom scrollbar matching aged parchment */
+/* Subtle clean scrollbar for light editorial aesthetic */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #EADBCE;
+  background: #faf8f5;
 }
 ::-webkit-scrollbar-thumb {
-  background: #C4AC8D;
+  background: #d8d2c6;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #A88955;
+  background: #5c1d24;
 }

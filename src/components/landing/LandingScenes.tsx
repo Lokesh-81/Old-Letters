@@ -1,0 +1,408 @@
+import React, { useState } from 'react';
+import { LETTER_TYPES, TEMPLATES } from '../../data/mockData';
+import { LetterType } from '../../types/letter';
+import { PaperSheet } from '../common/PaperSheet';
+
+interface LandingScenesProps {
+  onSelectLetterType: (type: LetterType) => void;
+  onStartWriting: () => void;
+}
+
+export const LandingScenes: React.FC<LandingScenesProps> = ({
+  onSelectLetterType,
+  onStartWriting,
+}) => {
+  const [selectedType, setSelectedType] = useState<LetterType>('LOVE');
+  const [activeTemplateIndex, setActiveTemplateIndex] = useState(0);
+
+  const activeTypeObj =
+    LETTER_TYPES.find((t) => t.type === selectedType) || LETTER_TYPES[0];
+
+  const currentTemplate = TEMPLATES[activeTemplateIndex] || TEMPLATES[0];
+
+  return (
+    <div className="w-full bg-[#faf8f5] text-[#141618]">
+      {/* SCENE 02: "Why do we rush everything?" Floating Editorial Sheet */}
+      <section
+        id="how-it-works-section"
+        className="py-32 px-6 sm:px-12 border-t border-[#eae4da] bg-[#f7f4ee] overflow-hidden"
+      >
+        <div className="max-w-5xl mx-auto space-y-16">
+          <div className="text-center space-y-3">
+            <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500">
+              01 · REFLECTION
+            </span>
+            <h2 className="font-serif text-4xl sm:text-6xl text-[#141618] font-light max-w-2xl mx-auto leading-[1.05]">
+              Why do we rush everything?
+            </h2>
+          </div>
+
+          {/* 3D Floating Paper Sheet Composition */}
+          <div className="perspective-1500 py-6 flex justify-center">
+            <div
+              className="relative w-full max-w-3xl preserve-3d transition-transform duration-700 hover:rotate-x-2"
+              style={{
+                transform: 'rotateX(3deg)',
+              }}
+            >
+              {/* Secondary background sheet passing behind */}
+              <div
+                className="absolute inset-0 bg-[#ebe4d8] border border-[#ded5c6] rounded-xs shadow-paper-sm -z-10"
+                style={{
+                  transform: 'translate3d(18px, 18px, -40px) rotate(-1.5deg)',
+                }}
+              />
+
+              {/* Primary foreground editorial sheet */}
+              <div
+                className="p-8 sm:p-14 bg-white border border-[#eae4da] rounded-xs shadow-paper-lg space-y-8"
+                style={{
+                  transform: 'translateZ(20px)',
+                }}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 font-serif text-lg sm:text-xl text-stone-700 leading-relaxed">
+                  <p>
+                    Modern digital conversations happen in fractured milliseconds. We reply before we have digested what the other person wrote, and our words vanish into endless notification feeds.
+                  </p>
+                  <p className="text-stone-900">
+                    OLD-LETTERS restores the ceremony of waiting. When you choose a delivery date, your letter is sealed in transit, allowing anticipation to give your words permanence.
+                  </p>
+                </div>
+
+                <div className="pt-6 border-t border-stone-200/80 grid grid-cols-3 gap-6 text-center">
+                  <div>
+                    <div className="text-[10px] font-mono uppercase text-stone-400">INTERVAL</div>
+                    <div className="font-serif text-xl sm:text-2xl text-stone-900 mt-1">48 Hours</div>
+                    <div className="text-[11px] text-stone-500">Standard Transit</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-mono uppercase text-stone-400">PRIVACY</div>
+                    <div className="font-serif text-xl sm:text-2xl text-stone-900 mt-1">Wax Seal</div>
+                    <div className="text-[11px] text-stone-500">Unbroken Protection</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-mono uppercase text-stone-400">ACCESS</div>
+                    <div className="font-serif text-xl sm:text-2xl text-stone-900 mt-1">Free</div>
+                    <div className="text-[11px] text-stone-500">For Everyone</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SCENE 03: WRITE → SEAL → WAIT → ARRIVE (4 Physical Correspondence Objects in 3D Depth) */}
+      <section className="py-32 px-6 sm:px-12 border-t border-[#eae4da] bg-[#faf8f5]">
+        <div className="max-w-6xl mx-auto space-y-16">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#eae4da] pb-8">
+            <div>
+              <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500 block mb-2">
+                02 · THE CEREMONY
+              </span>
+              <h2 className="font-serif text-4xl sm:text-5xl text-[#141618] font-light">
+                The Four Movements
+              </h2>
+            </div>
+            <div className="font-serif italic text-stone-600 max-w-sm text-base">
+              The journey from a blank page to the moment an envelope is opened.
+            </div>
+          </div>
+
+          {/* 3D Physical Cards Matrix */}
+          <div className="perspective-1500 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Movement 1: WRITE */}
+            <div
+              className="p-8 bg-white border border-[#eae4da] rounded-xs shadow-paper-md space-y-6 flex flex-col justify-between transition-transform duration-300 hover:-translate-y-2 preserve-3d"
+              style={{ transform: 'translateZ(10px)' }}
+            >
+              <div className="flex items-center justify-between text-[10px] font-mono text-stone-400 uppercase">
+                <span>PHASE 01</span>
+                <span>LETTER SHEET</span>
+              </div>
+              <div className="space-y-3">
+                <div className="w-10 h-12 bg-[#f4efe8] border border-[#ded6c8] shadow-xs rounded-xs flex items-center justify-center font-serif text-xs text-stone-700">
+                  ❦
+                </div>
+                <h3 className="font-serif text-2xl text-[#141618]">WRITE</h3>
+                <p className="text-xs font-sans text-stone-600 leading-relaxed">
+                  Compose on curated digital stationery. Inscribe your thoughts, attach a photograph, and set your salutation.
+                </p>
+              </div>
+              <div className="text-[10px] font-mono text-stone-400 pt-3 border-t border-stone-100">
+                STATIONERY & PROSE
+              </div>
+            </div>
+
+            {/* Movement 2: SEAL */}
+            <div
+              className="p-8 bg-white border border-[#eae4da] rounded-xs shadow-paper-md space-y-6 flex flex-col justify-between transition-transform duration-300 hover:-translate-y-2 preserve-3d"
+              style={{ transform: 'translateZ(25px)' }}
+            >
+              <div className="flex items-center justify-between text-[10px] font-mono text-stone-400 uppercase">
+                <span>PHASE 02</span>
+                <span>ENVELOPE & WAX</span>
+              </div>
+              <div className="space-y-3">
+                <div className="w-10 h-10 rounded-full bg-[#5c1d24] text-white flex items-center justify-center text-xs font-serif shadow-sm">
+                  ❦
+                </div>
+                <h3 className="font-serif text-2xl text-[#141618]">SEAL</h3>
+                <p className="text-xs font-sans text-stone-600 leading-relaxed">
+                  The letter folds into thirds and enters the envelope. A ceremonial wax seal closes the flap against early opening.
+                </p>
+              </div>
+              <div className="text-[10px] font-mono text-stone-400 pt-3 border-t border-stone-100">
+                PHYSICAL PROTECTION
+              </div>
+            </div>
+
+            {/* Movement 3: WAIT */}
+            <div
+              className="p-8 bg-white border border-[#eae4da] rounded-xs shadow-paper-md space-y-6 flex flex-col justify-between transition-transform duration-300 hover:-translate-y-2 preserve-3d"
+              style={{ transform: 'translateZ(15px)' }}
+            >
+              <div className="flex items-center justify-between text-[10px] font-mono text-stone-400 uppercase">
+                <span>PHASE 03</span>
+                <span>IN TRANSIT</span>
+              </div>
+              <div className="space-y-3">
+                <div className="w-12 h-8 bg-[#ebe4d8] border border-stone-300 flex items-center justify-center font-mono text-[10px] text-stone-700">
+                  48H
+                </div>
+                <h3 className="font-serif text-2xl text-[#141618]">WAIT</h3>
+                <p className="text-xs font-sans text-stone-600 leading-relaxed">
+                  The envelope travels in the transit vault. Neither sender nor recipient may open it early. Anticipation deepens.
+                </p>
+              </div>
+              <div className="text-[10px] font-mono text-stone-400 pt-3 border-t border-stone-100">
+                MEASURED PASSAGE
+              </div>
+            </div>
+
+            {/* Movement 4: ARRIVE */}
+            <div
+              className="p-8 bg-white border border-[#eae4da] rounded-xs shadow-paper-md space-y-6 flex flex-col justify-between transition-transform duration-300 hover:-translate-y-2 preserve-3d"
+              style={{ transform: 'translateZ(30px)' }}
+            >
+              <div className="flex items-center justify-between text-[10px] font-mono text-stone-400 uppercase">
+                <span>PHASE 04</span>
+                <span>DELIVERY SALON</span>
+              </div>
+              <div className="space-y-3">
+                <div className="w-10 h-10 border border-stone-800 text-stone-900 flex items-center justify-center text-xs font-serif">
+                  ✦
+                </div>
+                <h3 className="font-serif text-2xl text-[#141618]">ARRIVE</h3>
+                <p className="text-xs font-sans text-stone-600 leading-relaxed">
+                  Upon arrival, the recipient breaks the seal. The paper unfolds for an intimate, distraction-free reading experience.
+                </p>
+              </div>
+              <div className="text-[10px] font-mono text-stone-400 pt-3 border-t border-stone-100">
+                PRIVATE UNSEALING
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SCENE 04 & 05: LETTER TYPES (3D Stacked Archive Drawer) */}
+      <section className="py-32 px-6 sm:px-12 border-t border-[#eae4da] bg-[#f7f4ee]">
+        <div className="max-w-6xl mx-auto space-y-16">
+          <div className="space-y-3">
+            <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500">
+              03 · INTENTION & OCCASION
+            </span>
+            <h2 className="font-serif text-4xl sm:text-6xl text-[#141618] font-light">
+              What will you say?
+            </h2>
+            <p className="text-stone-600 font-serif text-lg sm:text-xl max-w-xl">
+              Select an intention. Each correspondence category carries its own emotional cadence.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+            {/* Left: 3D Stacked Card Drawer */}
+            <div className="lg:col-span-5 space-y-3 perspective-1000">
+              {LETTER_TYPES.slice(0, 6).map((item, idx) => {
+                const isSelected = selectedType === item.type;
+                return (
+                  <button
+                    key={item.type}
+                    type="button"
+                    onClick={() => setSelectedType(item.type)}
+                    className={`w-full p-5 text-left rounded-xs transition-all duration-300 cursor-pointer flex items-center justify-between border ${
+                      isSelected
+                        ? 'bg-white border-[#141618] shadow-paper-md translate-x-2'
+                        : 'bg-[#faf8f5]/80 border-[#eae4da] text-stone-600 hover:bg-white hover:text-stone-900'
+                    }`}
+                    style={{
+                      transform: isSelected
+                        ? 'translateZ(25px) scale(1.02)'
+                        : `translateZ(${10 - idx * 4}px)`,
+                    }}
+                  >
+                    <div>
+                      <div className="font-serif text-2xl text-stone-900 font-normal">
+                        {item.type}
+                      </div>
+                      <div className="text-xs text-stone-500 mt-0.5">{item.tagline}</div>
+                    </div>
+                    {isSelected && (
+                      <span className="text-xs font-mono text-[#5c1d24] font-semibold">
+                        ACTIVE ✦
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Right: Active Type Physical Display Sheet */}
+            <div className="lg:col-span-7 sticky top-28 p-10 sm:p-12 bg-white border border-[#eae4da] shadow-paper-lg rounded-xs space-y-8">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-stone-200 pb-3 text-xs font-mono text-stone-500">
+                  <span className="uppercase text-[#5c1d24] font-medium">
+                    INTENTION: {activeTypeObj.type}
+                  </span>
+                  <span>CADENCE</span>
+                </div>
+
+                <blockquote className="font-serif text-2xl sm:text-3xl text-stone-900 leading-relaxed italic">
+                  "{activeTypeObj.excerpt}"
+                </blockquote>
+
+                <p className="text-sm font-sans text-stone-600">
+                  {activeTypeObj.tagline}
+                </p>
+              </div>
+
+              <div className="pt-6 border-t border-stone-200 flex items-center justify-between">
+                <span className="text-xs font-mono text-stone-500">FREE CORRESPONDENCE</span>
+                <button
+                  type="button"
+                  onClick={() => onSelectLetterType(activeTypeObj.type)}
+                  className="px-6 py-3 bg-[#141618] hover:bg-[#5c1d24] text-white font-sans font-medium text-xs tracking-wider uppercase rounded-xs transition-colors cursor-pointer"
+                >
+                  Write a {activeTypeObj.type} Letter →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SCENE 06: 3D STATIONERY CAROUSEL */}
+      <section className="py-32 px-6 sm:px-12 border-t border-[#eae4da] bg-[#faf8f5] overflow-hidden">
+        <div className="max-w-6xl mx-auto space-y-16">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#eae4da] pb-8">
+            <div>
+              <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500 block mb-2">
+                04 · STATIONERY STUDIO
+              </span>
+              <h2 className="font-serif text-4xl sm:text-5xl text-[#141618] font-light">
+                Curated Stationery
+              </h2>
+            </div>
+            <div className="font-serif italic text-stone-600 max-w-sm text-base">
+              Explore 8 bespoke paper finishes with realistic deckled depth.
+            </div>
+          </div>
+
+          {/* 3D Stationery Stage */}
+          <div className="perspective-2000 py-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+              {/* Left Selector List */}
+              <div className="lg:col-span-5 space-y-2">
+                {TEMPLATES.map((tpl, i) => {
+                  const isCurrent = activeTemplateIndex === i;
+                  return (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      onClick={() => setActiveTemplateIndex(i)}
+                      className={`w-full p-4 text-left rounded-xs transition-all duration-200 cursor-pointer flex items-center justify-between border ${
+                        isCurrent
+                          ? 'bg-white border-[#141618] shadow-paper-md'
+                          : 'bg-transparent border-[#eae4da] text-stone-600 hover:bg-white'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-serif text-xl text-stone-900">{tpl.name}</div>
+                        <div className="text-xs text-stone-500">{tpl.tagline}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-3.5 h-3.5 rounded-full border border-stone-300 shadow-xs"
+                          style={{ backgroundColor: tpl.paperColor }}
+                        />
+                        <span
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: tpl.sealColor }}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Right 3D Paper Sheet View */}
+              <div className="lg:col-span-7 flex justify-center preserve-3d">
+                <div
+                  className="w-full max-w-lg transition-transform duration-500 shadow-paper-3d rounded-xs overflow-hidden"
+                  style={{
+                    transform: 'rotateY(-4deg) rotateX(2deg) translateZ(30px)',
+                  }}
+                >
+                  <PaperSheet
+                    template={currentTemplate}
+                    date="29 September 2026"
+                    greeting="Dear Vasantha,"
+                    content="I am writing this on the balcony as the evening cools down over the city. I wanted to tell you how much I admire the way you pay attention to people."
+                    signoff="Yours,"
+                    senderName="Lokesh"
+                    isEditing={false}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SCENE 07: FINAL INVITATION CTA */}
+      <section className="py-36 px-6 sm:px-12 border-t border-[#eae4da] bg-[#f7f4ee] text-center">
+        <div className="max-w-3xl mx-auto space-y-8">
+          <div className="text-[11px] font-mono tracking-[0.3em] uppercase text-stone-500">
+            05 · INVITATION
+          </div>
+
+          <h2 className="font-serif text-5xl sm:text-6xl lg:text-7xl text-[#141618] font-light leading-tight">
+            Some things are easier <br />
+            <span className="italic text-[#5c1d24]">to write than say.</span>
+          </h2>
+
+          <p className="text-stone-600 font-serif text-xl max-w-lg mx-auto">
+            Choose a recipient. Write without haste. Let them wait for your words.
+          </p>
+
+          <div className="pt-4">
+            <button
+              type="button"
+              onClick={onStartWriting}
+              className="px-9 py-4 bg-[#141618] hover:bg-[#5c1d24] text-white font-sans font-medium text-xs tracking-[0.16em] uppercase rounded-xs transition-all duration-300 shadow-xl cursor-pointer"
+            >
+              WRITE A LETTER NOW →
+            </button>
+          </div>
+
+          {/* Clean minimal editorial footer with zero fake names / fake tickers */}
+          <footer className="pt-20 border-t border-[#ded5c6] mt-20 flex flex-col sm:flex-row items-center justify-between text-[11px] font-mono text-stone-500 gap-4">
+            <div>OLD-LETTERS CORRESPONDENCE SERVICE</div>
+            <div>EST. 2026 · ALL LETTERS ARCHIVED PRIVATELY</div>
+          </footer>
+        </div>
+      </section>
+    </div>
+  );
+};

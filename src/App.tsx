@@ -1,402 +1,204 @@
-import { useState, useEffect } from 'react';
-import { ViewState, LetterData } from './types';
-import { INITIAL_LETTER, LETTER_CATEGORIES, STATIONERY_TEMPLATES } from './data/mockData';
-import { Header } from './components/Header';
-import { LandingPage } from './components/LandingPage';
-import { CategoryPicker } from './components/CategoryPicker';
-import { StationeryPicker } from './components/StationeryPicker';
-import { LetterEditor } from './components/LetterEditor';
-import { DeliveryScheduler } from './components/DeliveryScheduler';
-import { PostalReceipt } from './components/PostalReceipt';
-import { RecipientExperience } from './components/RecipientExperience';
-import { LiveMeetingRoom } from './components/LiveMeetingRoom';
-import { PostalArchive } from './components/PostalArchive';
-import { HowItWorks } from './components/HowItWorks';
-import { CurtainTransition } from './components/CurtainTransition';
-import { motion, AnimatePresence } from 'motion/react';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { useState } from 'react';
+import { Letter, LetterType } from './types/letter';
+import { INITIAL_ARCHIVE_LETTERS } from './data/mockData';
+import { Navigation } from './components/Navigation';
+import { LandingHero } from './components/landing/LandingHero';
+import { LandingScenes } from './components/landing/LandingScenes';
+import { ComposerFlow } from './components/composer/ComposerFlow';
+import { SenderArchive } from './components/archive/SenderArchive';
+import { RecipientExperience } from './components/recipient/RecipientExperience';
+import { HowItWorksView } from './components/HowItWorksView';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<ViewState>('LANDING');
-  const [letterData, setLetterData] = useState<LetterData>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('old_letters_active_letter');
-        if (saved) {
-          return JSON.parse(saved);
-        }
-      } catch {
-        // Fallback to initial
+  const [currentView, setCurrentView] = useState<
+    'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient'
+  >('landing');
+
+  // Stored correspondence letters
+  const [letters, setLetters] = useState<Letter[]>(() => {
+    try {
+      const saved = localStorage.getItem('old_letters_archive');
+      if (saved) {
+        return JSON.parse(saved);
       }
+    } catch {
+      // Fallback to initial
     }
-    return INITIAL_LETTER;
+    return INITIAL_ARCHIVE_LETTERS;
   });
 
-  // Save changes to local state
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
+  // Current active letter for recipient experience
+  const [activeRecipientLetter, setActiveRecipientLetter] = useState<Letter>(
+    INITIAL_ARCHIVE_LETTERS[0]
+  );
+
+  // Initial letter type passed to composer
+  const [composerInitialType, setComposerInitialType] = useState<LetterType>('LOVE');
+
+  // Helper to save posted letter to archive
+  const handleLetterPosted = (newLetter: Letter) => {
+    setLetters((prev) => {
+      const updated = [newLetter, ...prev];
       try {
-        localStorage.setItem('old_letters_active_letter', JSON.stringify(letterData));
+        localStorage.setItem('old_letters_archive', JSON.stringify(updated));
       } catch {
-        // Safe
+        // Safe fallback
       }
+      return updated;
+    });
+    setActiveRecipientLetter(newLetter);
+  };
+
+  // Launch recipient mode for a specific letter
+  const handleOpenRecipientView = (letterToOpen?: Letter) => {
+    if (letterToOpen) {
+      setActiveRecipientLetter(letterToOpen);
+    } else if (letters.length > 0) {
+      setActiveRecipientLetter(letters[0]);
     }
-  }, [letterData]);
-
-  const updateLetterData = (changes: Partial<LetterData>) => {
-    setLetterData((prev) => ({ ...prev, ...changes }));
+    setCurrentView('recipient');
   };
 
-  const startNewLetter = () => {
-    const randomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const newLetter: LetterData = {
-      ...INITIAL_LETTER,
-      id: `letter-${Date.now()}`,
-      trackingCode: randomCode,
-      letterBody: '',
-      status: 'DRAFT',
+  // User selects a type from the landing showcase
+  const handleSelectTypeFromLanding = (type: LetterType) => {
+    setComposerInitialType(type);
+    setCurrentView('composer');
+  };
+
+  // Recipient wants to pen a reply
+  const handleReplyToLetter = (receivedLetter: Letter) => {
+    const todayFormatted = new Date().toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+    const replyDraft: Letter = {
+      id: `ol-${Date.now()}`,
+      trackingCode: `OL-${Math.floor(1000 + Math.random() * 9000)}-R`,
+      type: 'LOVE',
+      templateId: receivedLetter.templateId || 'ivory',
+      senderName: receivedLetter.recipientName,
+      senderEmail: receivedLetter.recipientEmail,
+      recipientName: receivedLetter.senderName,
+      recipientEmail: receivedLetter.senderEmail,
+      letterDate: todayFormatted,
+      greeting: `Dear ${receivedLetter.senderName},`,
+      content: `I received your letter dated ${receivedLetter.letterDate} with a full heart. Every word was worth the wait...\n\n`,
+      signoff: 'Forever in correspondence,',
+      attachments: [],
+      verificationMethod: 'open',
+      postedAt: new Date().toISOString(),
+      scheduledDeliveryAt: new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
+      waitingHours: 48,
+      status: 'IN TRANSIT',
     };
-    setLetterData(newLetter);
-    setCurrentView('CATEGORIES');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    handleLetterPosted(replyDraft);
+    setCurrentView('composer');
   };
 
-  const handleSelectCategoryFromLanding = (catId: string) => {
-    updateLetterData({ categoryId: catId });
-    setCurrentView('STATIONERY');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const pageVariants = {
-    initial: {
-      opacity: 0,
-      y: 24,
-      scale: 1,
-    },
-    animate: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-    },
-    exit: {
-      opacity: 0,
-      y: -20,
-      scale: 0.98,
-    },
-  };
-
-  const pageTransition = {
-    duration: 0.45,
-    ease: [0.22, 1, 0.36, 1] as const,
-  };
+  const isRecipientMode = currentView === 'recipient';
 
   return (
-    <div className="min-h-screen bg-[#F6F1EA] text-[#2C241F] flex flex-col font-sans antialiased selection:bg-[#5A2528] selection:text-[#FAF8F5] overflow-x-hidden">
-      {/* Hide standard header during full-screen immersive video meeting */}
-      {currentView !== 'MEETING' && (
-        <Header
+    <div className="min-h-screen bg-[#faf8f5] text-[#141618] flex flex-col font-sans selection:bg-[#5c1d24]/15 selection:text-[#5c1d24]">
+      {/* Top Navigation Bar (Hidden during intimate recipient experience and on landing where Hero36 displays its animated entrance) */}
+      {currentView !== 'landing' && (
+        <Navigation
           currentView={currentView}
           onNavigate={(view) => {
-            setCurrentView(view);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (view === 'recipient') {
+              handleOpenRecipientView();
+            } else {
+              setCurrentView(view);
+            }
           }}
-          onStartWriting={() => {
-            setCurrentView('CATEGORIES');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          onOpenRecipientDemo={() => {
-            setCurrentView('RECIPIENT');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
+          isRecipientMode={isRecipientMode}
         />
       )}
 
-      {/* Main View Router with Sliding Page Transitions & Curtain Reveal */}
-      <main className="flex-1 overflow-x-hidden relative">
-        <CurtainTransition currentView={currentView} />
+      {/* Main View Router */}
+      <main className="flex-1 flex flex-col">
+        {currentView === 'landing' && (
+          <div className="space-y-0">
+            <LandingHero
+              onStartWriting={() => {
+                setComposerInitialType('LOVE');
+                setCurrentView('composer');
+              }}
+              onExploreHowItWorks={() => {
+                const el = document.getElementById('how-it-works-section');
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                  setCurrentView('how-it-works');
+                }
+              }}
+              onNavigate={(view) => {
+                if (view === 'recipient') {
+                  handleOpenRecipientView();
+                } else {
+                  setCurrentView(view);
+                }
+              }}
+            />
+            <LandingScenes
+              onSelectLetterType={handleSelectTypeFromLanding}
+              onStartWriting={() => {
+                setComposerInitialType('LOVE');
+                setCurrentView('composer');
+              }}
+            />
+          </div>
+        )}
 
-        <AnimatePresence mode="wait">
-          {currentView === 'LANDING' && (
-            <motion.div
-              key="landing"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-            >
-              <LandingPage
-                onStartWriting={() => {
-                  setCurrentView('CATEGORIES');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                onSelectCategory={handleSelectCategoryFromLanding}
-                onOpenArchive={() => {
-                  setCurrentView('ARCHIVE');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                onOpenHowItWorks={() => {
-                  setCurrentView('HOW_IT_WORKS');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-              />
-            </motion.div>
-          )}
+        {currentView === 'composer' && (
+          <ComposerFlow
+            initialType={composerInitialType}
+            onLetterPosted={handleLetterPosted}
+            onPreviewRecipient={(postedLtr) => {
+              setActiveRecipientLetter(postedLtr);
+              setCurrentView('recipient');
+            }}
+            onViewArchive={() => setCurrentView('archive')}
+            onCancel={() => setCurrentView('landing')}
+          />
+        )}
 
-          {currentView === 'CATEGORIES' && (
-            <motion.div
-              key="categories"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-            >
-              <CategoryPicker
-                selectedCategoryId={letterData.categoryId}
-                onSelectCategory={(catId) => updateLetterData({ categoryId: catId })}
-                onContinue={() => {
-                  setCurrentView('STATIONERY');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                onBack={() => {
-                  setCurrentView('LANDING');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-              />
-            </motion.div>
-          )}
+        {currentView === 'archive' && (
+          <SenderArchive
+            letters={letters}
+            onOpenLetter={(ltr) => {
+              setActiveRecipientLetter(ltr);
+              setCurrentView('recipient');
+            }}
+            onWriteNew={() => {
+              setComposerInitialType('LOVE');
+              setCurrentView('composer');
+            }}
+          />
+        )}
 
-          {currentView === 'STATIONERY' && (
-            <motion.div
-              key="stationery"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-            >
-              <StationeryPicker
-                selectedTemplateId={letterData.templateId}
-                onSelectTemplate={(tempId) => updateLetterData({ templateId: tempId })}
-                onContinue={() => {
-                  setCurrentView('WRITE');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                onBack={() => {
-                  setCurrentView('CATEGORIES');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-              />
-            </motion.div>
-          )}
+        {currentView === 'how-it-works' && (
+          <HowItWorksView
+            onStartWriting={() => setCurrentView('composer')}
+            onBack={() => setCurrentView('landing')}
+          />
+        )}
 
-          {currentView === 'WRITE' && (
-            <motion.div
-              key="write"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-            >
-              <LetterEditor
-                letterData={letterData}
-                onChangeLetter={updateLetterData}
-                onContinue={() => {
-                  setCurrentView('DELIVERY');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                onBack={() => {
-                  setCurrentView('STATIONERY');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-              />
-            </motion.div>
-          )}
-
-          {currentView === 'DELIVERY' && (
-            <motion.div
-              key="delivery"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-            >
-              <DeliveryScheduler
-                letterData={letterData}
-                onChangeLetter={updateLetterData}
-                onPostLetter={() => {
-                  updateLetterData({ status: 'POSTED' });
-                  setCurrentView('RECEIPT');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                onSaveDraft={() => {
-                  updateLetterData({ status: 'DRAFT' });
-                  setCurrentView('ARCHIVE');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                onBack={() => {
-                  setCurrentView('WRITE');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-              />
-            </motion.div>
-          )}
-
-          {currentView === 'RECEIPT' && (
-            <motion.div
-              key="receipt"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-            >
-              <PostalReceipt
-                letterData={letterData}
-                onOpenRecipientExperience={() => {
-                  setCurrentView('RECIPIENT');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                onReturnToArchive={() => {
-                  setCurrentView('ARCHIVE');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                onWriteAnother={startNewLetter}
-              />
-            </motion.div>
-          )}
-
-          {currentView === 'RECIPIENT' && (
-            <motion.div
-              key="recipient"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-            >
-              <RecipientExperience
-                letterData={letterData}
-                onEnterMeetingRoom={() => {
-                  setCurrentView('MEETING');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                onBackToPostOffice={() => {
-                  setCurrentView('LANDING');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-              />
-            </motion.div>
-          )}
-
-          {currentView === 'MEETING' && (
-            <motion.div
-              key="meeting"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-            >
-              <LiveMeetingRoom
-                letterData={letterData}
-                onExit={() => {
-                  setCurrentView('ARCHIVE');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-              />
-            </motion.div>
-          )}
-
-          {currentView === 'ARCHIVE' && (
-            <motion.div
-              key="archive"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-            >
-              <PostalArchive
-                onSelectLetterToView={(trackingCode) => {
-                  if (trackingCode === letterData.trackingCode) {
-                    setCurrentView('RECEIPT');
-                  } else {
-                    setCurrentView('RECIPIENT');
-                  }
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                onWriteNewLetter={startNewLetter}
-              />
-            </motion.div>
-          )}
-
-          {currentView === 'HOW_IT_WORKS' && (
-            <motion.div
-              key="how-it-works"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-            >
-              <HowItWorks
-                onStartWriting={() => {
-                  setCurrentView('CATEGORIES');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {currentView === 'recipient' && (
+          <RecipientExperience
+            letter={activeRecipientLetter}
+            onExit={() => setCurrentView('landing')}
+            onReply={handleReplyToLetter}
+          />
+        )}
       </main>
-
-      {/* Minimal Editorial Footer */}
-      {currentView !== 'MEETING' && (
-        <footer className="border-t border-[#E3D7C5] bg-[#FAF8F5] py-12 px-4 sm:px-6 lg:px-8 text-xs font-mono text-[#7E6E62]">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <span className="font-serif text-base uppercase tracking-widest text-[#2C241F] font-bold">
-                OLD-LETTERS
-              </span>
-              <span>•</span>
-              <span>SLOW CORRESPONDENCE</span>
-            </div>
-
-            <div className="flex items-center gap-6">
-              <button
-                onClick={() => {
-                  setCurrentView('HOW_IT_WORKS');
-                }}
-                className="hover:text-[#2C241F] underline transition-colors"
-              >
-                Philosophy
-              </button>
-              <button
-                onClick={() => {
-                  setCurrentView('ARCHIVE');
-                }}
-                className="hover:text-[#2C241F] underline transition-colors"
-              >
-                Archive
-              </button>
-              <button
-                onClick={() => {
-                  setCurrentView('RECIPIENT');
-                }}
-                className="hover:text-[#2C241F] underline text-[#5A2528] transition-colors"
-              >
-                Recipient Demo
-              </button>
-            </div>
-          </div>
-          <div className="max-w-7xl mx-auto mt-4 text-center sm:text-left text-[10px] text-stone-400">
-            "Some things are worth waiting for." All custom delivery dates are free.
-          </div>
-        </footer>
-      )}
     </div>
   );
 }
