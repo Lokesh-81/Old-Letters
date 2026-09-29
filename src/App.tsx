@@ -13,8 +13,10 @@ import { ComposerFlow } from './components/composer/ComposerFlow';
 import { SenderArchive } from './components/archive/SenderArchive';
 import { RecipientExperience } from './components/recipient/RecipientExperience';
 import { HowItWorksView } from './components/HowItWorksView';
+import { LoadingScreen } from './components/common/LoadingScreen';
 
 export default function App() {
+  const [showLoading, setShowLoading] = useState(true);
   const [currentView, setCurrentView] = useState<
     'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient'
   >('landing');
@@ -107,6 +109,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#faf9f7] text-teal-900 flex flex-col font-sans selection:bg-stone-300/50 selection:text-stone-900">
+      {/* 3-Second Loading Screen with Signature Animation */}
+      {showLoading && (
+        <LoadingScreen durationMs={3000} onComplete={() => setShowLoading(false)} />
+      )}
+
       {/* Top Navigation Bar (Hidden during intimate recipient experience and on landing where Hero36 displays its animated entrance) */}
       {currentView !== 'landing' && (
         <Navigation
