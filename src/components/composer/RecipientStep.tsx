@@ -68,7 +68,7 @@ export const RecipientStep: React.FC<RecipientStepProps> = ({
                 type="text"
                 value={recipientName}
                 onChange={(e) => onChange({ recipientName: e.target.value })}
-                placeholder="e.g. Elena Rostova"
+                placeholder="e.g. Vasantha Rao"
                 className="w-full bg-stone-950 border border-stone-700 focus:border-[#c5a059] px-3.5 py-2.5 text-stone-100 text-sm focus:outline-none transition-colors"
               />
             </div>
@@ -81,7 +81,7 @@ export const RecipientStep: React.FC<RecipientStepProps> = ({
                 type="email"
                 value={recipientEmail}
                 onChange={(e) => onChange({ recipientEmail: e.target.value })}
-                placeholder="elena@correspondence.org"
+                placeholder="vasantha@correspondence.in"
                 className="w-full bg-stone-950 border border-stone-700 focus:border-[#c5a059] px-3.5 py-2.5 text-stone-100 text-sm focus:outline-none transition-colors"
               />
               <span className="text-[11px] text-stone-500 mt-1 block">
@@ -106,7 +106,7 @@ export const RecipientStep: React.FC<RecipientStepProps> = ({
                 type="text"
                 value={senderName}
                 onChange={(e) => onChange({ senderName: e.target.value })}
-                placeholder="e.g. Julian Sterling"
+                placeholder="e.g. Lokesh Poosala"
                 className="w-full bg-stone-950 border border-stone-700 focus:border-[#c5a059] px-3.5 py-2.5 text-stone-100 text-sm focus:outline-none transition-colors"
               />
             </div>
@@ -119,7 +119,7 @@ export const RecipientStep: React.FC<RecipientStepProps> = ({
                 type="email"
                 value={senderEmail}
                 onChange={(e) => onChange({ senderEmail: e.target.value })}
-                placeholder="julian@oldletters.archive"
+                placeholder="lokesh@oldletters.in"
                 className="w-full bg-stone-950 border border-stone-700 focus:border-[#c5a059] px-3.5 py-2.5 text-stone-100 text-sm focus:outline-none transition-colors"
               />
             </div>

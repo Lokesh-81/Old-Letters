@@ -3,6 +3,7 @@ import { LETTER_TYPES, TEMPLATES } from '../../data/mockData';
 import { LetterType } from '../../types/letter';
 import { PaperSheet } from '../common/PaperSheet';
 import Footer23 from '../ui/index';
+import ScrollTriggered from '../ui/scroll-triggered';
 
 interface LandingScenesProps {
   onSelectLetterType: (type: LetterType) => void;
@@ -209,12 +210,33 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
         </div>
       </section>
 
+      {/* SCENE: SCROLL-TRIGGERED PAGES IN MOTION */}
+      <section className="py-24 px-6 sm:px-12 border-t border-[#eae4da] bg-[#fbf9f5] overflow-hidden">
+        <div className="max-w-4xl mx-auto space-y-6 text-center">
+          <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500">
+            03 · PHYSICAL SCROLL
+          </span>
+          <h2 className="text-4xl sm:text-6xl text-teal-900 font-extralight" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+            Letters That Rise With You
+          </h2>
+          <p className="text-teal-900/80 text-lg sm:text-xl max-w-xl mx-auto leading-relaxed" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+            As you scroll, correspondence sheets rise from the postal archive with spring physical depth. Select any letter to inscribe your own words.
+          </p>
+        </div>
+
+        <ScrollTriggered
+          onSelectLetter={(item) => {
+            onSelectLetterType(item.type as LetterType);
+          }}
+        />
+      </section>
+
       {/* SCENE 04 & 05: LETTER TYPES (3D Stacked Archive Drawer) */}
       <section id="letter-types" className="py-28 px-6 sm:px-12 border-t border-[#eae4da] bg-[#f4f2ec]">
         <div className="max-w-6xl mx-auto space-y-16">
           <div className="space-y-3">
             <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500">
-              03 · INTENTION & OCCASION
+              04 · INTENTION & OCCASION
             </span>
             <h2 className="text-4xl sm:text-6xl text-teal-900 font-extralight" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
               What will you say?
