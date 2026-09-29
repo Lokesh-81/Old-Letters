@@ -71,6 +71,10 @@ export default function App() {
         });
     }
 
+    if (new URLSearchParams(window.location.search).get('admin') === 'true') {
+      setShowAdminModal(true);
+    }
+
     // Load letters from real backend API
     fetchLetters()
       .then((data) => {
@@ -164,7 +168,6 @@ export default function App() {
               setCurrentView(view);
             }
           }}
-          onOpenAdmin={() => setShowAdminModal(true)}
           isRecipientMode={isRecipientMode}
         />
       )}

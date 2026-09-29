@@ -56,20 +56,8 @@ export const Navigation: React.FC<NavigationProps> = ({
           ))}
         </nav>
 
-        {/* Primary CTA and Admin Bureau */}
+        {/* Primary CTA */}
         <div className="flex items-center gap-3">
-          {onOpenAdmin && (
-            <button
-              type="button"
-              onClick={onOpenAdmin}
-              title="Post Office Bureau Administration (UPI Verification)"
-              className="text-[11px] font-mono uppercase tracking-wider text-stone-500 hover:text-teal-900 px-2.5 py-1.5 border border-[#eae4da] hover:border-teal-900 rounded-xs transition-colors cursor-pointer flex items-center gap-1.5"
-            >
-              <span>Bureau</span>
-              <span className="text-teal-900 font-serif">❦</span>
-            </button>
-          )}
-
           <button
             type="button"
             onClick={() => onNavigate('composer')}

@@ -3,6 +3,7 @@ import { createServer as createViteServer } from 'vite';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import {
@@ -16,11 +17,20 @@ import {
 
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const isProd = process.env.NODE_ENV === 'production';
 
 app.use(express.json({ limit: '10mb' }));
+
+// Ensure all /api responses default to application/json header
+app.use('/api', (req, res, next) => {
+  res.setHeader('Content-Type', 'application/json');
+  next();
+});
 
 // Supabase server-side client
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
@@ -777,6 +787,26 @@ app.post('/api/admin/payments/:id/verify', (req, res) => {
 // 11. Admin: View Audit Logs
 app.get('/api/admin/audit-logs', (req, res) => {
   res.json({ success: true, auditLogs: memoryStore.auditLogs });
+});
+
+// Explicit JSON 404 handler for any unmatched /api routes (prevents HTML fallthrough)
+app.all('/api/*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: `Postal API endpoint not found: ${req.method} ${req.path}`,
+  });
+});
+
+// Global API error handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('[OLD-LETTERS API Error]', err);
+  if (req.path.startsWith('/api')) {
+    return res.status(err.status || 500).json({
+      success: false,
+      error: err.message || 'An unexpected postal bureau error occurred.',
+    });
+  }
+  next(err);
 });
 
 // ====================================================================

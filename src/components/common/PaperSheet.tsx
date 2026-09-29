@@ -58,13 +58,27 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
 
   return (
     <div
-      className={`relative w-full max-w-2xl mx-auto rounded-sm transition-all duration-300 ${t.paperBg} ${t.textColor} ${className}`}
+      className={`relative w-full max-w-2xl mx-auto rounded-sm transition-all duration-300 border border-[#e6dcce] ${t.paperBg} ${t.textColor} ${className}`}
       style={{
-        boxShadow: isMidnight
-          ? '0 20px 50px -10px rgba(0,0,0,0.8), 0 0 1px rgba(255,255,255,0.1)'
-          : '0 1px 3px rgba(0,0,0,0.08), 0 20px 45px -15px rgba(0,0,0,0.3)',
+        boxShadow:
+          '0 2px 5px rgba(40,25,15,0.04), 0 12px 30px rgba(40,25,15,0.07), 0 28px 64px rgba(40,25,15,0.08), 0 0 0 1px rgba(215,200,180,0.55)',
       }}
     >
+      {/* Antique brass delicate corner accents */}
+      <div className="absolute top-2.5 left-2.5 w-3 h-3 border-t border-l border-[#bfa270]/40 pointer-events-none rounded-tl-[1px]" />
+      <div className="absolute top-2.5 right-2.5 w-3 h-3 border-t border-r border-[#bfa270]/40 pointer-events-none rounded-tr-[1px]" />
+      <div className="absolute bottom-2.5 left-2.5 w-3 h-3 border-b border-l border-[#bfa270]/40 pointer-events-none rounded-bl-[1px]" />
+      <div className="absolute bottom-2.5 right-2.5 w-3 h-3 border-b border-r border-[#bfa270]/40 pointer-events-none rounded-br-[1px]" />
+
+      {/* Subtle tactile paper grain overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-[0.03] rounded-sm mix-blend-multiply"
+        style={{
+          backgroundImage: 'radial-gradient(#1a140f 0.75px, transparent 0.75px)',
+          backgroundSize: '12px 12px',
+        }}
+      />
+
       {/* Air Mail classic chevron edge */}
       {isAirMail && (
         <div
@@ -145,9 +159,7 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
             />
           ) : (
             <div
-              className={`whitespace-pre-wrap text-base sm:text-lg select-text ${
-                isBurgundy ? 'text-[#f5ead8]' : ''
-              }`}
+              className="whitespace-pre-wrap text-base sm:text-lg select-text"
               style={{
                 lineHeight: isTypewriter ? '1.8' : '1.85',
               }}
