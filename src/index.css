@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --font-serif: "Cormorant Garamond", "Newsreader", Georgia, serif;
-  --font-display: "Cormorant Garamond", Georgia, serif;
+  --font-serif: "Georgia", "Cormorant Garamond", "Times New Roman", serif;
+  --font-display: "Georgia", "Cormorant Garamond", serif;
   --font-editorial: "Newsreader", Georgia, serif;
   --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
   --font-typewriter: "Courier Prime", monospace;
@@ -12,13 +12,11 @@
   --color-paper-200: #f4f2ec;
   --color-paper-300: #eae4da;
   --color-ink-950: #0f1112;
-  --color-ink-900: #141618;
-  --color-ink-800: #222528;
-  --color-ink-700: #383c40;
-  --color-wine-900: #421319;
-  --color-wine-800: #5c1d24;
-  --color-brass-500: #9e7b3b;
-  --color-brass-400: #b38b42;
+  --color-ink-900: #134e4a;
+  --color-ink-800: #115e59;
+  --color-teal-900: #134e4a;
+  --color-teal-800: #115e59;
+  --color-teal-700: #0f766e;
 }
 
 @layer utilities {
@@ -40,31 +38,46 @@
 
   /* Sophisticated physical paper elevation shadows */
   .shadow-paper-sm {
-    box-shadow: 0 2px 8px -2px rgba(20, 22, 24, 0.06), 0 1px 3px rgba(20, 22, 24, 0.04);
+    box-shadow: 0 2px 8px -2px rgba(19, 78, 74, 0.06), 0 1px 3px rgba(19, 78, 74, 0.04);
   }
   .shadow-paper-md {
-    box-shadow: 0 12px 30px -10px rgba(20, 22, 24, 0.09), 0 4px 10px -2px rgba(20, 22, 24, 0.05);
+    box-shadow: 0 12px 30px -10px rgba(19, 78, 74, 0.09), 0 4px 10px -2px rgba(19, 78, 74, 0.05);
   }
   .shadow-paper-lg {
-    box-shadow: 0 25px 60px -15px rgba(20, 22, 24, 0.12), 0 8px 20px -4px rgba(20, 22, 24, 0.06);
+    box-shadow: 0 25px 60px -15px rgba(19, 78, 74, 0.12), 0 8px 20px -4px rgba(19, 78, 74, 0.06);
   }
   .shadow-paper-3d {
-    box-shadow: 0 35px 70px -20px rgba(20, 22, 24, 0.18), 0 10px 25px -5px rgba(20, 22, 24, 0.08);
+    box-shadow: 0 35px 70px -20px rgba(19, 78, 74, 0.18), 0 10px 25px -5px rgba(19, 78, 74, 0.08);
+  }
+
+  /* Exact Hero Button Styling */
+  .btn-hero-teal {
+    background-color: #134e4a;
+    color: #ffffff;
+    box-shadow: inset 0 1px 0 2px rgba(255, 255, 255, 0.10), inset 0 -1px 0 2px rgba(0, 0, 0, 0.12);
+    transition: transform 150ms ease-out, background-color 150ms ease-out, box-shadow 150ms ease-out;
+  }
+  .btn-hero-teal:hover {
+    background-color: #115e59;
+    box-shadow: 0 2px 4px rgba(20, 83, 45, 0.25), 0 6px 18px rgba(20, 83, 45, 0.22);
+  }
+  .btn-hero-teal:active {
+    transform: scale(0.96);
   }
 }
 
-/* Subtle clean scrollbar for light editorial aesthetic */
+/* Subtle clean scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #faf8f5;
+  background: #faf9f7;
 }
 ::-webkit-scrollbar-thumb {
   background: #d8d2c6;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #5c1d24;
+  background: #134e4a;
 }

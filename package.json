@@ -17,8 +17,8 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "framer-motion": "^13.4.6",
-    "lucide-react": "^0.546.0",
-    "motion": "^12.23.24",
+    "lucide-react": "^1.48.0",
+    "motion": "^13.4.6",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "vite": "^8.3.0"

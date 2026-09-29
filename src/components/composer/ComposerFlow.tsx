@@ -128,7 +128,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8 w-full bg-[#faf8f5] text-[#141618]">
+    <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8 w-full bg-[#faf9f7] text-teal-900">
       {/* Studio Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#eae4da] pb-4 mb-8 gap-4">
         <div className="flex items-center gap-4">
@@ -136,7 +136,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
             WRITING STUDIO
           </span>
           <span className="text-stone-300">/</span>
-          <span className="font-serif text-lg text-[#141618]">
+          <span className="text-lg text-teal-900 font-medium" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
             {draft.type} Letter for {draft.recipientName || 'Recipient'}
           </span>
         </div>
@@ -146,7 +146,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
           <div className="flex items-center gap-2">
             <span
               className={`w-1.5 h-1.5 rounded-full ${
-                saveIndicator === 'saved' ? 'bg-emerald-600' : 'bg-amber-500 animate-pulse'
+                saveIndicator === 'saved' ? 'bg-teal-700' : 'bg-amber-500 animate-pulse'
               }`}
             />
             <span>{saveIndicator === 'saved' ? 'Saved' : 'Inscribing...'}</span>
@@ -159,7 +159,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
           <button
             type="button"
             onClick={onCancel}
-            className="text-stone-500 hover:text-stone-900 transition-colors cursor-pointer ml-2"
+            className="text-stone-500 hover:text-teal-900 transition-colors cursor-pointer ml-2"
           >
             Cancel Draft
           </button>
@@ -240,7 +240,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
               onClick={() => setActiveTab('compose')}
               className={`pb-3 border-b-2 transition-colors cursor-pointer ${
                 activeTab === 'compose'
-                  ? 'border-[#141618] text-[#141618] font-semibold'
+                  ? 'border-teal-900 text-teal-900 font-semibold'
                   : 'border-transparent text-stone-400 hover:text-stone-700'
               }`}
             >
@@ -251,7 +251,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
               onClick={() => setActiveTab('stationery')}
               className={`pb-3 border-b-2 transition-colors cursor-pointer ${
                 activeTab === 'stationery'
-                  ? 'border-[#141618] text-[#141618] font-semibold'
+                  ? 'border-teal-900 text-teal-900 font-semibold'
                   : 'border-transparent text-stone-400 hover:text-stone-700'
               }`}
             >
@@ -262,7 +262,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
               onClick={() => setActiveTab('dispatch')}
               className={`pb-3 border-b-2 transition-colors cursor-pointer ${
                 activeTab === 'dispatch'
-                  ? 'border-[#141618] text-[#141618] font-semibold'
+                  ? 'border-teal-900 text-teal-900 font-semibold'
                   : 'border-transparent text-stone-400 hover:text-stone-700'
               }`}
             >
@@ -273,7 +273,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
               onClick={() => setActiveTab('delivery')}
               className={`pb-3 border-b-2 transition-colors cursor-pointer ${
                 activeTab === 'delivery'
-                  ? 'border-[#141618] text-[#141618] font-semibold'
+                  ? 'border-teal-900 text-teal-900 font-semibold'
                   : 'border-transparent text-stone-400 hover:text-stone-700'
               }`}
             >
@@ -293,7 +293,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                   value={draft.greeting}
                   onChange={(e) => updateDraft({ greeting: e.target.value })}
                   placeholder="Dear Vasantha,"
-                  className="w-full bg-white border border-[#eae4da] focus:border-[#141618] px-4 py-3 text-[#141618] font-serif text-xl focus:outline-none rounded-xs transition-colors shadow-xs"
+                  className="w-full bg-white border border-[#eae4da] focus:border-teal-900 px-4 py-3 text-teal-900 font-serif text-xl focus:outline-none rounded-xs transition-colors shadow-xs"
                 />
               </div>
 
@@ -306,7 +306,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                   onChange={(e) => updateDraft({ content: e.target.value })}
                   placeholder="Write your letter without haste..."
                   rows={13}
-                  className="w-full bg-white border border-[#eae4da] focus:border-[#141618] p-5 text-stone-900 font-serif text-lg leading-relaxed focus:outline-none rounded-xs resize-y transition-colors shadow-xs"
+                  className="w-full bg-white border border-[#eae4da] focus:border-teal-900 p-5 text-stone-900 font-serif text-lg leading-relaxed focus:outline-none rounded-xs resize-y transition-colors shadow-xs"
                 />
               </div>
 
@@ -320,7 +320,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                     value={draft.signoff}
                     onChange={(e) => updateDraft({ signoff: e.target.value })}
                     placeholder="Yours,"
-                    className="w-full bg-white border border-[#eae4da] focus:border-[#141618] px-4 py-2.5 text-stone-900 font-serif text-base focus:outline-none rounded-xs shadow-xs"
+                    className="w-full bg-white border border-[#eae4da] focus:border-teal-900 px-4 py-2.5 text-stone-900 font-serif text-base focus:outline-none rounded-xs shadow-xs"
                   />
                 </div>
                 <div className="space-y-2">
@@ -332,7 +332,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                     value={draft.senderName}
                     onChange={(e) => updateDraft({ senderName: e.target.value })}
                     placeholder="Lokesh"
-                    className="w-full bg-white border border-[#eae4da] focus:border-[#141618] px-4 py-2.5 text-stone-900 font-serif text-base focus:outline-none rounded-xs shadow-xs"
+                    className="w-full bg-white border border-[#eae4da] focus:border-teal-900 px-4 py-2.5 text-stone-900 font-serif text-base focus:outline-none rounded-xs shadow-xs"
                   />
                 </div>
               </div>
@@ -377,7 +377,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                 <button
                   type="button"
                   onClick={() => setActiveTab('stationery')}
-                  className="px-5 py-2.5 bg-[#141618] hover:bg-[#5c1d24] text-white text-xs font-sans font-medium uppercase tracking-wider rounded-xs transition-colors cursor-pointer"
+                  className="px-5 py-2.5 bg-teal-900 hover:bg-teal-800 text-white text-xs font-sans font-medium uppercase tracking-wider rounded-xs transition-colors cursor-pointer shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] active:scale-[0.96]"
                 >
                   Stationery →
                 </button>
@@ -470,7 +470,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                 <button
                   type="button"
                   onClick={() => setActiveTab('dispatch')}
-                  className="px-5 py-2.5 bg-[#141618] hover:bg-[#5c1d24] text-white text-xs font-sans font-medium uppercase tracking-wider rounded-xs cursor-pointer"
+                  className="px-5 py-2.5 bg-teal-900 hover:bg-teal-800 text-white text-xs font-sans font-medium uppercase tracking-wider rounded-xs cursor-pointer shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] active:scale-[0.96]"
                 >
                   Recipient →
                 </button>
@@ -565,7 +565,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                 <button
                   type="button"
                   onClick={() => setActiveTab('delivery')}
-                  className="px-5 py-2.5 bg-[#141618] hover:bg-[#5c1d24] text-white text-xs font-sans font-medium uppercase tracking-wider rounded-xs cursor-pointer"
+                  className="px-5 py-2.5 bg-teal-900 hover:bg-teal-800 text-white text-xs font-sans font-medium uppercase tracking-wider rounded-xs cursor-pointer shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] active:scale-[0.96]"
                 >
                   Delivery Passage →
                 </button>
@@ -653,7 +653,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                   disabled={!draft.content.trim()}
                   className={`w-full py-4 font-sans font-medium text-xs tracking-[0.2em] uppercase rounded-xs transition-all duration-300 shadow-md cursor-pointer ${
                     draft.content.trim()
-                      ? 'bg-[#141618] hover:bg-[#5c1d24] text-white'
+                      ? 'bg-teal-900 hover:bg-teal-800 text-white shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] active:scale-[0.96]'
                       : 'bg-stone-300 text-stone-500 cursor-not-allowed'
                   }`}
                 >

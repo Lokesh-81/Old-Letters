@@ -1,9 +1,9 @@
-import Hero36 from "./index";
+import Footer23 from './index';
 
-export default function Demo() {
+export default function Footer23Demo() {
   return (
-    <div className="min-h-screen w-full">
-      <Hero36 />
+    <div className="flex min-h-screen w-full flex-col justify-end bg-stone-50">
+      <Footer23 />
     </div>
   );
 }

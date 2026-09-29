@@ -48,11 +48,11 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#faf8f5] text-[#141618] flex flex-col justify-between p-4 sm:p-8 select-none relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#faf9f7] text-teal-900 flex flex-col justify-between p-4 sm:p-8 select-none relative overflow-x-hidden">
       {/* Minimal Top Bar (Light theme) */}
       <header className="max-w-4xl mx-auto w-full flex items-center justify-between py-4 border-b border-[#eae4da]">
         <div className="flex items-center gap-3">
-          <span className="font-serif text-lg tracking-[0.12em] text-[#141618]">OLD-LETTERS</span>
+          <span className="text-lg tracking-[0.14em] text-teal-900" style={{ fontFamily: 'sans-serif' }}>OLD-LETTERS</span>
           <span className="text-stone-300">·</span>
           <span className="text-[11px] font-mono tracking-widest uppercase text-stone-500">
             PRIVATE ARRIVAL
@@ -62,7 +62,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
         <button
           type="button"
           onClick={onExit}
-          className="text-xs font-mono text-stone-500 hover:text-stone-900 transition-colors cursor-pointer flex items-center gap-2"
+          className="text-xs font-mono text-stone-500 hover:text-teal-900 transition-colors cursor-pointer flex items-center gap-2"
         >
           <span>✕</span>
           <span>Close</span>
@@ -76,7 +76,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
             <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500">
               DISPATCH REF: {letter.trackingCode}
             </span>
-            <h1 className="font-serif text-4xl sm:text-6xl text-[#141618] font-light">
+            <h1 className="font-serif text-4xl sm:text-6xl text-teal-900 font-light">
               A letter has arrived.
             </h1>
             <p className="text-stone-600 font-serif italic text-lg sm:text-xl">
@@ -105,7 +105,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
                   setPassphraseError(false);
                 }}
                 placeholder="Passphrase"
-                className="w-full bg-stone-50 border border-stone-300 px-3 py-2 text-stone-900 text-sm focus:outline-none focus:border-stone-900"
+                className="w-full bg-stone-50 border border-stone-300 px-3 py-2 text-stone-900 text-sm focus:outline-none focus:border-teal-900"
               />
               {passphraseError && (
                 <div className="text-xs text-rose-600 font-mono">
@@ -115,7 +115,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
               <div className="flex gap-2">
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-[#141618] text-white text-xs font-mono uppercase font-semibold cursor-pointer"
+                  className="flex-1 py-2 bg-teal-900 text-white text-xs font-mono uppercase font-semibold cursor-pointer hover:bg-teal-800 active:scale-95"
                 >
                   Unseal
                 </button>
@@ -152,7 +152,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
                 <button
                   type="button"
                   onClick={handleOpenEnvelope}
-                  className="inline-flex items-center gap-2 px-8 py-3.5 bg-[#141618] hover:bg-[#5c1d24] text-white font-sans font-medium text-xs tracking-[0.16em] uppercase rounded-xs transition-colors cursor-pointer shadow-lg"
+                  className="inline-flex items-center gap-2 px-8 py-3.5 bg-teal-900 hover:bg-teal-800 text-white font-sans font-medium text-xs tracking-[0.16em] uppercase rounded-xs transition-colors cursor-pointer shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] active:scale-[0.96]"
                 >
                   <span>BREAK WAX SEAL & OPEN</span>
                   <span>❦</span>
@@ -223,11 +223,11 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
             A FINAL NOTE
           </div>
 
-          <h2 className="font-serif text-4xl sm:text-6xl text-[#141618] font-light">
+          <h2 className="font-serif text-4xl sm:text-6xl text-teal-900 font-light">
             There is one more thing.
           </h2>
 
-          <div className="font-serif italic text-2xl sm:text-3xl text-[#5c1d24] leading-relaxed">
+          <div className="font-serif italic text-2xl sm:text-3xl text-teal-900 leading-relaxed">
             "Someone is waiting for you."
           </div>
 
@@ -239,7 +239,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
             <button
               type="button"
               onClick={() => setStage('parlour')}
-              className="px-8 py-4 bg-[#141618] hover:bg-[#5c1d24] text-white font-sans font-medium text-xs tracking-wider uppercase rounded-xs transition-colors cursor-pointer shadow-lg"
+              className="px-8 py-4 bg-teal-900 hover:bg-teal-800 text-white font-sans font-medium text-xs tracking-wider uppercase rounded-xs transition-colors cursor-pointer shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] active:scale-[0.96]"
             >
               MEET THEM →
             </button>
@@ -248,7 +248,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
               <button
                 type="button"
                 onClick={() => onReply(letter)}
-                className="px-6 py-4 border border-stone-300 hover:border-stone-800 text-stone-800 font-sans text-xs tracking-wider uppercase rounded-xs transition-colors cursor-pointer"
+                className="px-6 py-4 border border-stone-300 hover:border-teal-900 text-stone-800 hover:text-teal-900 font-sans text-xs tracking-wider uppercase rounded-xs transition-colors cursor-pointer"
               >
                 Write a Reply
               </button>
@@ -264,7 +264,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
             THE PRIVATE PARLOUR
           </div>
 
-          <h3 className="font-serif text-3xl text-[#141618] font-light">
+          <h3 className="font-serif text-3xl text-teal-900 font-light">
             The Post Office opens soon.
           </h3>
 
@@ -276,14 +276,14 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
             <button
               type="button"
               onClick={() => setStage('reading')}
-              className="px-5 py-2.5 border border-stone-300 text-stone-700 hover:text-stone-900 text-xs font-sans rounded-xs transition-colors cursor-pointer"
+              className="px-5 py-2.5 border border-stone-300 text-stone-700 hover:text-teal-900 text-xs font-sans rounded-xs transition-colors cursor-pointer"
             >
               ← Back to Letter
             </button>
             <button
               type="button"
               onClick={onExit}
-              className="px-6 py-2.5 bg-[#141618] hover:bg-[#5c1d24] text-white text-xs font-sans font-medium rounded-xs cursor-pointer"
+              className="px-6 py-2.5 bg-teal-900 hover:bg-teal-800 text-white text-xs font-sans font-medium rounded-xs cursor-pointer shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] active:scale-[0.96]"
             >
               Return Home
             </button>

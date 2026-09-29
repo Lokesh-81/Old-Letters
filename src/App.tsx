@@ -106,7 +106,7 @@ export default function App() {
   const isRecipientMode = currentView === 'recipient';
 
   return (
-    <div className="min-h-screen bg-[#faf8f5] text-[#141618] flex flex-col font-sans selection:bg-[#5c1d24]/15 selection:text-[#5c1d24]">
+    <div className="min-h-screen bg-[#faf9f7] text-teal-900 flex flex-col font-sans selection:bg-stone-300/50 selection:text-stone-900">
       {/* Top Navigation Bar (Hidden during intimate recipient experience and on landing where Hero36 displays its animated entrance) */}
       {currentView !== 'landing' && (
         <Navigation
@@ -152,6 +152,14 @@ export default function App() {
               onStartWriting={() => {
                 setComposerInitialType('LOVE');
                 setCurrentView('composer');
+              }}
+              onExploreHowItWorks={() => {
+                const el = document.getElementById('how-it-works-section');
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                  setCurrentView('how-it-works');
+                }
               }}
             />
           </div>

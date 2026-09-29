@@ -1,199 +1,345 @@
-import { motion, type Variants } from "framer-motion";
+'use client';
 
-interface Hero36Props {
-  onStartWriting?: () => void;
-  onExploreHowItWorks?: () => void;
-  onNavigate?: (view: 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient') => void;
+import { type FormEvent } from 'react';
+import { motion, type Variants } from 'motion/react';
+import {
+  ArrowRight,
+} from 'lucide-react';
+import LogoIcon from '@/assets/logo-icon';
+
+interface LinkItem {
+  label: string;
+  href: string;
 }
 
-export default function Hero36({
-  onStartWriting,
-  onExploreHowItWorks,
-  onNavigate,
-}: Hero36Props) {
-  // Nav bar: drops from top with blur
-  const navVariants: Variants = {
-    hidden: { opacity: 0, y: -22, filter: 'blur(7px)' },
-    show: {
-      opacity: 1,
-      y: 0,
-      filter: 'blur(0px)',
-      transition: { type: 'spring', damping: 22, stiffness: 180, delay: 0.05 },
-    },
-  };
+interface NavColumn {
+  title: string;
+  links: LinkItem[];
+}
 
-  // Title: container staggers children line-by-line
-  const titleContainerVariants: Variants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: { staggerChildren: 0.18, delayChildren: 0.32 },
-    },
-  };
+interface Footer23Props {
+  brandName?: string;
+  ctaHeading?: string;
+  ctaSubtitle?: string;
+  getDemoLabel?: string;
+  getDemoHref?: string;
+  signInLabel?: string;
+  signInHref?: string;
+  heroImage?: string;
+  heroAlt?: string;
+  emailPlaceholder?: string;
+  subscribeLabel?: string;
+  onSubscribe?: (email: string) => void;
+  columns?: NavColumn[];
+  language?: string;
+  onWriteClick?: () => void;
+  onHowItWorksClick?: () => void;
+}
 
-  // Each title line: rises from below with heavy blur
-  const titleLineVariants: Variants = {
-    hidden: { opacity: 0, y: 50, filter: 'blur(16px)' },
-    show: {
-      opacity: 1,
-      y: 0,
-      filter: 'blur(0px)',
-      transition: { type: 'spring', damping: 30, stiffness: 82, mass: 1.25 },
-    },
-  };
+const defaultColumns: NavColumn[] = [
+  {
+    title: 'CORRESPONDENCE',
+    links: [
+      { label: 'Letter Types', href: '#letter-types' },
+      { label: 'Curated Stationery', href: '#stationery' },
+      { label: 'Wax Seal Protection', href: '#how-it-works' },
+      { label: '48-Hour Vault', href: '#how-it-works' },
+      { label: 'Private Salon', href: '#delivery' },
+    ],
+  },
+  {
+    title: 'STATIONERY',
+    links: [
+      { label: 'Ivory Classical', href: '#stationery' },
+      { label: 'Typewritten Post', href: '#stationery' },
+      { label: 'Air Mail Par Avion', href: '#stationery' },
+      { label: 'Burgundy Velvet', href: '#stationery' },
+      { label: 'Midnight Archive', href: '#stationery' },
+    ],
+  },
+  {
+    title: 'PHILOSOPHY',
+    links: [
+      { label: 'On Taking Time', href: '#how-it-works' },
+      { label: 'The Transit Interval', href: '#how-it-works' },
+      { label: 'Ceremonial Unsealing', href: '#delivery' },
+      { label: 'Phase 2: Spoken Cylinders', href: '#write' },
+    ],
+  },
+  {
+    title: 'REGISTRY',
+    links: [
+      { label: 'Correspondence Archive', href: '#archive' },
+      { label: 'Privacy & Sealing', href: '#how-it-works' },
+      { label: 'Terms of Dispatch', href: '#' },
+      { label: 'Bureau Inquiries', href: '#' },
+    ],
+  },
+];
 
-  // Subtitle: fades up after both title lines settle
-  const subtitleVariants: Variants = {
-    hidden: { opacity: 0, y: 18, filter: 'blur(5px)' },
-    show: {
-      opacity: 1,
-      y: 0,
-      filter: 'blur(0px)',
-      transition: { type: 'spring', damping: 26, stiffness: 110, delay: 0.92 },
-    },
-  };
+const sectionStagger: Variants = {
+  hidden: {},
+  visible: {
+    transition: { staggerChildren: 0.1, delayChildren: 0.05 },
+  },
+};
 
-  // CTA button: scale-in from slightly small after subtitle
-  const ctaVariants: Variants = {
-    hidden: { opacity: 0, y: 14, scale: 0.94 },
-    show: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      transition: { type: 'spring', damping: 22, stiffness: 130, delay: 1.12 },
-    },
-  };
+const riseClean: Variants = {
+  hidden: { opacity: 0, y: 22 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 220, damping: 28, mass: 0.9 },
+  },
+};
 
-  // Background image: gentle fade + very subtle scale-down reveal
-  // Reveals the meadow image as the content is building
-  const bgVariants: Variants = {
-    hidden: { opacity: 0, scale: 1.05 },
-    show: {
-      opacity: 1,
-      scale: 1,
-      transition: { duration: 1.5, ease: [0.22, 1, 0.36, 1], delay: 0 },
-    },
-  };
+const imageReveal: Variants = {
+  hidden: { opacity: 0, scale: 1.05 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: { duration: 1.1, ease: [0.22, 1, 0.36, 1] },
+  },
+};
+
+const midStagger: Variants = {
+  hidden: {},
+  visible: {
+    transition: { staggerChildren: 0.08, delayChildren: 0.03 },
+  },
+};
+
+const midItem: Variants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 260, damping: 30, mass: 0.8 },
+  },
+};
+
+const linkCascade: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.035 } },
+};
+
+const linkTrickle: Variants = {
+  hidden: { opacity: 0, x: -6 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: { type: 'spring', stiffness: 350, damping: 30, mass: 0.6 },
+  },
+};
+
+const btnPop: Variants = {
+  hidden: { opacity: 0, scale: 0.9 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: { type: 'spring', stiffness: 420, damping: 22, mass: 0.6 },
+  },
+};
+
+const wordmarkSlam: Variants = {
+  hidden: { opacity: 0, y: 60 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 100, damping: 22, mass: 1.8 },
+  },
+};
+
+export default function Footer23({
+  brandName = 'OLD-LETTERS',
+  ctaHeading = 'Some things are easier to write than say.',
+  ctaSubtitle = 'A digital correspondence service restoring intentional tempo, physical wax unsealing, and meaningful connection.',
+  getDemoLabel = 'HOW IT WORKS',
+  getDemoHref = '#',
+  signInLabel = 'WRITE A LETTER',
+  signInHref = '#',
+  heroImage = 'https://assets.watermelon.sh/footer-23-bg.avif',
+  heroAlt = 'Sunlit landscape with serene golden horizon',
+  emailPlaceholder = 'Enter your email for dispatch updates',
+  subscribeLabel = 'Inscribe',
+  onSubscribe,
+  columns = defaultColumns,
+  onWriteClick,
+  onHowItWorksClick,
+}: Footer23Props) {
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    onSubscribe?.(String(fd.get('email') ?? ''));
+  }
 
   return (
-    <div
-      className="relative min-h-screen w-full overflow-hidden antialiased selection:bg-stone-300/50 selection:text-stone-900"
-      style={{
-        backgroundColor: '#faf9f7',
-        fontFamily: "'Georgia', 'Times New Roman', serif",
-      }}
-    >
+    <footer className="w-full overflow-hidden bg-stone-50 font-sans antialiased border-t border-stone-200">
+      {/* ── Top CTA section ─────────────────────────────────────────────── */}
       <motion.div
-        variants={bgVariants}
+        variants={sectionStagger}
         initial="hidden"
-        animate="show"
-        className="pointer-events-none absolute inset-0 z-0 will-change-transform select-none"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.2 }}
+        className="flex flex-col gap-6 px-6 pt-12 pb-8 sm:px-10 lg:flex-row lg:items-start lg:justify-between lg:gap-10 lg:px-14 xl:px-16"
+      >
+        {/* Left: heading + subtitle */}
+        <motion.div
+          variants={riseClean}
+          className="flex flex-col gap-2 lg:max-w-md xl:max-w-lg"
+        >
+          <h2 className="text-[clamp(1.75rem,4.5vw,2.5rem)] leading-[1.15] font-normal tracking-[-0.02em] text-zinc-900 font-serif">
+            {ctaHeading}
+          </h2>
+          <p className="text-md max-w-sm text-zinc-500 font-serif">{ctaSubtitle}</p>
+        </motion.div>
+
+        <motion.div
+          variants={sectionStagger}
+          className="flex flex-wrap items-end gap-3 lg:mt-1"
+        >
+          <motion.button
+            variants={btnPop}
+            type="button"
+            onClick={onHowItWorksClick}
+            className="inline-flex min-h-10 items-center gap-2 border border-zinc-300 bg-stone-200 px-4 font-mono text-sm font-medium text-zinc-700 transition-[background-color,border-color,transform] duration-200 hover:border-zinc-400 hover:bg-stone-100 active:scale-[0.97] cursor-pointer"
+          >
+            {getDemoLabel}
+            <ArrowRight className="size-4 stroke-1" />
+          </motion.button>
+          <motion.button
+            variants={btnPop}
+            type="button"
+            onClick={onWriteClick}
+            className="inline-flex min-h-10 items-center gap-2 border border-teal-900 bg-teal-900 px-4 font-mono text-sm font-medium text-white transition-[background-color,border-color,transform] duration-200 hover:bg-teal-800 active:scale-[0.97] cursor-pointer"
+          >
+            {signInLabel}
+            <ArrowRight className="size-4 stroke-1" />
+          </motion.button>
+        </motion.div>
+      </motion.div>
+
+      {/* ── Wide landscape image ──────────────────────────────────────── */}
+      <motion.div
+        variants={imageReveal}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.15 }}
+        className="-outline-offset-1 mx-6 overflow-hidden outline outline-black/20 sm:mx-10 lg:mx-14 xl:mx-16"
       >
         <img
-          src="https://assets.watermelon.sh/bg-hero-36.avif"
-          alt="Wildflower meadow with colorful flowers"
-          className="h-full w-full object-cover object-bottom outline -outline-offset-1 outline-black/[0.06]"
+          src={heroImage}
+          alt={heroAlt}
+          className="h-[220px] w-full object-cover object-bottom sm:h-[280px] md:h-[320px] lg:h-[360px]"
         />
       </motion.div>
-      <div className="relative z-10 flex min-h-screen flex-col">
-        {/* ── Navigation ────────────────────────────────────────────────────── */}
-        <motion.nav
-          variants={navVariants}
-          initial="hidden"
-          animate="show"
-          className="flex w-full items-center justify-between px-8 py-5 md:px-12 lg:px-16"
-        >
-          <span
-            onClick={() => onNavigate?.('landing')}
-            className="text-lg font-normal tracking-[0.14em] text-teal-900 cursor-pointer"
-            style={{ fontFamily: 'sans-serif', letterSpacing: '0.06em' }}
-          >
-            OLD-LETTERS
-          </span>
 
-          <div
-            className="hidden items-center gap-8 md:flex"
-            style={{ fontFamily: 'sans-serif' }}
-          >
-            {[
-              { label: 'Write', view: 'composer' as const },
-              { label: 'Archive', view: 'archive' as const },
-              { label: 'How It Works', view: 'how-it-works' as const },
-              { label: 'Delivery', view: 'recipient' as const },
-            ].map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => {
-                  if (item.view === 'how-it-works' && onExploreHowItWorks) {
-                    onExploreHowItWorks();
-                  } else {
-                    onNavigate?.(item.view);
-                  }
-                }}
-                className="flex min-h-10 items-center text-sm font-normal text-stone-700 transition-colors duration-200 hover:text-stone-900 cursor-pointer"
-              >
-                {item.label}
-              </button>
-            ))}
+      {/* ── Middle: brand + email form + nav columns ─────────────────── */}
+      <motion.div
+        variants={midStagger}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.12 }}
+        className="grid grid-cols-1 gap-6 md:gap-40 px-6 pt-8 pb-6 sm:px-10 md:grid-cols-[auto_1fr] lg:px-14 xl:px-16"
+      >
+        {/* Left: logo + subscribe */}
+        <motion.div
+          variants={midItem}
+          className="flex flex-col gap-4 md:max-w-xs"
+        >
+          {/* Brand */}
+          <div className="flex items-center gap-1.5">
+            <LogoIcon className="size-8 text-teal-900" />
+            <span className="text-md font-medium text-zinc-900 uppercase select-none tracking-[0.1em]">
+              {brandName}
+            </span>
           </div>
 
-          <button
-            onClick={onStartWriting}
-            className="flex min-h-10 items-center rounded-sm bg-teal-900 px-6 py-2.5 text-sm font-medium text-white shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] transition-[transform,background-color,box-shadow] duration-150 ease-out hover:bg-teal-800 hover:shadow-[0_2px_4px_rgba(20,83,45,0.25),0_6px_18px_rgba(20,83,45,0.22)] active:scale-[0.96] cursor-pointer"
-            style={{ fontFamily: 'sans-serif' }}
-          >
-            Write a Letter
-          </button>
+          {/* Subscribe form */}
+          <form onSubmit={handleSubmit} className="flex w-full max-w-xs gap-0">
+            <label htmlFor="footer23-email" className="sr-only">
+              Email address
+            </label>
+            <input
+              id="footer23-email"
+              name="email"
+              type="email"
+              placeholder={emailPlaceholder}
+              required
+              className="h-9 w-full border-2 border-zinc-300 bg-white px-3 text-[0.8125rem] text-zinc-900 placeholder:text-zinc-400 focus:border-teal-900 focus:outline-none"
+            />
+            <motion.button
+              type="submit"
+              className="group mt-0 h-9 cursor-pointer border-2 border-l-0 border-teal-900 bg-teal-900 px-3 text-sm font-normal text-white transition-[background-color] hover:bg-teal-800 active:scale-95"
+            >
+              {subscribeLabel}
+            </motion.button>
+          </form>
+        </motion.div>
+
+        <motion.nav
+          variants={midStagger}
+          aria-label="Footer navigation"
+          className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-4"
+        >
+          {columns.map((col) => (
+            <motion.div
+              key={col.title}
+              variants={midItem}
+              className="flex flex-col gap-3"
+            >
+              <h3 className="text-sm font-medium text-zinc-400 uppercase font-mono">
+                {col.title}
+              </h3>
+              <motion.ul variants={linkCascade} className="flex flex-col gap-2">
+                {col.links.map((link, i) => (
+                  <motion.li key={`${link.label}-${i}`} variants={linkTrickle}>
+                    <a
+                      href={link.href}
+                      className="text-sm leading-none font-medium text-zinc-600 transition-colors duration-150 hover:text-teal-900"
+                    >
+                      {link.label}
+                    </a>
+                  </motion.li>
+                ))}
+              </motion.ul>
+            </motion.div>
+          ))}
         </motion.nav>
+      </motion.div>
 
-        <main className="flex flex-1 flex-col items-center justify-start px-6 pt-12 pb-8 text-center md:pt-16">
-          <motion.h1
-            variants={titleContainerVariants}
-            initial="hidden"
-            animate="show"
-            className="max-w-5xl text-4xl leading-[1.07] font-extralight tracking-[-0.01em] text-balance text-teal-900 lg:text-[4.75rem] xl:text-[5.5rem] 2xl:text-[6rem]"
+      <div className="relative overflow-hidden">
+        <motion.div
+          variants={wordmarkSlam}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.3 }}
+          className="flex items-end overflow-hidden px-4 pt-2 sm:px-6 lg:px-8"
+          aria-hidden="true"
+        >
+          <svg
+            className="w-full select-none"
+            viewBox={`0 0 ${Math.max(brandName.length * 95, 400)} 120`}
+            preserveAspectRatio="xMidYMid meet"
+            aria-label={brandName}
           >
-            <motion.span
-              variants={titleLineVariants}
-              className="block will-change-transform"
+            <text
+              x="50%"
+              y="100%"
+              dominantBaseline="alphabetic"
+              textAnchor="middle"
+              textLength="100%"
+              lengthAdjust="spacing"
+              fontSize="150"
+              fontWeight="500"
+              fontFamily="sans-serif"
+              fill="#134e4a"
             >
-              Some things
-            </motion.span>
-            <motion.span
-              variants={titleLineVariants}
-              className="block will-change-transform"
-            >
-              are worth waiting for.
-            </motion.span>
-          </motion.h1>
-
-          {/* Subtitle — sans-serif, muted stone, text-pretty prevents orphans */}
-          <motion.p
-            variants={subtitleVariants}
-            initial="hidden"
-            animate="show"
-            className="text-md mt-5 max-w-100 leading-[1.7] font-normal text-pretty text-teal-900/80 will-change-transform md:max-w-110"
-            style={{ fontFamily: 'sans-serif' }}
-          >
-            Write something meaningful. Choose when it arrives. Let someone wait for it.
-          </motion.p>
-          <motion.div
-            variants={ctaVariants}
-            initial="hidden"
-            animate="show"
-            className="mt-8 will-change-transform"
-          >
-            <button
-              onClick={onStartWriting}
-              className="text-md flex min-h-12 items-center rounded-sm bg-teal-900 px-10 py-3.5 font-medium tracking-[0.01em] text-white shadow-[inset_0_2px_0_2px_rgba(255,255,255,0.10),inset_0_-2px_0_2px_rgba(0,0,0,0.12)] transition-[transform,background-color,box-shadow] duration-150 ease-out text-shadow-2xs hover:bg-teal-800 hover:shadow-[0_2px_6px_rgba(20,83,45,0.22),0_8px_24px_rgba(20,83,45,0.28)] active:scale-[0.96] cursor-pointer"
-              style={{ fontFamily: 'sans-serif' }}
-            >
-              Write a Letter →
-            </button>
-          </motion.div>
-        </main>
+              {brandName.toUpperCase()}
+            </text>
+          </svg>
+        </motion.div>
       </div>
-    </div>
+    </footer>
   );
 }

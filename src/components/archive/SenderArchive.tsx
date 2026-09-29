@@ -22,14 +22,14 @@ export const SenderArchive: React.FC<SenderArchiveProps> = ({
   });
 
   return (
-    <div className="max-w-5xl mx-auto px-6 sm:px-12 py-16 space-y-16 bg-[#faf8f5] text-[#141618]">
+    <div className="max-w-5xl mx-auto px-6 sm:px-12 py-16 space-y-16 bg-[#faf9f7] text-teal-900">
       {/* Editorial Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-[#eae4da] pb-8 gap-6">
         <div className="space-y-3">
           <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500">
             REGISTRY OF LETTERS
           </span>
-          <h1 className="font-serif text-5xl sm:text-6xl text-[#141618] font-light">
+          <h1 className="font-serif text-5xl sm:text-6xl text-teal-900 font-light">
             Your Correspondence
           </h1>
           <p className="font-serif italic text-stone-600 text-lg">
@@ -40,7 +40,8 @@ export const SenderArchive: React.FC<SenderArchiveProps> = ({
         <button
           type="button"
           onClick={onWriteNew}
-          className="px-6 py-3.5 bg-[#141618] hover:bg-[#5c1d24] text-white font-sans font-medium text-xs tracking-wider uppercase rounded-xs transition-colors cursor-pointer self-start sm:self-auto shadow-sm"
+          className="rounded-sm bg-teal-900 px-6 py-2.5 text-xs uppercase tracking-wider font-medium text-white shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] transition-[transform,background-color,box-shadow] duration-150 ease-out hover:bg-teal-800 hover:shadow-[0_2px_4px_rgba(20,83,45,0.25),0_6px_18px_rgba(20,83,45,0.22)] active:scale-[0.96] cursor-pointer self-start sm:self-auto"
+          style={{ fontFamily: 'sans-serif' }}
         >
           Write a Letter →
         </button>
@@ -55,7 +56,7 @@ export const SenderArchive: React.FC<SenderArchiveProps> = ({
               type="button"
               onClick={() => setFilter(tab)}
               className={`transition-colors cursor-pointer ${
-                filter === tab ? 'text-[#141618] border-b-2 border-[#141618] pb-1 font-semibold' : 'text-stone-400 hover:text-stone-700'
+                filter === tab ? 'text-teal-900 border-b-2 border-teal-900 pb-1 font-semibold' : 'text-stone-400 hover:text-teal-900'
               }`}
             >
               {tab === 'ALL' ? 'All Letters' : tab}
@@ -88,12 +89,12 @@ export const SenderArchive: React.FC<SenderArchiveProps> = ({
                 <div className="flex items-center gap-3 text-xs font-mono text-stone-500 uppercase tracking-wider">
                   <span>TO {ltr.recipientName}</span>
                   <span>·</span>
-                  <span className="text-stone-700 font-medium">{ltr.type}</span>
+                  <span className="text-teal-900 font-medium">{ltr.type}</span>
                   <span>·</span>
                   <span>{ltr.letterDate}</span>
                 </div>
 
-                <h3 className="font-serif text-3xl sm:text-4xl text-[#141618] font-light group-hover:text-[#5c1d24] transition-colors">
+                <h3 className="font-serif text-3xl sm:text-4xl text-teal-900 font-light group-hover:text-teal-800 transition-colors">
                   To {ltr.recipientName}
                 </h3>
 
@@ -108,9 +109,9 @@ export const SenderArchive: React.FC<SenderArchiveProps> = ({
                   <div className="text-[11px] font-mono uppercase tracking-wider text-stone-400">
                     {isDelivered ? 'STATUS' : 'EXPECTED ARRIVAL'}
                   </div>
-                  <div className="font-serif text-lg text-stone-900 font-medium">
+                  <div className="font-serif text-lg text-teal-900 font-medium">
                     {isDelivered ? (
-                      <span className="text-emerald-700">Delivered & Opened</span>
+                      <span className="text-teal-800">Delivered & Opened</span>
                     ) : (
                       <span>Arriving {arrivalDate}</span>
                     )}

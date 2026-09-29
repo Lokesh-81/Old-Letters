@@ -10,16 +10,16 @@ export const HowItWorksView: React.FC<HowItWorksViewProps> = ({
   onBack,
 }) => {
   return (
-    <div className="max-w-4xl mx-auto px-6 sm:px-12 py-16 space-y-20 bg-[#faf8f5] text-[#141618]">
+    <div className="max-w-4xl mx-auto px-6 sm:px-12 py-16 space-y-20 bg-[#faf9f7] text-teal-900">
       {/* Header */}
       <div className="space-y-4 text-center">
         <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500">
           THE PHILOSOPHY
         </span>
-        <h1 className="font-serif text-5xl sm:text-7xl text-[#141618] font-light">
+        <h1 className="text-5xl sm:text-7xl text-teal-900 font-extralight" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
           On Taking Time
         </h1>
-        <p className="font-serif italic text-stone-600 text-xl max-w-lg mx-auto leading-relaxed">
+        <p className="italic text-teal-900/80 text-xl max-w-lg mx-auto leading-relaxed" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
           "The emotional resonance of a letter lives in the interval between writing and receiving."
         </p>
       </div>
@@ -30,7 +30,7 @@ export const HowItWorksView: React.FC<HowItWorksViewProps> = ({
           <div className="md:col-span-4 text-[11px] font-mono uppercase text-stone-500">
             01 / THE VELOCITY PROBLEM
           </div>
-          <div className="md:col-span-8 space-y-4 font-serif text-xl text-stone-800 leading-relaxed">
+          <div className="md:col-span-8 space-y-4 text-xl text-stone-800 leading-relaxed" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
             <p>
               When conversations happen in real-time text bubbles, we optimize for speed over reflection. We reply before we have digested what the other person has said.
             </p>
@@ -44,7 +44,7 @@ export const HowItWorksView: React.FC<HowItWorksViewProps> = ({
           <div className="md:col-span-4 text-[11px] font-mono uppercase text-stone-500">
             02 / THE 48-HOUR VAULT
           </div>
-          <div className="md:col-span-8 space-y-4 font-serif text-xl text-stone-800 leading-relaxed">
+          <div className="md:col-span-8 space-y-4 text-xl text-stone-800 leading-relaxed" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
             <p>
               When you post a letter to someone, it enters an encrypted transit vault. Neither the sender can recall it impulsively, nor can the recipient break the seal before the scheduled hour.
             </p>
@@ -58,7 +58,7 @@ export const HowItWorksView: React.FC<HowItWorksViewProps> = ({
           <div className="md:col-span-4 text-[11px] font-mono uppercase text-stone-500">
             03 / CEREMONY & PRIVACY
           </div>
-          <div className="md:col-span-8 space-y-4 font-serif text-xl text-stone-800 leading-relaxed">
+          <div className="md:col-span-8 space-y-4 text-xl text-stone-800 leading-relaxed" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
             <p>
               When the arrival moment comes, the recipient opens a private salon. The wax seal breaks, the paper unfolds, and they read your words without notifications, likes, or comments.
             </p>
@@ -71,21 +71,22 @@ export const HowItWorksView: React.FC<HowItWorksViewProps> = ({
 
       {/* CTA Box */}
       <div className="p-10 bg-white border border-[#eae4da] shadow-paper-sm rounded-xs text-center space-y-6">
-        <h3 className="font-serif text-3xl text-stone-900 font-light">
+        <h3 className="text-3xl text-teal-900 font-light" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
           Write something worth waiting for.
         </h3>
         <div className="flex items-center justify-center gap-4">
           <button
             type="button"
             onClick={onStartWriting}
-            className="px-8 py-3.5 bg-[#141618] hover:bg-[#5c1d24] text-white font-sans font-medium text-xs tracking-wider uppercase rounded-xs transition-colors cursor-pointer"
+            className="rounded-sm bg-teal-900 px-8 py-3 text-xs uppercase tracking-wider font-medium text-white shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] transition-[transform,background-color,box-shadow] duration-150 ease-out hover:bg-teal-800 hover:shadow-[0_2px_4px_rgba(20,83,45,0.25),0_6px_18px_rgba(20,83,45,0.22)] active:scale-[0.96] cursor-pointer"
+            style={{ fontFamily: 'sans-serif' }}
           >
             Compose Letter →
           </button>
           <button
             type="button"
             onClick={onBack}
-            className="px-6 py-3.5 border border-stone-300 text-stone-700 font-sans text-xs tracking-wider uppercase rounded-xs transition-colors cursor-pointer"
+            className="px-6 py-3 border border-stone-300 text-stone-700 hover:text-teal-900 font-sans text-xs tracking-wider uppercase rounded-xs transition-colors cursor-pointer"
           >
             Back
           </button>

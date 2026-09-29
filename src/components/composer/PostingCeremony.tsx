@@ -48,7 +48,7 @@ export const PostingCeremony: React.FC<PostingCeremonyProps> = ({
   };
 
   return (
-    <div className="min-h-[80vh] flex flex-col items-center justify-center py-16 px-6 max-w-4xl mx-auto w-full bg-[#faf8f5] text-[#141618]">
+    <div className="min-h-[80vh] flex flex-col items-center justify-center py-16 px-6 max-w-4xl mx-auto w-full bg-[#faf9f7] text-teal-900">
       {phase !== 'complete' ? (
         <div className="w-full flex flex-col items-center justify-center space-y-12">
           {/* Subtle Stage Subtitle */}
@@ -56,7 +56,7 @@ export const PostingCeremony: React.FC<PostingCeremonyProps> = ({
             <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500">
               CEREMONY OF POSTING
             </span>
-            <div className="font-serif text-3xl text-stone-900">
+            <div className="font-serif text-3xl text-teal-900">
               {phase === 'folding' && 'Folding parchment into thirds...'}
               {phase === 'enveloping' && 'Placing letter into envelope...'}
               {phase === 'sealing' && 'Impressing ceremonial wax seal...'}
@@ -115,10 +115,10 @@ export const PostingCeremony: React.FC<PostingCeremonyProps> = ({
 
           {/* Minimalist dot indicator */}
           <div className="flex items-center gap-2">
-            <span className={`w-1.5 h-1.5 rounded-full ${phase === 'folding' ? 'bg-[#5c1d24]' : 'bg-stone-300'}`} />
-            <span className={`w-1.5 h-1.5 rounded-full ${phase === 'enveloping' ? 'bg-[#5c1d24]' : 'bg-stone-300'}`} />
-            <span className={`w-1.5 h-1.5 rounded-full ${phase === 'sealing' ? 'bg-[#5c1d24]' : 'bg-stone-300'}`} />
-            <span className={`w-1.5 h-1.5 rounded-full ${phase === 'departing' ? 'bg-[#5c1d24]' : 'bg-stone-300'}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${phase === 'folding' ? 'bg-teal-900' : 'bg-stone-300'}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${phase === 'enveloping' ? 'bg-teal-900' : 'bg-stone-300'}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${phase === 'sealing' ? 'bg-teal-900' : 'bg-stone-300'}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${phase === 'departing' ? 'bg-teal-900' : 'bg-stone-300'}`} />
           </div>
         </div>
       ) : (
@@ -128,7 +128,7 @@ export const PostingCeremony: React.FC<PostingCeremonyProps> = ({
             <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500">
               DISPATCH CONFIRMED
             </span>
-            <h2 className="font-serif text-5xl sm:text-6xl text-[#141618] font-light">
+            <h2 className="font-serif text-5xl sm:text-6xl text-teal-900 font-light">
               Your letter is on its way.
             </h2>
             <p className="text-stone-600 font-serif text-lg">
@@ -146,7 +146,7 @@ export const PostingCeremony: React.FC<PostingCeremonyProps> = ({
               <span className="text-[10px] font-mono text-stone-500 uppercase block">
                 EXPECTED ARRIVAL
               </span>
-              <div className="font-serif text-2xl text-[#141618]">{arrivalDateString}</div>
+              <div className="font-serif text-2xl text-teal-900">{arrivalDateString}</div>
               <div className="text-xs text-stone-500 font-mono">
                 {letter.waitingHours} hours of intentional waiting
               </div>
@@ -162,7 +162,7 @@ export const PostingCeremony: React.FC<PostingCeremonyProps> = ({
                 className="w-full py-2.5 px-3 bg-stone-50 border border-stone-200 hover:border-stone-400 text-xs font-mono text-stone-800 flex items-center justify-between transition-colors cursor-pointer"
               >
                 <span className="truncate">https://old-letters.in/receive/{letter.trackingCode}</span>
-                <span className="text-[#5c1d24] font-medium shrink-0 ml-3">
+                <span className="text-teal-900 font-medium shrink-0 ml-3">
                   {copiedLink ? 'Copied ✓' : 'Copy'}
                 </span>
               </button>
@@ -174,21 +174,21 @@ export const PostingCeremony: React.FC<PostingCeremonyProps> = ({
             <button
               type="button"
               onClick={() => onPreviewRecipient(letter)}
-              className="w-full sm:w-auto px-7 py-3.5 bg-[#141618] hover:bg-[#5c1d24] text-white font-sans font-medium text-xs tracking-wider uppercase rounded-xs transition-colors cursor-pointer shadow-md"
+              className="w-full sm:w-auto px-7 py-3.5 bg-teal-900 hover:bg-teal-800 text-white font-sans font-medium text-xs tracking-wider uppercase rounded-xs transition-colors cursor-pointer shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] active:scale-[0.96]"
             >
               Preview Recipient Arrival →
             </button>
             <button
               type="button"
               onClick={onViewArchive}
-              className="w-full sm:w-auto px-6 py-3.5 border border-stone-300 hover:border-stone-800 text-stone-700 hover:text-stone-950 font-sans text-xs tracking-wider uppercase rounded-xs transition-colors cursor-pointer"
+              className="w-full sm:w-auto px-6 py-3.5 border border-stone-300 hover:border-teal-900 text-stone-700 hover:text-teal-900 font-sans text-xs tracking-wider uppercase rounded-xs transition-colors cursor-pointer"
             >
               Correspondence Archive
             </button>
             <button
               type="button"
               onClick={onWriteAnother}
-              className="w-full sm:w-auto px-5 py-3.5 text-stone-500 hover:text-stone-800 font-sans text-xs tracking-wider transition-colors cursor-pointer"
+              className="w-full sm:w-auto px-5 py-3.5 text-stone-500 hover:text-teal-900 font-sans text-xs tracking-wider transition-colors cursor-pointer"
             >
               Write Another
             </button>

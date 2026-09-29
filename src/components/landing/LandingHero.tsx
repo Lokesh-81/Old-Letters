@@ -1,5 +1,5 @@
 import React from 'react';
-import Hero36 from '../ui/index';
+import Hero36 from '../ui/hero-36';
 
 interface LandingHeroProps {
   onStartWriting: () => void;
