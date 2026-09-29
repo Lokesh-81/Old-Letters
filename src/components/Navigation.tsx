@@ -3,12 +3,14 @@ import React from 'react';
 interface NavigationProps {
   currentView: 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient';
   onNavigate: (view: 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient') => void;
+  onOpenAdmin?: () => void;
   isRecipientMode?: boolean;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
   currentView,
   onNavigate,
+  onOpenAdmin,
   isRecipientMode = false,
 }) => {
   if (isRecipientMode) {
@@ -54,8 +56,20 @@ export const Navigation: React.FC<NavigationProps> = ({
           ))}
         </nav>
 
-        {/* Primary CTA with exact Hero styling */}
-        <div>
+        {/* Primary CTA and Admin Bureau */}
+        <div className="flex items-center gap-3">
+          {onOpenAdmin && (
+            <button
+              type="button"
+              onClick={onOpenAdmin}
+              title="Post Office Bureau Administration (UPI Verification)"
+              className="text-[11px] font-mono uppercase tracking-wider text-stone-500 hover:text-teal-900 px-2.5 py-1.5 border border-[#eae4da] hover:border-teal-900 rounded-xs transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <span>Bureau</span>
+              <span className="text-teal-900 font-serif">❦</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => onNavigate('composer')}

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Letter, LetterType } from './types/letter';
 import { INITIAL_ARCHIVE_LETTERS } from './data/mockData';
 import { Navigation } from './components/Navigation';
@@ -14,9 +14,13 @@ import { SenderArchive } from './components/archive/SenderArchive';
 import { RecipientExperience } from './components/recipient/RecipientExperience';
 import { HowItWorksView } from './components/HowItWorksView';
 import { LoadingScreen } from './components/common/LoadingScreen';
+import { fetchLetters, getDeliveryMeta } from './lib/api';
+import { AdminPaymentModal } from './components/admin/AdminPaymentModal';
 
 export default function App() {
   const [showLoading, setShowLoading] = useState(true);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [recipientDeliveryToken, setRecipientDeliveryToken] = useState<string | undefined>(undefined);
   const [currentView, setCurrentView] = useState<
     'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient'
   >('landing');
@@ -41,6 +45,41 @@ export default function App() {
 
   // Initial letter type passed to composer
   const [composerInitialType, setComposerInitialType] = useState<LetterType>('LOVE');
+
+  // On mount: check for /letter/:token or ?letter=:token and fetch backend archive
+  useEffect(() => {
+    const path = window.location.pathname;
+    const match = path.match(/\/letter\/([a-zA-Z0-9_-]+)/);
+    const tokenFromUrl = match ? match[1] : new URLSearchParams(window.location.search).get('letter');
+
+    if (tokenFromUrl) {
+      setRecipientDeliveryToken(tokenFromUrl);
+      getDeliveryMeta(tokenFromUrl)
+        .then((meta) => {
+          setActiveRecipientLetter((prev) => ({
+            ...prev,
+            trackingCode: meta.trackingCode,
+            senderName: meta.senderName,
+            recipientName: meta.recipientName,
+            verificationMethod: meta.verificationMethod,
+            status: meta.status as any,
+          }));
+          setCurrentView('recipient');
+        })
+        .catch(() => {
+          setCurrentView('recipient');
+        });
+    }
+
+    // Load letters from real backend API
+    fetchLetters()
+      .then((data) => {
+        if (data && data.length > 0) {
+          setLetters(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Helper to save posted letter to archive
   const handleLetterPosted = (newLetter: Letter) => {
@@ -125,6 +164,7 @@ export default function App() {
               setCurrentView(view);
             }
           }}
+          onOpenAdmin={() => setShowAdminModal(true)}
           isRecipientMode={isRecipientMode}
         />
       )}
@@ -209,11 +249,21 @@ export default function App() {
         {currentView === 'recipient' && (
           <RecipientExperience
             letter={activeRecipientLetter}
+            deliveryToken={recipientDeliveryToken}
             onExit={() => setCurrentView('landing')}
             onReply={handleReplyToLetter}
           />
         )}
       </main>
+
+      {/* Post Office Bureau Admin Verification Desk */}
+      <AdminPaymentModal
+        isOpen={showAdminModal}
+        onClose={() => setShowAdminModal(false)}
+        onPaymentUpdated={() => {
+          fetchLetters().then(setLetters).catch(() => {});
+        }}
+      />
     </div>
   );
 }

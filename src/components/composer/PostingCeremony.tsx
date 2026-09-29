@@ -4,6 +4,7 @@ import { EnvelopeObject } from '../common/EnvelopeObject';
 
 interface PostingCeremonyProps {
   letter: Letter;
+  deliveryToken?: string;
   onPreviewRecipient: (letter: Letter) => void;
   onViewArchive: () => void;
   onWriteAnother: () => void;
@@ -11,6 +12,7 @@ interface PostingCeremonyProps {
 
 export const PostingCeremony: React.FC<PostingCeremonyProps> = ({
   letter,
+  deliveryToken,
   onPreviewRecipient,
   onViewArchive,
   onWriteAnother,
@@ -40,9 +42,11 @@ export const PostingCeremony: React.FC<PostingCeremonyProps> = ({
       })
     : 'October 1, 2026';
 
+  const linkToken = deliveryToken || letter.trackingCode;
+  const deliveryLink = `${window.location.origin}/letter/${linkToken}`;
+
   const handleCopyLink = () => {
-    const fakeLink = `${window.location.origin}/?ref=${letter.trackingCode}`;
-    navigator.clipboard?.writeText(fakeLink).catch(() => {});
+    navigator.clipboard?.writeText(deliveryLink).catch(() => {});
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
@@ -161,7 +165,7 @@ export const PostingCeremony: React.FC<PostingCeremonyProps> = ({
                 onClick={handleCopyLink}
                 className="w-full py-2.5 px-3 bg-stone-50 border border-stone-200 hover:border-stone-400 text-xs font-mono text-stone-800 flex items-center justify-between transition-colors cursor-pointer"
               >
-                <span className="truncate">https://old-letters.in/receive/{letter.trackingCode}</span>
+                <span className="truncate">{deliveryLink}</span>
                 <span className="text-teal-900 font-medium shrink-0 ml-3">
                   {copiedLink ? 'Copied ✓' : 'Copy'}
                 </span>

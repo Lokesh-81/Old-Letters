@@ -3,6 +3,8 @@ import { Letter, LetterAttachment, LetterType } from '../../types/letter';
 import { LETTER_TYPES, TEMPLATES } from '../../data/mockData';
 import { PaperSheet } from '../common/PaperSheet';
 import { PostingCeremony } from './PostingCeremony';
+import { postLetter } from '../../lib/api';
+import { UpiPaymentModal } from '../payment/UpiPaymentModal';
 
 interface ComposerFlowProps {
   initialType?: LetterType;
@@ -21,6 +23,10 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'compose' | 'stationery' | 'dispatch' | 'delivery'>('compose');
   const [isPosting, setIsPosting] = useState(false);
+  const [isSubmittingPost, setIsSubmittingPost] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
+  const [generatedDeliveryToken, setGeneratedDeliveryToken] = useState<string | undefined>(undefined);
+  const [activePaymentFeature, setActivePaymentFeature] = useState<'VOICE_NOTE' | 'VIDEO_NOTE' | 'LIVE_MEETING' | null>(null);
   const [mobileView, setMobileView] = useState<'write' | 'preview'>('write');
   const [saveIndicator, setSaveIndicator] = useState<'saved' | 'typing'>('saved');
   const [showPhotoModal, setShowPhotoModal] = useState(false);
@@ -103,20 +109,52 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
     }
   };
 
-  const handleExecutePost = () => {
-    const finalized: Letter = {
-      ...draft,
-      postedAt: new Date().toISOString(),
-      status: 'IN TRANSIT',
-    };
-    onLetterPosted(finalized);
-    setIsPosting(true);
+  const handleExecutePost = async () => {
+    try {
+      setIsSubmittingPost(true);
+      setPostError(null);
+
+      const result = await postLetter({
+        type: draft.type,
+        templateId: draft.templateId,
+        senderName: draft.senderName || 'Anonymous',
+        senderEmail: draft.senderEmail || 'sender@old-letters.in',
+        recipientName: draft.recipientName || 'Recipient',
+        recipientEmail: draft.recipientEmail || 'recipient@old-letters.in',
+        greeting: draft.greeting,
+        content: draft.content,
+        signoff: draft.signoff,
+        verificationMethod: draft.verificationMethod,
+        passphrase: draft.passphrase,
+        scheduledDeliveryAt: draft.scheduledDeliveryAt,
+        waitingHours: draft.waitingHours,
+        postmarkCity: draft.postmarkCity || 'Bureau of Correspondence',
+        status: 'SCHEDULED',
+      });
+
+      const finalized: Letter = {
+        ...draft,
+        id: result.letter.id,
+        trackingCode: result.trackingCode,
+        status: 'SCHEDULED',
+        postedAt: new Date().toISOString(),
+      };
+
+      setGeneratedDeliveryToken(result.deliveryToken);
+      onLetterPosted(finalized);
+      setIsPosting(true);
+    } catch (err: any) {
+      setPostError(err.message || 'Failed to seal and post letter.');
+    } finally {
+      setIsSubmittingPost(false);
+    }
   };
 
   if (isPosting) {
     return (
       <PostingCeremony
         letter={draft}
+        deliveryToken={generatedDeliveryToken}
         onPreviewRecipient={onPreviewRecipient}
         onViewArchive={onViewArchive}
         onWriteAnother={() => {
@@ -351,26 +389,20 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
 
                   <button
                     type="button"
-                    onClick={() =>
-                      setPhase2Notice(
-                        'Audio Wax Cylinders are arriving in Phase 2. You will be able to enclose spoken recordings that play upon unsealing.'
-                      )
-                    }
-                    className="px-3.5 py-2 bg-[#f4efe8] hover:bg-[#ede5d8] border border-[#ded5c6] text-xs font-sans text-stone-600 rounded-xs transition-colors cursor-pointer"
+                    onClick={() => setActivePaymentFeature('VOICE_NOTE')}
+                    className="px-3.5 py-2 bg-white hover:bg-stone-50 border border-stone-300 text-xs font-sans text-stone-700 rounded-xs transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
                   >
-                    Voice (Phase 2)
+                    <span>🎙</span>
+                    <span>Voice Note (₹99)</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() =>
-                      setPhase2Notice(
-                        'Live Video Parlours and 8mm Video Reels are scheduled for Phase 2.'
-                      )
-                    }
-                    className="px-3.5 py-2 bg-[#f4efe8] hover:bg-[#ede5d8] border border-[#ded5c6] text-xs font-sans text-stone-600 rounded-xs transition-colors cursor-pointer"
+                    onClick={() => setActivePaymentFeature('VIDEO_NOTE')}
+                    className="px-3.5 py-2 bg-white hover:bg-stone-50 border border-stone-300 text-xs font-sans text-stone-700 rounded-xs transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
                   >
-                    Video (Phase 2)
+                    <span>🎞</span>
+                    <span>Video Note (₹149)</span>
                   </button>
                 </div>
 
@@ -513,7 +545,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                 <label className="block text-[11px] font-mono text-stone-500 uppercase tracking-wider">
                   Arrival Protection
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <button
                     type="button"
                     onClick={() => updateDraft({ verificationMethod: 'open' })}
@@ -524,7 +556,20 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                     }`}
                   >
                     <div className="font-serif text-sm">Direct Unseal</div>
-                    <div className="text-[10px] text-stone-500">Opens immediately upon arrival</div>
+                    <div className="text-[10px] text-stone-500">Immediate upon arrival</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => updateDraft({ verificationMethod: 'otp' })}
+                    className={`p-3 text-left border rounded-xs transition-colors cursor-pointer ${
+                      draft.verificationMethod === 'otp'
+                        ? 'bg-white border-[#141618] text-stone-900 font-medium shadow-xs'
+                        : 'bg-[#faf8f5] border-[#eae4da] text-stone-600'
+                    }`}
+                  >
+                    <div className="font-serif text-sm">Gmail OTP</div>
+                    <div className="text-[10px] text-stone-500">6-digit code via Resend</div>
                   </button>
 
                   <button
@@ -537,9 +582,15 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                     }`}
                   >
                     <div className="font-serif text-sm">Secret Cipher</div>
-                    <div className="text-[10px] text-stone-500">Requires a shared secret phrase</div>
+                    <div className="text-[10px] text-stone-500">Shared secret passphrase</div>
                   </button>
                 </div>
+
+                {draft.verificationMethod === 'otp' && (
+                  <div className="p-3 bg-[#faf9f7] border border-[#eae4da] rounded-xs text-xs font-mono text-stone-600">
+                    A cryptographic 6-digit OTP will be dispatched to {draft.recipientEmail || 'recipient'} upon delivery.
+                  </div>
+                )}
 
                 {draft.verificationMethod === 'passphrase' && (
                   <div className="pt-2">
@@ -608,16 +659,16 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                 </div>
               </div>
 
-              {/* Transit Preset Buttons */}
+              {/* Transit Preset Buttons (Minimum 48 hours enforced) */}
               <div className="space-y-2">
                 <label className="block text-[11px] font-mono text-stone-500 uppercase tracking-wider">
-                  Select Transit Tempo
+                  Select Transit Tempo (Min. 48 Hours)
                 </label>
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { label: '24 Hours', hours: 24, note: 'Express' },
                     { label: '48 Hours', hours: 48, note: 'Standard Post' },
                     { label: '7 Days', hours: 168, note: 'Reflective' },
+                    { label: '30 Days', hours: 720, note: 'Memorial' },
                   ].map((preset) => {
                     const isSelected = draft.waitingHours === preset.hours;
                     return (
@@ -645,19 +696,25 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                 </div>
               </div>
 
+              {postError && (
+                <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xs font-mono">
+                  {postError}
+                </div>
+              )}
+
               {/* Post Letter Action */}
               <div className="pt-6 border-t border-[#eae4da] space-y-4">
                 <button
                   type="button"
                   onClick={handleExecutePost}
-                  disabled={!draft.content.trim()}
+                  disabled={!draft.content.trim() || isSubmittingPost}
                   className={`w-full py-4 font-sans font-medium text-xs tracking-[0.2em] uppercase rounded-xs transition-all duration-300 shadow-md cursor-pointer ${
-                    draft.content.trim()
+                    draft.content.trim() && !isSubmittingPost
                       ? 'bg-teal-900 hover:bg-teal-800 text-white shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] active:scale-[0.96]'
                       : 'bg-stone-300 text-stone-500 cursor-not-allowed'
                   }`}
                 >
-                  SEAL & POST LETTER →
+                  {isSubmittingPost ? 'SEALING LETTER IN VAULT...' : 'SEAL & POST LETTER →'}
                 </button>
 
                 <div className="text-center text-[11px] font-mono text-stone-500">
@@ -668,6 +725,19 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
           )}
         </div>
       </div>
+
+      {/* Manual UPI Payment Modal */}
+      {activePaymentFeature && (
+        <UpiPaymentModal
+          isOpen={true}
+          featureCode={activePaymentFeature}
+          letterId={draft.id}
+          onClose={() => setActivePaymentFeature(null)}
+          onPaymentSubmitted={() => {
+            // Modal internally shows pending message
+          }}
+        />
+      )}
 
       {/* Photo Enclosure Modal */}
       {showPhotoModal && (
