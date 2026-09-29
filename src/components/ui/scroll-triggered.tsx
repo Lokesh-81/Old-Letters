@@ -43,7 +43,7 @@ export const CORRESPONDENCE_PAGES: LetterScrollItem[] = [
     paperColor: '#f7f4ed',
     textColor: '#1c1917',
     sealColor: '#854d0e',
-    sealSymbol: '✦',
+    sealSymbol: '⚜',
     hueA: 38,
     hueB: 65,
     rotation: 6,

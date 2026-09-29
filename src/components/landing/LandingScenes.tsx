@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { LETTER_TYPES, TEMPLATES } from '../../data/mockData';
-import { LetterType } from '../../types/letter';
+import { LetterTemplate, LetterType } from '../../types/letter';
 import { PaperSheet } from '../common/PaperSheet';
 import Footer23 from '../ui/index';
 import ScrollTriggered from '../ui/scroll-triggered';
+import RadialCarousel from '../ui/radial-carousel';
 
 interface LandingScenesProps {
   onSelectLetterType: (type: LetterType) => void;
@@ -24,6 +25,13 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
 
   const currentTemplate = TEMPLATES[activeTemplateIndex] || TEMPLATES[0];
 
+  const handleTemplateFromRadial = (tpl: LetterTemplate) => {
+    const idx = TEMPLATES.findIndex((t) => t.id === tpl.id);
+    if (idx !== -1) {
+      setActiveTemplateIndex(idx);
+    }
+  };
+
   return (
     <div className="w-full bg-[#faf9f7] text-teal-900">
       {/* SCENE 02: "Why do we rush everything?" Floating Editorial Sheet */}
@@ -33,9 +41,6 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
       >
         <div className="max-w-5xl mx-auto space-y-16">
           <div className="text-center space-y-3">
-            <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500">
-              01 · REFLECTION
-            </span>
             <h2 className="text-4xl sm:text-6xl text-teal-900 font-extralight max-w-2xl mx-auto leading-[1.05]" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
               Why do we rush everything?
             </h2>
@@ -101,9 +106,6 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
         <div className="max-w-6xl mx-auto space-y-16">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#eae4da] pb-8">
             <div>
-              <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500 block mb-2">
-                02 · THE CEREMONY
-              </span>
               <h2 className="text-4xl sm:text-5xl text-teal-900 font-extralight" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
                 The Four Movements
               </h2>
@@ -195,7 +197,7 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
               </div>
               <div className="space-y-3">
                 <div className="w-10 h-10 border border-teal-900 text-teal-900 flex items-center justify-center text-xs font-serif">
-                  ✦
+                  ❦
                 </div>
                 <h3 className="text-2xl text-teal-900" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>ARRIVE</h3>
                 <p className="text-xs font-sans text-stone-600 leading-relaxed">
@@ -210,12 +212,9 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
         </div>
       </section>
 
-      {/* SCENE: SCROLL-TRIGGERED PAGES IN MOTION */}
+      {/* SCENE: LETTERS THAT RISE WITH YOU (Scroll-Triggered Motion) */}
       <section className="py-24 px-6 sm:px-12 border-t border-[#eae4da] bg-[#fbf9f5] overflow-hidden">
-        <div className="max-w-4xl mx-auto space-y-6 text-center">
-          <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500">
-            03 · PHYSICAL SCROLL
-          </span>
+        <div className="max-w-4xl mx-auto space-y-4 text-center">
           <h2 className="text-4xl sm:text-6xl text-teal-900 font-extralight" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
             Letters That Rise With You
           </h2>
@@ -231,13 +230,10 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
         />
       </section>
 
-      {/* SCENE 04 & 05: LETTER TYPES (3D Stacked Archive Drawer) */}
+      {/* SCENE: INTENTION & OCCASION */}
       <section id="letter-types" className="py-28 px-6 sm:px-12 border-t border-[#eae4da] bg-[#f4f2ec]">
         <div className="max-w-6xl mx-auto space-y-16">
           <div className="space-y-3">
-            <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500">
-              04 · INTENTION & OCCASION
-            </span>
             <h2 className="text-4xl sm:text-6xl text-teal-900 font-extralight" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
               What will you say?
             </h2>
@@ -275,7 +271,7 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
                     </div>
                     {isSelected && (
                       <span className="text-xs font-mono text-teal-800 font-semibold">
-                        ACTIVE ✦
+                        SELECTED
                       </span>
                     )}
                   </button>
@@ -318,78 +314,64 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
         </div>
       </section>
 
-      {/* SCENE 06: 3D STATIONERY CAROUSEL */}
+      {/* SCENE: CURATED STATIONERY (Radial Carousel Studio) */}
       <section id="stationery" className="py-28 px-6 sm:px-12 border-t border-[#eae4da] bg-[#faf9f7] overflow-hidden">
         <div className="max-w-6xl mx-auto space-y-16">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#eae4da] pb-8">
             <div>
-              <span className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500 block mb-2">
-                04 · STATIONERY STUDIO
-              </span>
               <h2 className="text-4xl sm:text-5xl text-teal-900 font-extralight" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
                 Curated Stationery
               </h2>
             </div>
             <div className="italic text-teal-900/80 max-w-sm text-base" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-              Explore 8 bespoke paper finishes with realistic deckled depth.
+              Explore 8 bespoke paper finishes with our interactive radial stationery compass.
             </div>
           </div>
 
-          {/* 3D Stationery Stage */}
-          <div className="perspective-2000 py-6">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-              {/* Left Selector List */}
-              <div className="lg:col-span-5 space-y-2">
-                {TEMPLATES.map((tpl, i) => {
-                  const isCurrent = activeTemplateIndex === i;
-                  return (
-                    <button
-                      key={tpl.id}
-                      type="button"
-                      onClick={() => setActiveTemplateIndex(i)}
-                      className={`w-full p-4 text-left rounded-xs transition-all duration-200 cursor-pointer flex items-center justify-between border ${
-                        isCurrent
-                          ? 'bg-white border-teal-900 shadow-paper-md'
-                          : 'bg-transparent border-[#eae4da] text-stone-600 hover:bg-white hover:text-teal-900'
-                      }`}
-                    >
-                      <div>
-                        <div className="text-xl text-teal-900" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>{tpl.name}</div>
-                        <div className="text-xs text-stone-500">{tpl.tagline}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="w-3.5 h-3.5 rounded-full border border-stone-300 shadow-xs"
-                          style={{ backgroundColor: tpl.paperColor }}
-                        />
-                        <span
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: tpl.sealColor }}
-                        />
-                      </div>
-                    </button>
-                  );
-                })}
+          {/* Radial Carousel Component Stage */}
+          <div className="py-6 flex flex-col items-center">
+            <RadialCarousel
+              templates={TEMPLATES}
+              activeTemplateId={currentTemplate.id}
+              onSelectTemplate={handleTemplateFromRadial}
+              radius={240}
+              thumbnailSize={110}
+              centerSize={380}
+            />
+
+            {/* Selected Template Live Paper Sheet Preview */}
+            <div className="mt-16 w-full max-w-3xl flex flex-col items-center">
+              <div className="flex items-center justify-between w-full max-w-lg mb-4 text-xs font-mono text-stone-500 uppercase border-b border-stone-200 pb-2">
+                <span>LIVE IMPRESSION: {currentTemplate.name}</span>
+                <span className="text-teal-900 font-medium">{currentTemplate.category}</span>
               </div>
 
-              {/* Right 3D Paper Sheet View */}
-              <div className="lg:col-span-7 flex justify-center preserve-3d">
-                <div
-                  className="w-full max-w-lg transition-transform duration-500 shadow-paper-3d rounded-xs overflow-hidden"
-                  style={{
-                    transform: 'rotateY(-4deg) rotateX(2deg) translateZ(30px)',
-                  }}
+              <div
+                className="w-full max-w-lg shadow-paper-3d rounded-xs overflow-hidden transition-all duration-500"
+                style={{
+                  transform: 'rotateX(2deg)',
+                }}
+              >
+                <PaperSheet
+                  template={currentTemplate}
+                  date="29 September 2026"
+                  greeting="Dear Vasantha,"
+                  content="I am writing this on the balcony as the evening cools down over the city. I wanted to tell you how much I admire the way you pay attention to people."
+                  signoff="Yours,"
+                  senderName="Lokesh"
+                  isEditing={false}
+                />
+              </div>
+
+              <div className="mt-8">
+                <button
+                  type="button"
+                  onClick={onStartWriting}
+                  className="rounded-sm bg-teal-900 px-8 py-3 text-xs uppercase tracking-wider font-medium text-white shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] transition-[transform,background-color,box-shadow] duration-150 ease-out hover:bg-teal-800 hover:shadow-[0_2px_4px_rgba(20,83,45,0.25),0_6px_18px_rgba(20,83,45,0.22)] active:scale-[0.96] cursor-pointer"
+                  style={{ fontFamily: 'sans-serif' }}
                 >
-                  <PaperSheet
-                    template={currentTemplate}
-                    date="29 September 2026"
-                    greeting="Dear Vasantha,"
-                    content="I am writing this on the balcony as the evening cools down over the city. I wanted to tell you how much I admire the way you pay attention to people."
-                    signoff="Yours,"
-                    senderName="Lokesh"
-                    isEditing={false}
-                  />
-                </div>
+                  Compose with {currentTemplate.name} →
+                </button>
               </div>
             </div>
           </div>

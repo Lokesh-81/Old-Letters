@@ -28,7 +28,7 @@ export const HowItWorksView: React.FC<HowItWorksViewProps> = ({
       <div className="space-y-16 border-t border-[#eae4da] pt-16">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
           <div className="md:col-span-4 text-[11px] font-mono uppercase text-stone-500">
-            01 / THE VELOCITY PROBLEM
+            THE VELOCITY PROBLEM
           </div>
           <div className="md:col-span-8 space-y-4 text-xl text-stone-800 leading-relaxed" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
             <p>
@@ -42,7 +42,7 @@ export const HowItWorksView: React.FC<HowItWorksViewProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start border-t border-[#eae4da] pt-12">
           <div className="md:col-span-4 text-[11px] font-mono uppercase text-stone-500">
-            02 / THE 48-HOUR VAULT
+            THE 48-HOUR VAULT
           </div>
           <div className="md:col-span-8 space-y-4 text-xl text-stone-800 leading-relaxed" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
             <p>
@@ -56,7 +56,7 @@ export const HowItWorksView: React.FC<HowItWorksViewProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start border-t border-[#eae4da] pt-12">
           <div className="md:col-span-4 text-[11px] font-mono uppercase text-stone-500">
-            03 / CEREMONY & PRIVACY
+            CEREMONY & PRIVACY
           </div>
           <div className="md:col-span-8 space-y-4 text-xl text-stone-800 leading-relaxed" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
             <p>
