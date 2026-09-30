@@ -338,3 +338,65 @@ export async function triggerSchedulerTick(): Promise<{
   });
   return safeParseJson(res, 'Scheduler tick execution completed');
 }
+
+export async function requestAuthOtp(email: string): Promise<{
+  success: boolean;
+  message: string;
+  devOtpHint?: string;
+}> {
+  const res = await fetch(`${API_BASE}/auth/request-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  return safeParseJson(res, 'Failed to request authentication code');
+}
+
+export async function verifyAuthOtp(email: string, otp: string, fullName?: string): Promise<{
+  success: boolean;
+  user: { id: string; email: string; fullName: string };
+  token?: string;
+}> {
+  const res = await fetch(`${API_BASE}/auth/verify-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ email, otp, fullName }),
+  });
+  return safeParseJson(res, 'Authentication verification failed');
+}
+
+export async function getCurrentUser(): Promise<{
+  id: string;
+  email: string;
+  fullName: string;
+  role?: string;
+  avatarUrl?: string;
+  authProvider?: string;
+  emailVerified?: boolean;
+} | null> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/me`, {
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!res.ok) return null;
+    const data = await safeParseJson<{ authenticated: boolean; user?: any }>(res, 'Failed to get current user');
+    if (data.authenticated && data.user) {
+      return data.user;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function logoutUser(): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/auth/logout`, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json' },
+    });
+  } catch {
+    // Silent fail
+  }
+}
+

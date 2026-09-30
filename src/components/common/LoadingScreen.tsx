@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Signature } from '../ui/signature';
 
@@ -11,45 +11,59 @@ interface LoadingScreenProps {
 
 export const LoadingScreen: React.FC<LoadingScreenProps> = ({
   onComplete,
-  durationMs = 3200,
+  durationMs = 3000,
 }) => {
   const [isVisible, setIsVisible] = useState(true);
-  const [signatureFinished, setSignatureFinished] = useState(false);
   const minTimeElapsedRef = useRef(false);
+  const signatureFinishedRef = useRef(false);
+  const dismissedRef = useRef(false);
+
+  const dismiss = useCallback(() => {
+    if (dismissedRef.current) return;
+    dismissedRef.current = true;
+    setIsVisible(false);
+  }, []);
 
   useEffect(() => {
-    // Ensure the loading screen displays for at least the specified duration (e.g. 3.2s)
-    const timer = setTimeout(() => {
+    // Timer for minimum duration
+    const minTimer = setTimeout(() => {
       minTimeElapsedRef.current = true;
-      // If signature is already finished, dismiss now
-      setSignatureFinished((prev) => {
-        if (prev) {
-          setIsVisible(false);
-          onComplete?.();
-        }
-        return prev;
-      });
+      if (signatureFinishedRef.current) {
+        dismiss();
+      }
     }, durationMs);
 
-    return () => clearTimeout(timer);
-  }, [durationMs, onComplete]);
+    // Fallback maximum safety timer to guarantee dismiss even if signature or fonts take too long
+    const safetyTimer = setTimeout(() => {
+      dismiss();
+    }, durationMs + 1500);
 
-  const handleSignatureComplete = () => {
-    setSignatureFinished(true);
-    // If the minimum time has elapsed, dismiss now
+    return () => {
+      clearTimeout(minTimer);
+      clearTimeout(safetyTimer);
+    };
+  }, [durationMs, dismiss]);
+
+  const handleSignatureComplete = useCallback(() => {
+    signatureFinishedRef.current = true;
     if (minTimeElapsedRef.current) {
-      setIsVisible(false);
-      onComplete?.();
+      dismiss();
     }
-  };
+  }, [dismiss]);
+
+  const handleExitComplete = useCallback(() => {
+    if (onComplete) {
+      onComplete();
+    }
+  }, [onComplete]);
 
   return (
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={handleExitComplete}>
       {isVisible && (
         <motion.div
           key="app-loading-screen"
           initial={{ opacity: 1 }}
-          exit={{ opacity: 0, transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] } }}
+          exit={{ opacity: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } }}
           className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#faf9f7] text-[#134e4a] select-none overflow-hidden"
           style={{
             backgroundImage:

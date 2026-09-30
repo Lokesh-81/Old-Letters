@@ -14,12 +14,29 @@ import { SenderArchive } from './components/archive/SenderArchive';
 import { RecipientExperience } from './components/recipient/RecipientExperience';
 import { HowItWorksView } from './components/HowItWorksView';
 import { LoadingScreen } from './components/common/LoadingScreen';
-import { fetchLetters, getDeliveryMeta } from './lib/api';
+import { fetchLetters, getDeliveryMeta, getCurrentUser, logoutUser } from './lib/api';
 import { AdminPaymentModal } from './components/admin/AdminPaymentModal';
+import { AuthModal } from './components/auth/AuthModal';
+import { ProfileModal } from './components/auth/ProfileModal';
 
 export default function App() {
   const [showLoading, setShowLoading] = useState(true);
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [authInitialMode, setAuthInitialMode] = useState<'login' | 'signup'>('login');
+  const [intendedDestination, setIntendedDestination] = useState<string | null>(null);
+
+  const [currentUser, setCurrentUser] = useState<{
+    id: string;
+    email: string;
+    fullName: string;
+    role?: string;
+    avatarUrl?: string;
+    authProvider?: string;
+    emailVerified?: boolean;
+  } | null>(null);
+
   const [recipientDeliveryToken, setRecipientDeliveryToken] = useState<string | undefined>(undefined);
   const [currentView, setCurrentView] = useState<
     'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient'
@@ -33,7 +50,7 @@ export default function App() {
         return JSON.parse(saved);
       }
     } catch {
-      // Fallback to initial
+      // Fallback
     }
     return INITIAL_ARCHIVE_LETTERS;
   });
@@ -46,11 +63,12 @@ export default function App() {
   // Initial letter type passed to composer
   const [composerInitialType, setComposerInitialType] = useState<LetterType>('LOVE');
 
-  // On mount: check for /letter/:token or ?letter=:token and fetch backend archive
+  // On mount: check for routes, tokens, and sessions
   useEffect(() => {
     const path = window.location.pathname;
     const match = path.match(/\/letter\/([a-zA-Z0-9_-]+)/);
-    const tokenFromUrl = match ? match[1] : new URLSearchParams(window.location.search).get('letter');
+    const searchParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = match ? match[1] : searchParams.get('letter');
 
     if (tokenFromUrl) {
       setRecipientDeliveryToken(tokenFromUrl);
@@ -71,15 +89,29 @@ export default function App() {
         });
     }
 
-    if (new URLSearchParams(window.location.search).get('admin') === 'true') {
+    if (searchParams.get('admin') === 'true') {
       setShowAdminModal(true);
     }
 
-    // Load letters from real backend API
-    fetchLetters()
-      .then((data) => {
-        if (data && data.length > 0) {
-          setLetters(data);
+    if (path === '/login' || searchParams.get('auth') === 'login') {
+      setAuthInitialMode('login');
+      setShowAuthModal(true);
+    } else if (path === '/signup' || searchParams.get('auth') === 'signup') {
+      setAuthInitialMode('signup');
+      setShowAuthModal(true);
+    }
+
+    // Load user session from backend
+    getCurrentUser()
+      .then((user) => {
+        if (user) {
+          setCurrentUser(user);
+          // Fetch authenticated letters
+          fetchLetters().then((data) => {
+            if (data && data.length > 0) {
+              setLetters(data);
+            }
+          }).catch(() => {});
         }
       })
       .catch(() => {});
@@ -109,10 +141,27 @@ export default function App() {
     setCurrentView('recipient');
   };
 
-  // User selects a type from the landing showcase
-  const handleSelectTypeFromLanding = (type: LetterType) => {
+  // Intercept writing action: prompt auth if unauthenticated without losing destination
+  const handleStartWriting = (type: LetterType = 'LOVE') => {
     setComposerInitialType(type);
+    if (!currentUser) {
+      setIntendedDestination('composer');
+      setAuthInitialMode('login');
+      setShowAuthModal(true);
+      return;
+    }
     setCurrentView('composer');
+  };
+
+  // Intercept archive action
+  const handleOpenArchive = () => {
+    if (!currentUser) {
+      setIntendedDestination('archive');
+      setAuthInitialMode('login');
+      setShowAuthModal(true);
+      return;
+    }
+    setCurrentView('archive');
   };
 
   // Recipient wants to pen a reply
@@ -145,7 +194,22 @@ export default function App() {
     };
 
     handleLetterPosted(replyDraft);
-    setCurrentView('composer');
+    handleStartWriting('LOVE');
+  };
+
+  // Auth success handler: restores intended flow seamlessly
+  const handleAuthSuccess = (user: any) => {
+    setCurrentUser(user);
+    setShowAuthModal(false);
+    fetchLetters().then(setLetters).catch(() => {});
+
+    if (intendedDestination === 'composer') {
+      setCurrentView('composer');
+      setIntendedDestination(null);
+    } else if (intendedDestination === 'archive') {
+      setCurrentView('archive');
+      setIntendedDestination(null);
+    }
   };
 
   const isRecipientMode = currentView === 'recipient';
@@ -157,17 +221,35 @@ export default function App() {
         <LoadingScreen durationMs={3000} onComplete={() => setShowLoading(false)} />
       )}
 
-      {/* Top Navigation Bar (Hidden during intimate recipient experience and on landing where Hero36 displays its animated entrance) */}
+      {/* Top Navigation Bar */}
       {currentView !== 'landing' && (
         <Navigation
           currentView={currentView}
           onNavigate={(view) => {
             if (view === 'recipient') {
               handleOpenRecipientView();
+            } else if (view === 'archive') {
+              handleOpenArchive();
+            } else if (view === 'composer') {
+              handleStartWriting();
             } else {
               setCurrentView(view);
             }
           }}
+          currentUser={currentUser}
+          onOpenAuth={() => {
+            setAuthInitialMode('login');
+            setShowAuthModal(true);
+          }}
+          onOpenProfile={() => setShowProfileModal(true)}
+          onOpenAdmin={() => setShowAdminModal(true)}
+          onLogout={() => {
+            logoutUser();
+            setCurrentUser(null);
+            setLetters(INITIAL_ARCHIVE_LETTERS);
+            setCurrentView('landing');
+          }}
+          onWriteClick={() => handleStartWriting()}
           isRecipientMode={isRecipientMode}
         />
       )}
@@ -177,10 +259,7 @@ export default function App() {
         {currentView === 'landing' && (
           <div className="space-y-0">
             <LandingHero
-              onStartWriting={() => {
-                setComposerInitialType('LOVE');
-                setCurrentView('composer');
-              }}
+              onStartWriting={() => handleStartWriting('LOVE')}
               onExploreHowItWorks={() => {
                 const el = document.getElementById('how-it-works-section');
                 if (el) {
@@ -192,17 +271,16 @@ export default function App() {
               onNavigate={(view) => {
                 if (view === 'recipient') {
                   handleOpenRecipientView();
+                } else if (view === 'archive') {
+                  handleOpenArchive();
                 } else {
                   setCurrentView(view);
                 }
               }}
             />
             <LandingScenes
-              onSelectLetterType={handleSelectTypeFromLanding}
-              onStartWriting={() => {
-                setComposerInitialType('LOVE');
-                setCurrentView('composer');
-              }}
+              onSelectLetterType={(type) => handleStartWriting(type)}
+              onStartWriting={() => handleStartWriting('LOVE')}
               onExploreHowItWorks={() => {
                 const el = document.getElementById('how-it-works-section');
                 if (el) {
@@ -223,7 +301,7 @@ export default function App() {
               setActiveRecipientLetter(postedLtr);
               setCurrentView('recipient');
             }}
-            onViewArchive={() => setCurrentView('archive')}
+            onViewArchive={handleOpenArchive}
             onCancel={() => setCurrentView('landing')}
           />
         )}
@@ -235,16 +313,13 @@ export default function App() {
               setActiveRecipientLetter(ltr);
               setCurrentView('recipient');
             }}
-            onWriteNew={() => {
-              setComposerInitialType('LOVE');
-              setCurrentView('composer');
-            }}
+            onWriteNew={() => handleStartWriting('LOVE')}
           />
         )}
 
         {currentView === 'how-it-works' && (
           <HowItWorksView
-            onStartWriting={() => setCurrentView('composer')}
+            onStartWriting={() => handleStartWriting('LOVE')}
             onBack={() => setCurrentView('landing')}
           />
         )}
@@ -265,6 +340,30 @@ export default function App() {
         onClose={() => setShowAdminModal(false)}
         onPaymentUpdated={() => {
           fetchLetters().then(setLetters).catch(() => {});
+        }}
+      />
+
+      {/* User Authentication Modal (Login / Signup / Google) */}
+      <AuthModal
+        isOpen={showAuthModal}
+        initialMode={authInitialMode}
+        onClose={() => {
+          setShowAuthModal(false);
+          setIntendedDestination(null);
+        }}
+        onSuccess={handleAuthSuccess}
+      />
+
+      {/* Profile Modal */}
+      <ProfileModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        user={currentUser}
+        onLogout={() => {
+          logoutUser();
+          setCurrentUser(null);
+          setLetters(INITIAL_ARCHIVE_LETTERS);
+          setCurrentView('landing');
         }}
       />
     </div>
