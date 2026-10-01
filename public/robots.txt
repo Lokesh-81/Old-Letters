@@ -1,0 +1,19 @@
+# robots.txt for OLD-LETTERS (https://oldletters.vercel.app)
+User-agent: *
+Allow: /$
+Allow: /how-it-works
+Allow: /cookies
+Allow: /privacy
+Allow: /terms
+
+# Disallow private, authenticated, administrative, and tokenized letter routes
+Disallow: /api/
+Disallow: /letter/
+Disallow: /composer
+Disallow: /archive
+Disallow: /recipient
+Disallow: /admin
+Disallow: /bureau
+
+# Sitemap declaration
+Sitemap: https://oldletters.vercel.app/sitemap.xml
