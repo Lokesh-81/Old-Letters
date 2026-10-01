@@ -17,6 +17,8 @@ import { LoadingScreen } from './components/common/LoadingScreen';
 import { CookiePolicyView } from './components/legal/CookiePolicyView';
 import { PrivacyPolicyView } from './components/legal/PrivacyPolicyView';
 import { TermsOfServiceView } from './components/legal/TermsOfServiceView';
+import { CookieConsentBanner } from './components/legal/CookieConsentBanner';
+import { CookiePreferencesModal } from './components/legal/CookiePreferencesModal';
 import { fetchLetters, getDeliveryMeta, getCurrentUser, logoutUser } from './lib/api';
 import { AdminPaymentModal } from './components/admin/AdminPaymentModal';
 import { AuthModal } from './components/auth/AuthModal';
@@ -27,6 +29,7 @@ export default function App() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showCookiePreferencesModal, setShowCookiePreferencesModal] = useState(false);
   const [authInitialMode, setAuthInitialMode] = useState<'login' | 'signup'>('login');
   const [intendedDestination, setIntendedDestination] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
@@ -339,12 +342,16 @@ export default function App() {
                 }
               }}
               onNavigateLegal={handleNavigate}
+              onOpenCookiePreferences={() => setShowCookiePreferencesModal(true)}
             />
           </div>
         )}
 
         {currentView === 'cookies' && (
-          <CookiePolicyView onBack={() => handleNavigate('landing')} />
+          <CookiePolicyView
+            onBack={() => handleNavigate('landing')}
+            onOpenPreferences={() => setShowCookiePreferencesModal(true)}
+          />
         )}
 
         {currentView === 'privacy' && (
@@ -464,6 +471,19 @@ export default function App() {
           setLetters(INITIAL_ARCHIVE_LETTERS);
           setCurrentView('landing');
         }}
+      />
+
+      {/* First-Visit Cookie Consent Banner */}
+      <CookieConsentBanner
+        onOpenPreferences={() => setShowCookiePreferencesModal(true)}
+        onViewPolicy={() => handleNavigate('cookies')}
+      />
+
+      {/* Cookie Preferences Modal */}
+      <CookiePreferencesModal
+        isOpen={showCookiePreferencesModal}
+        onClose={() => setShowCookiePreferencesModal(false)}
+        onViewPolicy={() => handleNavigate('cookies')}
       />
     </div>
   );

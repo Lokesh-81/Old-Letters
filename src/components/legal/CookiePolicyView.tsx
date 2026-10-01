@@ -1,10 +1,16 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import React from 'react';
 
 interface LegalPageProps {
   onBack: () => void;
+  onOpenPreferences?: () => void;
 }
 
-export const CookiePolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
+export const CookiePolicyView: React.FC<LegalPageProps> = ({ onBack, onOpenPreferences }) => {
   return (
     <div className="min-h-screen bg-[#faf9f7] text-[#141618] font-serif py-12 px-6 sm:px-12">
       <div className="max-w-3xl mx-auto space-y-10">
@@ -22,22 +28,44 @@ export const CookiePolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onBack}
-            className="text-xs font-sans uppercase tracking-wider text-teal-900 border border-teal-900/30 hover:border-teal-900 px-4 py-2 rounded-xs bg-white hover:bg-stone-50 transition-colors cursor-pointer"
-          >
-            ← Return to Desk
-          </button>
+          <div className="flex items-center gap-3">
+            {onOpenPreferences && (
+              <button
+                type="button"
+                onClick={onOpenPreferences}
+                className="text-xs font-sans uppercase tracking-wider text-white bg-teal-900 hover:bg-teal-800 px-4 py-2 rounded-xs shadow-xs transition-colors cursor-pointer"
+              >
+                Cookie Preferences
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onBack}
+              className="text-xs font-sans uppercase tracking-wider text-teal-900 border border-teal-900/30 hover:border-teal-900 px-4 py-2 rounded-xs bg-white hover:bg-stone-50 transition-colors cursor-pointer"
+            >
+              ← Return to Desk
+            </button>
+          </div>
         </div>
 
         {/* Informational Policy Notice */}
-        <div className="p-4 bg-amber-50/70 border border-amber-200/80 rounded-xs text-xs font-sans text-amber-900 leading-relaxed">
-          <span className="font-semibold uppercase tracking-wider text-[10px] block mb-0.5">
-            Informational Legal Notice
-          </span>
-          This document describes the technical cookie and session mechanisms currently utilized by OLD-LETTERS.
-          It is an informational policy template for user transparency and should be reviewed for jurisdictional legal compliance.
+        <div className="p-4 bg-amber-50/70 border border-amber-200/80 rounded-xs text-xs font-sans text-amber-900 leading-relaxed flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <span className="font-semibold uppercase tracking-wider text-[10px] block mb-0.5">
+              Informational Legal Notice
+            </span>
+            This document describes the technical cookie and session mechanisms currently utilized by OLD-LETTERS.
+            It is an informational policy template for user transparency.
+          </div>
+          {onOpenPreferences && (
+            <button
+              type="button"
+              onClick={onOpenPreferences}
+              className="shrink-0 text-xs font-medium text-teal-900 underline underline-offset-2 hover:text-teal-950 cursor-pointer"
+            >
+              Adjust Preferences →
+            </button>
+          )}
         </div>
 
         {/* Content Body */}
@@ -71,7 +99,7 @@ export const CookiePolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
             <div className="border border-[#eae4da] bg-white rounded-xs p-5 space-y-3 shadow-2xs">
               <div className="flex items-center justify-between border-b border-stone-100 pb-2">
                 <span className="font-mono text-xs font-bold text-teal-900">oldletters_session</span>
-                <span className="text-[10px] font-mono uppercase bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-2xs">
+                <span className="text-[10px] font-mono uppercase bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-2xs font-semibold">
                   Strictly Essential
                 </span>
               </div>
@@ -82,7 +110,7 @@ export const CookiePolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
                 </div>
                 <div>
                   <span className="font-mono text-[10px] text-stone-500 uppercase block">Security Attributes</span>
-                  <span className="text-stone-800 font-medium">Secure (HTTPS), SameSite=Lax</span>
+                  <span className="text-stone-800 font-medium">Secure (HTTPS in Production), SameSite=Lax, Path=/</span>
                 </div>
                 <div>
                   <span className="font-mono text-[10px] text-stone-500 uppercase block">Lifespan</span>
@@ -94,7 +122,7 @@ export const CookiePolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
                 </div>
               </div>
               <p className="text-xs text-stone-600 font-light pt-1">
-                <strong>Purpose:</strong> Stores your cryptographically signed JSON Web Token (JWT). This confirms you are logged
+                <strong>Why Essential:</strong> Stores your cryptographically signed JSON Web Token (JWT). This confirms you are logged
                 in so you can view your personal correspondence archive, compose draft letters, access verification methods, and protect
                 unopened mail from unauthorized parties. Because it is marked <code className="bg-stone-100 px-1 py-0.5 rounded font-mono text-[11px]">HTTP-Only</code>,
                 client-side JavaScript cannot read or tamper with this cookie, mitigating Cross-Site Scripting (XSS) risks.
@@ -105,7 +133,43 @@ export const CookiePolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
           {/* Section 3 */}
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              3. Google OAuth 2.0 Authentication
+              3. Optional Cookies & Consent Storage
+            </h2>
+            <p className="font-light">
+              We respect your choice to control non-essential data. Optional cookies include:
+            </p>
+            <ul className="list-disc pl-5 space-y-1.5 font-light text-xs sm:text-sm">
+              <li>
+                <strong>Analytics Cookies:</strong> Intended to measure system performance and stationery usage.
+                <em> Note: OLD-LETTERS does not currently run third-party tracking scripts. If you enable analytics,
+                your preference is recorded, but no external trackers are loaded.</em>
+              </li>
+              <li>
+                <strong>Marketing Cookies:</strong> Intended for advertising. OLD-LETTERS does not engage in advertising,
+                marketing networks, or data brokering. These are disabled by default.
+              </li>
+            </ul>
+
+            <div className="border border-[#eae4da] bg-white rounded-xs p-4 space-y-2 mt-2">
+              <div className="flex items-center justify-between border-b border-stone-100 pb-2">
+                <span className="font-mono text-xs font-bold text-teal-900">oldletters_cookie_consent</span>
+                <span className="text-[10px] font-mono uppercase bg-stone-100 text-stone-600 border border-stone-200 px-2 py-0.5 rounded-2xs">
+                  Local Storage Preference
+                </span>
+              </div>
+              <p className="text-xs text-stone-600 font-light">
+                When you make a selection on our Cookie Consent Banner or Modal (Accept All, Reject Optional, or Save Preferences),
+                your choice is persisted locally in your browser&apos;s <code className="bg-stone-100 px-1 py-0.5 rounded font-mono text-[11px]">localStorage</code> under
+                the key <code className="font-mono text-[11px]">oldletters_cookie_consent</code>. It stores only your category flags and a timestamp,
+                with zero personal data or authentication secrets.
+              </p>
+            </div>
+          </section>
+
+          {/* Section 4 */}
+          <section className="space-y-3">
+            <h2 className="font-serif text-xl text-teal-950 font-medium">
+              4. Google OAuth 2.0 Authentication
             </h2>
             <p className="font-light">
               When you choose to sign in using &ldquo;Continue with Google&rdquo;, you are briefly directed to Google&rsquo;s official
@@ -119,25 +183,26 @@ export const CookiePolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
             </p>
           </section>
 
-          {/* Section 4 */}
+          {/* Section 5 */}
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              4. Why Essential Cookies Cannot Be Disabled
+              5. Why Essential Cookies Cannot Be Disabled
             </h2>
             <p className="font-light">
               Under applicable privacy regulations (such as GDPR, ePrivacy Directive, and CCPA), strictly essential cookies that are
               required to deliver a service explicitly requested by the user do not require prior consent banners, as the service cannot function without them.
             </p>
             <p className="font-light">
-              If you configure your browser to block all cookies, you will not be able to log in, write sealed letters, save drafts,
+              Choosing <strong>&ldquo;Reject Optional&rdquo;</strong> rejects non-essential cookies while preserving your secure session.
+              If you configure your browser to block all cookies universally, you will not be able to log in, write sealed letters, save drafts,
               or view your correspondence archive.
             </p>
           </section>
 
-          {/* Section 5 */}
+          {/* Section 6 */}
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              5. How to Manage Cookies in Your Browser
+              6. How to Manage Cookies in Your Browser
             </h2>
             <p className="font-light">
               You can control or delete cookies at any time through your browser settings:
@@ -150,10 +215,10 @@ export const CookiePolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
             </ul>
           </section>
 
-          {/* Section 6 */}
+          {/* Section 7 */}
           <section className="space-y-3 border-t border-[#eae4da] pt-6">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              6. Bureau Inquiries
+              7. Bureau Inquiries
             </h2>
             <p className="font-light">
               If you have any questions about our session security, cookie implementation, or privacy practices, please contact our
@@ -165,8 +230,8 @@ export const CookiePolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
           </section>
         </div>
 
-        {/* Bottom Back Button */}
-        <div className="border-t border-[#eae4da] pt-6 flex justify-between items-center">
+        {/* Bottom Back Button & Actions */}
+        <div className="border-t border-[#eae4da] pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
           <button
             type="button"
             onClick={onBack}
@@ -174,6 +239,17 @@ export const CookiePolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
           >
             ← Back to Correspondence Desk
           </button>
+
+          {onOpenPreferences && (
+            <button
+              type="button"
+              onClick={onOpenPreferences}
+              className="text-xs font-sans uppercase tracking-wider text-stone-600 hover:text-stone-900 underline cursor-pointer"
+            >
+              Reopen Cookie Preferences
+            </button>
+          )}
+
           <span className="text-[10px] font-mono text-stone-400">
             OLD-LETTERS REGISTRY NO. C-1892
           </span>

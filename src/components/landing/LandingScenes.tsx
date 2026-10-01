@@ -11,6 +11,7 @@ interface LandingScenesProps {
   onStartWriting: () => void;
   onExploreHowItWorks?: () => void;
   onNavigateLegal?: (view: 'cookies' | 'privacy' | 'terms') => void;
+  onOpenCookiePreferences?: () => void;
 }
 
 export const LandingScenes: React.FC<LandingScenesProps> = ({
@@ -18,6 +19,7 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
   onStartWriting,
   onExploreHowItWorks,
   onNavigateLegal,
+  onOpenCookiePreferences,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<LetterCategory>('ROMANTIC');
   const [selectedType, setSelectedType] = useState<LetterType>('LOVE');
@@ -415,6 +417,7 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
         onWriteClick={onStartWriting}
         onHowItWorksClick={onExploreHowItWorks}
         onNavigateLegal={onNavigateLegal}
+        onOpenCookiePreferences={onOpenCookiePreferences}
       />
     </div>
   );

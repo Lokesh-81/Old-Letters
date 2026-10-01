@@ -35,6 +35,7 @@ interface Footer23Props {
   onWriteClick?: () => void;
   onHowItWorksClick?: () => void;
   onNavigateLegal?: (view: 'cookies' | 'privacy' | 'terms') => void;
+  onOpenCookiePreferences?: () => void;
 }
 
 const defaultColumns: NavColumn[] = [
@@ -71,6 +72,7 @@ const defaultColumns: NavColumn[] = [
     title: 'REGISTRY',
     links: [
       { label: 'Correspondence Archive', href: '#archive' },
+      { label: 'Cookie Preferences', href: '#preferences' },
       { label: 'Cookie Policy', href: '/cookies' },
       { label: 'Privacy Policy', href: '/privacy' },
       { label: 'Terms of Service', href: '/terms' },
@@ -168,6 +170,7 @@ export default function Footer23({
   onWriteClick,
   onHowItWorksClick,
   onNavigateLegal,
+  onOpenCookiePreferences,
 }: Footer23Props) {
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -296,12 +299,16 @@ export default function Footer23({
               <motion.ul variants={linkCascade} className="flex flex-col gap-2">
                 {col.links.map((link, i) => {
                   const isLegal = link.href.startsWith('/');
+                  const isCookiePreferences = link.href === '#preferences';
                   return (
                     <motion.li key={`${link.label}-${i}`} variants={linkTrickle}>
                       <a
                         href={link.href}
                         onClick={(e) => {
-                          if (isLegal && onNavigateLegal) {
+                          if (isCookiePreferences && onOpenCookiePreferences) {
+                            e.preventDefault();
+                            onOpenCookiePreferences();
+                          } else if (isLegal && onNavigateLegal) {
                             e.preventDefault();
                             const path = link.href.replace('/', '') as 'cookies' | 'privacy' | 'terms';
                             onNavigateLegal(path);
@@ -326,6 +333,14 @@ export default function Footer23({
           © {new Date().getFullYear()} OLD-LETTERS Postal Conservancy. All correspondence reserved.
         </div>
         <div className="flex items-center gap-4 flex-wrap justify-center">
+          <button
+            type="button"
+            onClick={() => onOpenCookiePreferences?.()}
+            className="hover:text-teal-900 transition-colors cursor-pointer"
+          >
+            Cookie Preferences
+          </button>
+          <span className="text-stone-300">·</span>
           <button
             type="button"
             onClick={() => onNavigateLegal?.('cookies')}
