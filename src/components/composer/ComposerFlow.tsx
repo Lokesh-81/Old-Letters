@@ -839,8 +839,8 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                           : 'bg-[#faf8f5] border-[#eae4da] text-stone-600'
                       }`}
                     >
-                      <div className="font-serif text-sm">Gmail OTP</div>
-                      <div className="text-[10px] text-stone-500">6-digit code via Resend</div>
+                      <div className="font-serif text-sm">Email OTP</div>
+                      <div className="text-[10px] text-stone-500">6-digit verification code</div>
                     </button>
 
                     <button

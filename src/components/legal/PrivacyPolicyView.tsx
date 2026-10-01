@@ -78,7 +78,7 @@ export const PrivacyPolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
             <ul className="list-disc pl-5 space-y-1.5 font-light text-xs sm:text-sm">
               <li>Authenticating your account session and providing access to your private correspondence archive.</li>
               <li>Holding letters in our delivery vault until their scheduled arrival interval has elapsed.</li>
-              <li>Dispatching ceremonial notification emails to the recipient via our postal delivery service (Resend).</li>
+              <li>Dispatching ceremonial notification emails to the recipient via our postal delivery mailroom (Gmail SMTP).</li>
               <li>Verifying recipient identity prior to granting access to the unsealing ceremony.</li>
             </ul>
           </section>
@@ -104,7 +104,7 @@ export const PrivacyPolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
             <ul className="list-disc pl-5 space-y-1.5 font-light text-xs sm:text-sm">
               <li><strong>MongoDB Atlas:</strong> Managed cloud database for reliable, encrypted letter and account storage.</li>
               <li><strong>Google OAuth 2.0:</strong> Optional single sign-on authentication service.</li>
-              <li><strong>Resend:</strong> Transactional email service for delivery notifications.</li>
+              <li><strong>Gmail SMTP:</strong> Transactional email service for delivery notifications.</li>
               <li><strong>Vercel:</strong> Cloud hosting and serverless execution platform.</li>
             </ul>
           </section>

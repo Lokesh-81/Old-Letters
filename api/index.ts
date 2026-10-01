@@ -8,7 +8,6 @@ import app from '../server';
 
 export default function handler(req: Request, res: Response) {
   try {
-    // If Vercel rewrote the request and stripped the path, restore it from headers:
     const forwardedUri = (req.headers['x-forwarded-uri'] || req.headers['x-matched-path'] || req.headers['x-invoke-path']) as string | undefined;
 
     if (forwardedUri && forwardedUri.startsWith('/api') && !req.url.startsWith('/api')) {
@@ -28,3 +27,5 @@ export default function handler(req: Request, res: Response) {
     }
   }
 }
+
+export { app };

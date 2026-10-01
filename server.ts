@@ -1,5 +1,4 @@
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -9,7 +8,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
-import { Resend } from 'resend';
+import { sendMail, isEmailConfigured, SENDER_EMAIL, SENDER_NAME } from './src/lib/email';
 import {
   CreateLetterSchema,
   SubmitPaymentSchema,
@@ -61,11 +60,20 @@ const getProductionAppUrl = (): string => {
 
 const APP_URL = getProductionAppUrl();
 
-// Security Headers & Request Parsers
+// Security Headers, Vercel Path Normalization & Request Parsers
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  // Restore path rewritten by Vercel serverless functions
+  const forwardedUri = (req.headers['x-forwarded-uri'] || req.headers['x-matched-path'] || req.headers['x-invoke-path']) as string | undefined;
+  if (forwardedUri && forwardedUri.startsWith('/api') && !req.url.startsWith('/api')) {
+    req.url = forwardedUri;
+  } else if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/?')) {
+    req.url = `/api${req.url.startsWith('/') ? '' : '/'}${req.url}`;
+  }
+
   next();
 });
 
@@ -82,11 +90,7 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Resend client
-const resendApiKey = process.env.RESEND_API_KEY || '';
-const resendFromEmail = process.env.RESEND_FROM_EMAIL || 'post@old-letters.in';
 const adminEmail = process.env.ADMIN_EMAIL || 'admin@old-letters.in';
-const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 // Helpers
 function hashSha256(val: string): string {
@@ -339,7 +343,7 @@ app.get('/api/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     backend: 'mongodb-atlas',
     atlasConnected: isUsingAtlas(),
-    resendConfigured: Boolean(resendApiKey),
+    emailConfigured: isEmailConfigured(),
     googleOAuthConfigured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     database: 'MongoDB Atlas Protocol',
   });
@@ -726,38 +730,33 @@ app.post('/api/auth/request-otp', async (req, res) => {
       createdAt: new Date(),
     });
 
-    if (resend) {
-      try {
-        await resend.emails.send({
-          from: `OLD-LETTERS <${resendFromEmail}>`,
-          to: email,
-          subject: 'Your OLD-LETTERS Bureau Access Code',
-          html: `
-            <div style="background-color: #faf9f7; padding: 40px; font-family: serif; color: #134e4a; text-align: center;">
-              <div style="max-width: 440px; margin: 0 auto; background: #ffffff; border: 1px solid #eae4da; padding: 36px; border-radius: 4px;">
-                <div style="font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: #78716c; margin-bottom: 12px; font-family: monospace;">
-                  OLD-LETTERS BUREAU AUTHENTICATION
-                </div>
-                <h2 style="font-size: 24px; font-weight: 300; margin: 0 0 16px 0; color: #134e4a;">Correspondence Sign-in</h2>
-                <p style="font-size: 14px; font-family: sans-serif; color: #57534e; margin-bottom: 24px;">
-                  Use the following single-use code to authenticate your session. Valid for 10 minutes.
-                </p>
-                <div style="font-size: 34px; font-family: monospace; letter-spacing: 0.3em; font-weight: bold; background: #faf9f7; padding: 16px; border: 1px dashed #134e4a; color: #134e4a; margin: 24px 0;">
-                  ${otpCode}
-                </div>
+    if (isEmailConfigured()) {
+      await sendMail({
+        to: email,
+        subject: 'Your OLD-LETTERS Bureau Access Code',
+        html: `
+          <div style="background-color: #faf9f7; padding: 40px; font-family: serif; color: #134e4a; text-align: center;">
+            <div style="max-width: 440px; margin: 0 auto; background: #ffffff; border: 1px solid #eae4da; padding: 36px; border-radius: 4px;">
+              <div style="font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: #78716c; margin-bottom: 12px; font-family: monospace;">
+                OLD-LETTERS BUREAU AUTHENTICATION
+              </div>
+              <h2 style="font-size: 24px; font-weight: 300; margin: 0 0 16px 0; color: #134e4a;">Correspondence Sign-in</h2>
+              <p style="font-size: 14px; font-family: sans-serif; color: #57534e; margin-bottom: 24px;">
+                Use the following single-use code to authenticate your session. Valid for 10 minutes.
+              </p>
+              <div style="font-size: 34px; font-family: monospace; letter-spacing: 0.3em; font-weight: bold; background: #faf9f7; padding: 16px; border: 1px dashed #134e4a; color: #134e4a; margin: 24px 0;">
+                ${otpCode}
               </div>
             </div>
-          `,
-        });
-      } catch (err) {
-        console.error('Failed to send auth OTP email:', err);
-      }
+          </div>
+        `,
+      });
     }
 
     res.json({
       success: true,
       message: 'Access code sent to email.',
-      devOtpHint: resend ? undefined : otpCode,
+      devOtpHint: isEmailConfigured() ? undefined : otpCode,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -1012,6 +1011,31 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
       },
       createdAt: now,
     });
+
+    // Send confirmation to sender if email service is active
+    const senderNotificationEmail = input.senderEmail || req.user?.email;
+    if (isEmailConfigured() && senderNotificationEmail) {
+      await sendMail({
+        to: senderNotificationEmail,
+        subject: `Your correspondence has been sealed — Ref: ${trackingCode}`,
+        html: `
+          <div style="background-color: #faf9f7; padding: 40px; font-family: serif; color: #134e4a; text-align: center;">
+            <div style="max-width: 460px; margin: 0 auto; background: #ffffff; border: 1px solid #eae4da; padding: 36px; border-radius: 4px;">
+              <div style="font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: #78716c; margin-bottom: 12px; font-family: monospace;">
+                DISPATCH REF: ${trackingCode}
+              </div>
+              <h2 style="font-size: 26px; font-weight: 300; margin: 0 0 16px 0; color: #134e4a;">Correspondence Sealed</h2>
+              <p style="font-size: 14px; font-family: sans-serif; color: #57534e; margin-bottom: 20px; line-height: 1.6;">
+                Your letter to <strong>${input.recipientName}</strong> has been secured in the postal vault. It is scheduled for ceremonial delivery at <strong>${deliveryDate.toUTCString()}</strong>.
+              </p>
+              <div style="font-size: 11px; font-family: monospace; color: #78716c; border-top: 1px solid #eae4da; padding-top: 16px; margin-top: 24px;">
+                OLD-LETTERS CENTRAL POSTAL BUREAU
+              </div>
+            </div>
+          </div>
+        `,
+      });
+    }
 
     const responseLetter = {
       id: letterId.toString(),
@@ -1368,38 +1392,33 @@ app.post(['/api/delivery/request-otp', '/api/recipient/request-otp'], async (req
       createdAt: new Date(),
     });
 
-    if (resend) {
-      try {
-        await resend.emails.send({
-          from: `OLD-LETTERS <${resendFromEmail}>`,
-          to: recipient.email,
-          subject: 'Your letter has arrived — OLD-LETTERS Verification Code',
-          html: `
-            <div style="background-color: #faf9f7; padding: 40px; font-family: serif; color: #134e4a; text-align: center;">
-              <div style="max-width: 440px; margin: 0 auto; background: #ffffff; border: 1px solid #eae4da; padding: 36px; border-radius: 4px;">
-                <div style="font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #78716c; margin-bottom: 12px; font-family: monospace;">
-                  PRIVATE CORRESPONDENCE VERIFICATION
-                </div>
-                <h2 style="font-size: 26px; font-weight: 300; margin: 0 0 16px 0;">Verify Your Access</h2>
-                <p style="font-size: 14px; font-family: sans-serif; color: #57534e; margin-bottom: 24px;">
-                  Enter this code to unseal your incoming letter. Valid for 10 minutes.
-                </p>
-                <div style="font-size: 36px; font-family: monospace; letter-spacing: 0.25em; font-weight: bold; background: #faf9f7; padding: 16px; border: 1px dashed #134e4a; color: #134e4a; margin: 24px 0;">
-                  ${otpCode}
-                </div>
+    if (isEmailConfigured()) {
+      await sendMail({
+        to: recipient.email,
+        subject: 'Your letter has arrived — OLD-LETTERS Verification Code',
+        html: `
+          <div style="background-color: #faf9f7; padding: 40px; font-family: serif; color: #134e4a; text-align: center;">
+            <div style="max-width: 440px; margin: 0 auto; background: #ffffff; border: 1px solid #eae4da; padding: 36px; border-radius: 4px;">
+              <div style="font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #78716c; margin-bottom: 12px; font-family: monospace;">
+                PRIVATE CORRESPONDENCE VERIFICATION
+              </div>
+              <h2 style="font-size: 26px; font-weight: 300; margin: 0 0 16px 0;">Verify Your Access</h2>
+              <p style="font-size: 14px; font-family: sans-serif; color: #57534e; margin-bottom: 24px;">
+                Enter this code to unseal your incoming letter. Valid for 10 minutes.
+              </p>
+              <div style="font-size: 36px; font-family: monospace; letter-spacing: 0.25em; font-weight: bold; background: #faf9f7; padding: 16px; border: 1px dashed #134e4a; color: #134e4a; margin: 24px 0;">
+                ${otpCode}
               </div>
             </div>
-          `,
-        });
-      } catch (emailErr) {
-        console.error('Failed to send Resend OTP email:', emailErr);
-      }
+          </div>
+        `,
+      });
     }
 
     res.json({
       success: true,
       message: 'Verification code dispatched to recipient email.',
-      devOtpHint: resend ? undefined : otpCode,
+      devOtpHint: isEmailConfigured() ? undefined : otpCode,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -1623,43 +1642,38 @@ app.post(['/api/scheduler/tick', '/api/cron/delivery', '/api/internal/delivery/r
 
       const recipient = await recipientsColl.findOne({ letterId: letter._id });
 
-      if (resend && recipient && recipient.email) {
-        try {
-          const deliveryUrl = `${APP_URL}/letter/${rawToken}`;
-          await resend.emails.send({
-            from: `OLD-LETTERS <${resendFromEmail}>`,
-            to: recipient.email,
-            subject: 'Your letter has arrived — OLD-LETTERS',
-            html: `
-              <div style="background-color: #faf9f7; padding: 48px 24px; font-family: serif; color: #134e4a; text-align: center;">
-                <div style="max-width: 480px; margin: 0 auto; background: #ffffff; border: 1px solid #eae4da; padding: 40px 32px; border-radius: 4px;">
-                  <div style="font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: #78716c; margin-bottom: 16px; font-family: monospace;">
-                    DISPATCH REF: ${letter.trackingCode}
-                  </div>
-                  <h1 style="font-size: 32px; font-weight: 300; margin: 0 0 16px 0; color: #134e4a;">
-                    A letter has arrived.
-                  </h1>
-                  <p style="font-style: italic; font-size: 18px; color: #44403c; margin: 0 0 24px 0;">
-                    Your letter is waiting for you.
-                  </p>
-                  <a href="${deliveryUrl}" style="display: inline-block; background-color: #134e4a; color: #ffffff; padding: 14px 32px; text-decoration: none; font-size: 12px; font-family: sans-serif; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; border-radius: 2px;">
-                    OPEN YOUR LETTER →
-                  </a>
+      if (isEmailConfigured() && recipient && recipient.email) {
+        const deliveryUrl = `${APP_URL}/letter/${rawToken}`;
+        await sendMail({
+          to: recipient.email,
+          subject: 'Your letter has arrived — OLD-LETTERS',
+          html: `
+            <div style="background-color: #faf9f7; padding: 48px 24px; font-family: serif; color: #134e4a; text-align: center;">
+              <div style="max-width: 480px; margin: 0 auto; background: #ffffff; border: 1px solid #eae4da; padding: 40px 32px; border-radius: 4px;">
+                <div style="font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: #78716c; margin-bottom: 16px; font-family: monospace;">
+                  DISPATCH REF: ${letter.trackingCode}
                 </div>
+                <h1 style="font-size: 32px; font-weight: 300; margin: 0 0 16px 0; color: #134e4a;">
+                  A letter has arrived.
+                </h1>
+                <p style="font-style: italic; font-size: 18px; color: #44403c; margin: 0 0 24px 0;">
+                  Your letter is waiting for you.
+                </p>
+                <a href="${deliveryUrl}" style="display: inline-block; background-color: #134e4a; color: #ffffff; padding: 14px 32px; text-decoration: none; font-size: 12px; font-family: sans-serif; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; border-radius: 2px;">
+                  OPEN YOUR LETTER →
+                </a>
               </div>
-            `,
-          });
+            </div>
+          `,
+        });
 
-          await eventsColl.insertOne({
-            _id: new ObjectId(),
-            letterId: letter._id,
-            eventType: 'RECIPIENT_EMAIL_SENT',
-            metadata: { recipientEmail: recipient.email },
-            createdAt: new Date(),
-          });
-        } catch (e) {
-          console.error('Scheduler email error:', e);
-        }
+        await eventsColl.insertOne({
+          _id: new ObjectId(),
+          letterId: letter._id,
+          eventType: 'RECIPIENT_EMAIL_SENT',
+          metadata: { recipientEmail: recipient.email },
+          createdAt: new Date(),
+        });
       }
 
       deliveredLetters.push({
@@ -1993,6 +2007,7 @@ async function startServer() {
   }
 
   if (!isProd) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
