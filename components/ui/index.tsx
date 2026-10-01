@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { signupUser, loginUser, normalizeApiError } from '../../src/lib/api';
 
 // Google SVG Icon
 const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -27,6 +28,7 @@ export interface Auth7Props {
   onSuccess?: (user: { id: string; email: string; fullName: string; role?: string; avatarUrl?: string }) => void;
   onCancel?: () => void;
   initialMode?: 'login' | 'signup';
+  initialError?: string | null;
   promptTitle?: string;
   promptSubtitle?: string;
   onGuestPreview?: () => void;
@@ -36,6 +38,7 @@ export default function Auth7({
   onSuccess,
   onCancel,
   initialMode = 'login',
+  initialError,
   promptTitle,
   promptSubtitle,
   onGuestPreview,
@@ -46,7 +49,13 @@ export default function Auth7({
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(initialError || null);
+
+  useEffect(() => {
+    if (initialError) {
+      setErrorMsg(initialError);
+    }
+  }, [initialError]);
 
   // Form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -71,27 +80,27 @@ export default function Auth7({
 
     setLoading(true);
     try {
-      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-      const payload = isLogin
-        ? { email: cleanEmail, password: password.trim() }
-        : { email: cleanEmail, password: password.trim(), fullName: fullName.trim() || 'Correspondent' };
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Authentication rejected. Please check your credentials.');
+      if (isLogin) {
+        const result = await loginUser({
+          email: cleanEmail,
+          password: password.trim(),
+        });
+        if (onSuccess && result.user) {
+          onSuccess(result.user);
+        }
+      } else {
+        const result = await signupUser({
+          email: cleanEmail,
+          password: password.trim(),
+          fullName: fullName.trim() || 'Correspondent',
+        });
+        if (onSuccess && result.user) {
+          onSuccess(result.user);
+        }
       }
-
-      if (onSuccess && data.user) {
-        onSuccess(data.user);
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'An error occurred during correspondence authentication.');
+    } catch (err: unknown) {
+      const cleanError = normalizeApiError(err, 'Something went wrong. Please try again.');
+      setErrorMsg(cleanError);
     } finally {
       setLoading(false);
     }
@@ -155,7 +164,9 @@ export default function Auth7({
               {/* Error Notice */}
               {errorMsg && (
                 <div className="mb-4 p-3 bg-red-50/80 border border-red-200 text-xs text-red-800 rounded font-sans leading-relaxed">
-                  {errorMsg}
+                  {typeof errorMsg === 'string' && errorMsg !== '[object Object]'
+                    ? errorMsg
+                    : 'Something went wrong. Please try again.'}
                 </div>
               )}
 

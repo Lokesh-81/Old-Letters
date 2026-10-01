@@ -97,14 +97,27 @@ export default function App() {
 
       // Google OAuth redirection feedback
       if (authParam === 'google_not_configured') {
-        setAuthNotice('Google OAuth is not configured on this deployment. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your Vercel project environment variables.');
+        setAuthNotice('Google sign-in is not configured yet. Please use email and password.');
+        setAuthInitialMode('login');
+        setShowAuthModal(true);
         window.history.replaceState({}, document.title, window.location.pathname);
       } else if (authParam === 'google_success') {
         setAuthNotice('Signed in with Google successfully.');
         window.history.replaceState({}, document.title, window.location.pathname);
         setTimeout(() => setAuthNotice(null), 5000);
+        // Refresh current user session
+        getCurrentUser().then((user) => {
+          if (user) {
+            setCurrentUser(user);
+            fetchLetters().then((l) => {
+              if (l && l.length > 0) setLetters(l);
+            });
+          }
+        });
       } else if (authParam === 'error') {
         setAuthNotice('Authentication could not be completed. Please try again.');
+        setAuthInitialMode('login');
+        setShowAuthModal(true);
         window.history.replaceState({}, document.title, window.location.pathname);
         setTimeout(() => setAuthNotice(null), 5000);
       }
@@ -429,6 +442,7 @@ export default function App() {
       <AuthModal
         isOpen={showAuthModal}
         initialMode={authInitialMode}
+        initialError={authNotice}
         promptTitle={
           intendedDestination === 'seal-and-send'
             ? 'Before a letter can leave your desk,\nwe need to know who is sending it.'

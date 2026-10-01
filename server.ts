@@ -205,106 +205,128 @@ function checkRateLimit(key: string, maxRequests: number = 5, windowMs: number =
 // ====================================================================
 // GOOGLE OAUTH 2.0 CONFIGURATION (Passport Strategy)
 // ====================================================================
-const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
-const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
-const googleCallbackUrl = process.env.GOOGLE_CALLBACK_URL || `${APP_URL}/api/auth/google/callback`;
-
-if (googleClientId && googleClientSecret) {
-  passport.use(
-    new GoogleStrategy(
-      {
-        clientID: googleClientId,
-        clientSecret: googleClientSecret,
-        callbackURL: googleCallbackUrl,
-        proxy: true,
-      },
-      async (accessToken, refreshToken, profile, done) => {
-        try {
-          const email = profile.emails?.[0]?.value?.toLowerCase();
-          if (!email) {
-            return done(new Error('No email found in Google profile'), undefined);
-          }
-          const db = await getDb();
-          const usersColl = db.collection('users');
-          const now = new Date();
-
-          // 1. Check if user already exists by googleId
-          let user = await usersColl.findOne({ googleId: profile.id });
-          if (user) {
-            await usersColl.updateOne(
-              { _id: user._id },
-              { $set: { lastLoginAt: now, updatedAt: now } }
-            );
-            return done(null, {
-              id: user._id.toString(),
-              email: user.email,
-              fullName: user.fullName,
-              avatarUrl: user.avatarUrl || profile.photos?.[0]?.value,
-              role: user.role || 'USER',
-              authProvider: user.authProvider || 'GOOGLE',
-              emailVerified: true,
-            });
-          }
-
-          // 2. Check if user exists by email -> Intelligently Link Google ID!
-          user = await usersColl.findOne({ email });
-          if (user) {
-            await usersColl.updateOne(
-              { _id: user._id },
-              {
-                $set: {
-                  googleId: profile.id,
-                  authProvider: 'BOTH',
-                  emailVerified: true,
-                  lastLoginAt: now,
-                  updatedAt: now,
-                  avatarUrl: user.avatarUrl || profile.photos?.[0]?.value,
-                },
-              }
-            );
-            return done(null, {
-              id: user._id.toString(),
-              email: user.email,
-              fullName: user.fullName,
-              avatarUrl: user.avatarUrl || profile.photos?.[0]?.value,
-              role: user.role || 'USER',
-              authProvider: 'BOTH',
-              emailVerified: true,
-            });
-          }
-
-          // 3. New Google User
-          const newUserId = new ObjectId();
-          const newUser: UserDoc = {
-            _id: newUserId,
-            email,
-            fullName: profile.displayName || email.split('@')[0],
-            avatarUrl: profile.photos?.[0]?.value,
-            authProvider: 'GOOGLE',
-            googleId: profile.id,
-            role: email === adminEmail || email === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER',
-            emailVerified: true,
-            createdAt: now,
-            updatedAt: now,
-            lastLoginAt: now,
-          };
-          await usersColl.insertOne(newUser);
-          return done(null, {
-            id: newUserId.toString(),
-            email: newUser.email,
-            fullName: newUser.fullName,
-            avatarUrl: newUser.avatarUrl,
-            role: newUser.role,
-            authProvider: 'GOOGLE',
-            emailVerified: true,
-          });
-        } catch (err) {
-          return done(err as any, undefined);
-        }
-      }
-    )
-  );
+function getGoogleOAuthConfig() {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim() || '';
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() || '';
+  const callbackUrl = process.env.GOOGLE_CALLBACK_URL?.trim() || `${APP_URL}/api/auth/google/callback`;
+  return { clientId, clientSecret, callbackUrl };
 }
+
+let googleStrategyConfigured = false;
+function ensureGoogleStrategy(): boolean {
+  const { clientId, clientSecret, callbackUrl } = getGoogleOAuthConfig();
+  if (!clientId || !clientSecret) {
+    return false;
+  }
+  if (googleStrategyConfigured) {
+    return true;
+  }
+
+  try {
+    passport.use(
+      new GoogleStrategy(
+        {
+          clientID: clientId,
+          clientSecret: clientSecret,
+          callbackURL: callbackUrl,
+          proxy: true,
+        },
+        async (accessToken, refreshToken, profile, done) => {
+          try {
+            const email = profile.emails?.[0]?.value?.toLowerCase();
+            if (!email) {
+              return done(new Error('No email found in Google profile'), undefined);
+            }
+            const db = await getDb();
+            const usersColl = db.collection('users');
+            const now = new Date();
+
+            // 1. Check if user already exists by googleId
+            let user = await usersColl.findOne({ googleId: profile.id });
+            if (user) {
+              await usersColl.updateOne(
+                { _id: user._id },
+                { $set: { lastLoginAt: now, updatedAt: now } }
+              );
+              return done(null, {
+                id: user._id.toString(),
+                email: user.email,
+                fullName: user.fullName,
+                avatarUrl: user.avatarUrl || profile.photos?.[0]?.value,
+                role: user.role || 'USER',
+                authProvider: user.authProvider || 'GOOGLE',
+                emailVerified: true,
+              });
+            }
+
+            // 2. Check if user exists by email -> Intelligently Link Google ID!
+            user = await usersColl.findOne({ email });
+            if (user) {
+              await usersColl.updateOne(
+                { _id: user._id },
+                {
+                  $set: {
+                    googleId: profile.id,
+                    authProvider: 'BOTH',
+                    emailVerified: true,
+                    lastLoginAt: now,
+                    updatedAt: now,
+                    avatarUrl: user.avatarUrl || profile.photos?.[0]?.value,
+                  },
+                }
+              );
+              return done(null, {
+                id: user._id.toString(),
+                email: user.email,
+                fullName: user.fullName,
+                avatarUrl: user.avatarUrl || profile.photos?.[0]?.value,
+                role: user.role || 'USER',
+                authProvider: 'BOTH',
+                emailVerified: true,
+              });
+            }
+
+            // 3. New Google User
+            const newUserId = new ObjectId();
+            const newUser: UserDoc = {
+              _id: newUserId,
+              email,
+              fullName: profile.displayName || email.split('@')[0],
+              avatarUrl: profile.photos?.[0]?.value,
+              authProvider: 'GOOGLE',
+              googleId: profile.id,
+              role: email === adminEmail || email === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER',
+              emailVerified: true,
+              createdAt: now,
+              updatedAt: now,
+              lastLoginAt: now,
+            };
+            await usersColl.insertOne(newUser);
+            return done(null, {
+              id: newUserId.toString(),
+              email: newUser.email,
+              fullName: newUser.fullName,
+              avatarUrl: newUser.avatarUrl,
+              role: newUser.role,
+              authProvider: 'GOOGLE',
+              emailVerified: true,
+            });
+          } catch (err) {
+            return done(err as any, undefined);
+          }
+        }
+      )
+    );
+    googleStrategyConfigured = true;
+    return true;
+  } catch (err) {
+    console.error('[Google OAuth Setup Error]', err);
+    return false;
+  }
+}
+
+// Initial strategy registration attempt
+ensureGoogleStrategy();
 
 // ====================================================================
 // API ROUTES
@@ -318,7 +340,7 @@ app.get('/api/health', async (req, res) => {
     backend: 'mongodb-atlas',
     atlasConnected: isUsingAtlas(),
     resendConfigured: Boolean(resendApiKey),
-    googleOAuthConfigured: Boolean(googleClientId && googleClientSecret),
+    googleOAuthConfigured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     database: 'MongoDB Atlas Protocol',
   });
 });
@@ -542,13 +564,14 @@ app.post(['/api/auth/login', '/auth/login'], async (req, res) => {
 
 // Google OAuth Initiation
 app.get(['/api/auth/google', '/auth/google'], (req, res, next) => {
-  if (!googleClientId || !googleClientSecret) {
+  const isConfigured = ensureGoogleStrategy();
+  if (!isConfigured) {
     if (req.accepts('html')) {
       return res.redirect('/?auth=google_not_configured');
     }
     return res.status(503).json({
       success: false,
-      error: 'Google OAuth is not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.',
+      error: 'Google sign-in is not configured yet. Please use email and password.',
     });
   }
   passport.authenticate('google', { scope: ['profile', 'email'], session: false })(req, res, next);
@@ -556,14 +579,27 @@ app.get(['/api/auth/google', '/auth/google'], (req, res, next) => {
 
 // Google OAuth Callback
 app.get(['/api/auth/google/callback', '/auth/google/callback'], (req, res, next) => {
-  if (!googleClientId || !googleClientSecret) {
-    return res.redirect('/?auth=google_not_configured');
+  const isConfigured = ensureGoogleStrategy();
+  if (!isConfigured) {
+    if (req.accepts('html')) {
+      return res.redirect('/?auth=google_not_configured');
+    }
+    return res.status(503).json({
+      success: false,
+      error: 'Google sign-in is not configured yet. Please use email and password.',
+    });
   }
 
   passport.authenticate('google', { session: false }, (err: any, user: any) => {
     if (err || !user) {
       console.error('[Google OAuth Error]', err);
-      return res.redirect('/?auth=error');
+      if (req.accepts('html')) {
+        return res.redirect('/?auth=error');
+      }
+      return res.status(401).json({
+        success: false,
+        error: 'Google authentication failed. Please try again.',
+      });
     }
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: '30d' });
     res.cookie('oldletters_session', token, {

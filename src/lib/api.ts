@@ -4,6 +4,72 @@ import { Letter } from '../types/letter';
 const API_BASE = '/api';
 
 /**
+ * Normalizes any error, response object, or exception into a clean, human-readable string.
+ * Strictly prevents '[object Object]', raw HTML, or unparsed JSON from ever reaching the UI.
+ */
+export function normalizeApiError(
+  err: unknown,
+  fallback: string = 'Something went wrong. Please try again.'
+): string {
+  if (!err) return fallback;
+
+  if (typeof err === 'string') {
+    const trimmed = err.trim();
+    if (
+      !trimmed ||
+      trimmed === '[object Object]' ||
+      trimmed.toLowerCase().includes('<!doctype') ||
+      trimmed.toLowerCase().includes('<html') ||
+      trimmed.toLowerCase().includes('<body')
+    ) {
+      return fallback;
+    }
+    return trimmed;
+  }
+
+  if (err instanceof Error) {
+    const msg = typeof err.message === 'string' ? err.message.trim() : '';
+    if (
+      msg &&
+      msg !== '[object Object]' &&
+      !msg.toLowerCase().includes('<!doctype') &&
+      !msg.toLowerCase().includes('<html')
+    ) {
+      return msg;
+    }
+    return fallback;
+  }
+
+  if (typeof err === 'object') {
+    const obj = err as Record<string, any>;
+    if (typeof obj.error === 'string' && obj.error.trim() && obj.error !== '[object Object]') {
+      return obj.error.trim();
+    }
+    if (typeof obj.message === 'string' && obj.message.trim() && obj.message !== '[object Object]') {
+      return obj.message.trim();
+    }
+    if (obj.error && typeof obj.error === 'object') {
+      if (typeof obj.error.message === 'string' && obj.error.message.trim()) {
+        return obj.error.message.trim();
+      }
+      if (typeof obj.error.code === 'string' && obj.error.code.trim()) {
+        return `Error: ${obj.error.code}`;
+      }
+    }
+    if (Array.isArray(obj.errors) && obj.errors.length > 0) {
+      const first = obj.errors[0];
+      if (typeof first === 'string' && first.trim()) return first.trim();
+      if (first && typeof first.message === 'string' && first.message.trim()) return first.message.trim();
+    }
+    if (typeof obj.statusText === 'string' && obj.statusText.trim()) {
+      return obj.statusText.trim();
+    }
+  }
+
+  return fallback;
+}
+
+/**
  * Safely parse response as JSON. Never blindly call res.json() to prevent
  * syntax errors when server returns HTML error pages or non-JSON strings.
  */
@@ -469,4 +535,108 @@ export async function logoutUser(): Promise<void> {
     // Silent fail
   }
 }
+
+export async function signupUser(payload: {
+  email: string;
+  password: string;
+  fullName?: string;
+}): Promise<{ user: any; token?: string }> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/auth/signup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error('Unable to connect to the correspondence bureau. Please check your network connection.');
+  }
+
+  let text = '';
+  try {
+    text = await res.text();
+  } catch {
+    throw new Error('Something went wrong. Please try again.');
+  }
+
+  let data: any = null;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = null;
+  }
+
+  if (!res.ok || !data || data.success === false) {
+    const errorString = normalizeApiError(
+      data?.error || data?.message || data,
+      res.status === 400
+        ? 'A valid email and password (minimum 6 characters) are required.'
+        : res.status === 429
+        ? 'Too many registration attempts. Please wait a few minutes.'
+        : 'Something went wrong. Please try again.'
+    );
+    throw new Error(errorString);
+  }
+
+  if (!data.user) {
+    throw new Error('Something went wrong. Please try again.');
+  }
+
+  return { user: data.user, token: data.token };
+}
+
+export async function loginUser(payload: {
+  email: string;
+  password: string;
+}): Promise<{ user: any; token?: string }> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error('Unable to connect to the correspondence bureau. Please check your network connection.');
+  }
+
+  let text = '';
+  try {
+    text = await res.text();
+  } catch {
+    throw new Error('Something went wrong. Please try again.');
+  }
+
+  let data: any = null;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = null;
+  }
+
+  if (!res.ok || !data || data.success === false) {
+    const errorString = normalizeApiError(
+      data?.error || data?.message || data,
+      res.status === 401
+        ? 'Invalid email or password.'
+        : res.status === 429
+        ? 'Too many login attempts. Please wait 15 minutes.'
+        : 'Something went wrong. Please try again.'
+    );
+    throw new Error(errorString);
+  }
+
+  if (!data.user) {
+    throw new Error('Something went wrong. Please try again.');
+  }
+
+  return { user: data.user, token: data.token };
+}
+
 

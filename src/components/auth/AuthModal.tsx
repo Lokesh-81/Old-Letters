@@ -6,6 +6,7 @@ interface AuthModalProps {
   onClose: () => void;
   onSuccess: (user: { id: string; email: string; fullName: string }) => void;
   initialMode?: 'login' | 'signup';
+  initialError?: string | null;
   promptTitle?: string;
   promptSubtitle?: string;
   onGuestPreview?: () => void;
@@ -16,6 +17,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onSuccess,
   initialMode = 'login',
+  initialError,
   promptTitle,
   promptSubtitle,
   onGuestPreview,
@@ -27,6 +29,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       <div className="relative w-full max-w-5xl bg-[#faf9f7] rounded-none md:rounded-2xl shadow-2xl overflow-hidden border border-stone-200">
         <Auth7
           initialMode={initialMode}
+          initialError={initialError}
           promptTitle={promptTitle}
           promptSubtitle={promptSubtitle}
           onGuestPreview={onGuestPreview}
