@@ -142,13 +142,13 @@ export default function Auth7({
               <div className="mb-6 text-center">
                 <h1 className="text-2xl sm:text-3xl font-normal text-teal-950 font-serif tracking-tight whitespace-pre-line leading-tight">
                   {isLogin
-                    ? (promptTitle || 'Return to your correspondence.')
-                    : (promptTitle || 'Before a letter can leave your desk,\nwe need to know who is sending it.')}
+                    ? (promptTitle || 'Sign in to your correspondence')
+                    : (promptTitle || 'Create your account')}
                 </h1>
                 <p className="text-xs sm:text-sm font-sans text-stone-600 mt-2 font-light">
                   {isLogin
                     ? (promptSubtitle || 'Access your private letters, scheduled dispatches, and archives.')
-                    : (promptSubtitle || 'Create your correspondence account before sending your first letter.')}
+                    : (promptSubtitle || 'Create your account before composing and sealing your correspondence.')}
                 </p>
               </div>
 
@@ -171,7 +171,7 @@ export default function Auth7({
                       required
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="e.g. Vasantha or Lokesh"
+                      placeholder="Your Name"
                       className="w-full rounded-sm border border-[#eae4da] bg-white px-4 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 focus:border-teal-900 focus:outline-none focus:ring-1 focus:ring-teal-900 transition-all"
                     />
                   </div>
@@ -186,7 +186,7 @@ export default function Auth7({
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="e.g. vasantha@correspondence.in"
+                    placeholder="yourmail@gmail.com"
                     className="w-full rounded-sm border border-[#eae4da] bg-white px-4 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 focus:border-teal-900 focus:outline-none focus:ring-1 focus:ring-teal-900 transition-all"
                   />
                 </div>
@@ -232,7 +232,7 @@ export default function Auth7({
                       ? 'Confirming Seal...'
                       : isLogin
                       ? 'SIGN IN'
-                      : 'CREATE YOUR CORRESPONDENCE ACCOUNT'}
+                      : 'CREATE ACCOUNT'}
                   </button>
                 </div>
               </form>
@@ -271,7 +271,7 @@ export default function Auth7({
                       }}
                       className="font-medium text-teal-900 hover:underline cursor-pointer ml-1"
                     >
-                      Create one
+                      Create account
                     </button>
                   </>
                 ) : (

@@ -34,6 +34,7 @@ interface Footer23Props {
   language?: string;
   onWriteClick?: () => void;
   onHowItWorksClick?: () => void;
+  onNavigateLegal?: (view: 'cookies' | 'privacy' | 'terms') => void;
 }
 
 const defaultColumns: NavColumn[] = [
@@ -70,9 +71,9 @@ const defaultColumns: NavColumn[] = [
     title: 'REGISTRY',
     links: [
       { label: 'Correspondence Archive', href: '#archive' },
-      { label: 'Privacy & Sealing', href: '#how-it-works' },
-      { label: 'Terms of Dispatch', href: '#' },
-      { label: 'Bureau Inquiries', href: '#' },
+      { label: 'Cookie Policy', href: '/cookies' },
+      { label: 'Privacy Policy', href: '/privacy' },
+      { label: 'Terms of Service', href: '/terms' },
     ],
   },
 ];
@@ -166,6 +167,7 @@ export default function Footer23({
   columns = defaultColumns,
   onWriteClick,
   onHowItWorksClick,
+  onNavigateLegal,
 }: Footer23Props) {
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -292,21 +294,63 @@ export default function Footer23({
                 {col.title}
               </h3>
               <motion.ul variants={linkCascade} className="flex flex-col gap-2">
-                {col.links.map((link, i) => (
-                  <motion.li key={`${link.label}-${i}`} variants={linkTrickle}>
-                    <a
-                      href={link.href}
-                      className="text-sm leading-none font-medium text-zinc-600 transition-colors duration-150 hover:text-teal-900"
-                    >
-                      {link.label}
-                    </a>
-                  </motion.li>
-                ))}
+                {col.links.map((link, i) => {
+                  const isLegal = link.href.startsWith('/');
+                  return (
+                    <motion.li key={`${link.label}-${i}`} variants={linkTrickle}>
+                      <a
+                        href={link.href}
+                        onClick={(e) => {
+                          if (isLegal && onNavigateLegal) {
+                            e.preventDefault();
+                            const path = link.href.replace('/', '') as 'cookies' | 'privacy' | 'terms';
+                            onNavigateLegal(path);
+                          }
+                        }}
+                        className="text-sm leading-none font-medium text-zinc-600 transition-colors duration-150 hover:text-teal-900 cursor-pointer"
+                      >
+                        {link.label}
+                      </a>
+                    </motion.li>
+                  );
+                })}
               </motion.ul>
             </motion.div>
           ))}
         </motion.nav>
       </motion.div>
+
+      {/* Bottom Legal Notice Bar */}
+      <div className="border-t border-[#eae4da]/80 py-6 px-6 sm:px-12 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-stone-500 font-sans">
+        <div>
+          © {new Date().getFullYear()} OLD-LETTERS Postal Conservancy. All correspondence reserved.
+        </div>
+        <div className="flex items-center gap-4 flex-wrap justify-center">
+          <button
+            type="button"
+            onClick={() => onNavigateLegal?.('cookies')}
+            className="hover:text-teal-900 transition-colors cursor-pointer"
+          >
+            Cookie Policy
+          </button>
+          <span className="text-stone-300">·</span>
+          <button
+            type="button"
+            onClick={() => onNavigateLegal?.('privacy')}
+            className="hover:text-teal-900 transition-colors cursor-pointer"
+          >
+            Privacy Policy
+          </button>
+          <span className="text-stone-300">·</span>
+          <button
+            type="button"
+            onClick={() => onNavigateLegal?.('terms')}
+            className="hover:text-teal-900 transition-colors cursor-pointer"
+          >
+            Terms of Service
+          </button>
+        </div>
+      </div>
 
       <div className="relative overflow-hidden">
         <motion.div

@@ -45,7 +45,21 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 const isProd = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || 'old-letters-super-confidential-secret-key-1892';
 const CRON_SECRET = process.env.CRON_SECRET || 'old-letters-cron-secure-key-2026';
-const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
+
+const getProductionAppUrl = (): string => {
+  if (process.env.APP_URL) {
+    return process.env.APP_URL.replace(/\/+$/, '');
+  }
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.replace(/\/+$/, '')}`;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL.replace(/\/+$/, '')}`;
+  }
+  return `http://localhost:${PORT}`;
+};
+
+const APP_URL = getProductionAppUrl();
 
 // Security Headers & Request Parsers
 app.use((req, res, next) => {
@@ -60,9 +74,11 @@ app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use(cookieParser());
 app.use(passport.initialize());
 
-// Ensure all /api responses default to application/json header
+// Ensure all /api responses default to application/json header unless redirecting or streaming
 app.use('/api', (req, res, next) => {
-  res.setHeader('Content-Type', 'application/json');
+  if (!req.path.includes('/auth/google') && !req.path.includes('/media/')) {
+    res.setHeader('Content-Type', 'application/json');
+  }
   next();
 });
 
@@ -200,6 +216,7 @@ if (googleClientId && googleClientSecret) {
         clientID: googleClientId,
         clientSecret: googleClientSecret,
         callbackURL: googleCallbackUrl,
+        proxy: true,
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
@@ -320,7 +337,7 @@ app.get('/api/config/payment', (req, res) => {
 // ====================================================================
 
 // Current Authenticated User Session
-app.get(['/api/auth/me', '/api/me'], async (req: AuthenticatedRequest, res) => {
+app.get(['/api/auth/me', '/api/me', '/auth/me'], async (req: AuthenticatedRequest, res) => {
   if (!req.user || !req.user.id) {
     return res.json({ authenticated: false, user: null });
   }
@@ -364,8 +381,8 @@ app.get(['/api/auth/me', '/api/me'], async (req: AuthenticatedRequest, res) => {
   });
 });
 
-// Email + Password Registration
-app.post('/api/auth/register', async (req, res) => {
+// Email + Password Registration / Signup
+app.post(['/api/auth/register', '/api/auth/signup', '/auth/register', '/auth/signup'], async (req, res) => {
   try {
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '').trim();
@@ -418,6 +435,7 @@ app.post('/api/auth/register', async (req, res) => {
           secure: isProd,
           sameSite: 'lax',
           maxAge: 30 * 24 * 3600 * 1000,
+          path: '/',
         });
         return res.json({ success: true, token: sessionToken, user: userPayload });
       }
@@ -457,6 +475,7 @@ app.post('/api/auth/register', async (req, res) => {
       secure: isProd,
       sameSite: 'lax',
       maxAge: 30 * 24 * 3600 * 1000,
+      path: '/',
     });
 
     res.json({ success: true, token: sessionToken, user: userPayload });
@@ -466,7 +485,7 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 // Email + Password Login
-app.post('/api/auth/login', async (req, res) => {
+app.post(['/api/auth/login', '/auth/login'], async (req, res) => {
   try {
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '').trim();
@@ -512,6 +531,7 @@ app.post('/api/auth/login', async (req, res) => {
       secure: isProd,
       sameSite: 'lax',
       maxAge: 30 * 24 * 3600 * 1000,
+      path: '/',
     });
 
     res.json({ success: true, token: sessionToken, user: userPayload });
@@ -521,8 +541,11 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // Google OAuth Initiation
-app.get('/api/auth/google', (req, res, next) => {
+app.get(['/api/auth/google', '/auth/google'], (req, res, next) => {
   if (!googleClientId || !googleClientSecret) {
+    if (req.accepts('html')) {
+      return res.redirect('/?auth=google_not_configured');
+    }
     return res.status(503).json({
       success: false,
       error: 'Google OAuth is not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.',
@@ -532,7 +555,7 @@ app.get('/api/auth/google', (req, res, next) => {
 });
 
 // Google OAuth Callback
-app.get('/api/auth/google/callback', (req, res, next) => {
+app.get(['/api/auth/google/callback', '/auth/google/callback'], (req, res, next) => {
   if (!googleClientId || !googleClientSecret) {
     return res.redirect('/?auth=google_not_configured');
   }
@@ -548,6 +571,7 @@ app.get('/api/auth/google/callback', (req, res, next) => {
       secure: isProd,
       sameSite: 'lax',
       maxAge: 30 * 24 * 3600 * 1000,
+      path: '/',
     });
     res.redirect('/?auth=google_success');
   })(req, res, next);
@@ -620,6 +644,7 @@ app.post('/api/auth/google/test-login', async (req, res) => {
       secure: isProd,
       sameSite: 'lax',
       maxAge: 30 * 24 * 3600 * 1000,
+      path: '/',
     });
 
     res.json({ success: true, user: userPayload, token: sessionToken });
@@ -629,8 +654,8 @@ app.post('/api/auth/google/test-login', async (req, res) => {
 });
 
 // Logout
-app.post('/api/auth/logout', (req, res) => {
-  res.clearCookie('oldletters_session');
+app.post(['/api/auth/logout', '/auth/logout'], (req, res) => {
+  res.clearCookie('oldletters_session', { path: '/' });
   res.json({ success: true, message: 'Logged out successfully.' });
 });
 
@@ -1949,4 +1974,10 @@ async function startServer() {
   });
 }
 
-startServer();
+// Only start standalone HTTP server when executed directly (not in Vercel or test)
+if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {
+  startServer();
+}
+
+export { app };
+export default app;

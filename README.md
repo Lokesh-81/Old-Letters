@@ -1,514 +1,361 @@
 # OLD-LETTERS
 
-> *Some things are worth waiting for.*
-
-OLD-LETTERS is a modern luxury digital correspondence platform designed around the emotional experience of writing, sealing, waiting, and receiving a letter. In a world saturated with ephemeral instant messaging and fleeting notifications, OLD-LETTERS restores the quiet patience, deliberate intention, and reverence of physical post to the digital realm.
-
-Every letter penned on OLD-LETTERS is sealed in virtual wax and placed inside an unhurried delivery vault. It cannot be opened prematurely. When the appointed hour arrives, the recipient receives a confidential postal dispatch link protected by physical wax-seal mechanics, confidential ciphers, or one-time verification.
-
----
-
-## The Core Experience
+A digital correspondence platform built around:
 
 ```
-   WRITE  ─────────▶  SEAL  ─────────▶  WAIT  ─────────▶  ARRIVE
-(Intention)        (Wax & Token)    (48h Vault)      (Unsealing)
+WRITE → SEAL → WAIT → ARRIVE
 ```
 
-1. **WRITE**: The sender chooses a tactile stationery sheet (Ivory Classical, Typewritten Sheet, Air Courier, Burgundy Velvet, Midnight Ink) and pens their thoughts with careful measure.
-2. **SEAL**: The correspondence is stamped with a digital wax seal, assigned an archival tracking reference (e.g. `OL-1892-A`), and locked with an irreversible cryptographic delivery token.
-3. **WAIT**: The letter enters the transit vault for a mandatory minimum of 48 hours (or a scheduled future date like 7 days, 30 days, or a custom anniversary). During this period, the letter is held in quiet trust.
-4. **ARRIVE**: At the appointed time, the scheduler delivers an arrival dispatch to the recipient. The letter is unsealed only after authentication, private OTP verification, or entering a secret cipher passphrase.
+OLD-LETTERS is an intentional digital correspondence service that restores the patience, reverence, and emotional gravity of physical post. In contrast to instant messaging, every letter penned on OLD-LETTERS is sealed in virtual wax and placed into a temporal delivery vault. It cannot be opened prematurely. When the scheduled hour arrives, the recipient is invited to a quiet, ceremonial unsealing.
 
 ---
 
-## Table of Contents
+## Features
 
-1. [About OLD-LETTERS](#1-about-old-letters)
-2. [Core Experience](#2-core-experience)
-3. [Features](#3-features)
-4. [Letter Types](#4-letter-types)
-5. [Templates & Stationery](#5-templates--stationery)
-6. [Delivery System](#6-delivery-system)
-7. [Recipient Verification](#7-recipient-verification)
-8. [Authentication System](#8-authentication-system)
-9. [Google Sign-In](#9-google-sign-in)
-10. [Paid Experiences](#10-paid-experiences)
-11. [Manual UPI Payment System](#11-manual-upi-payment-system)
-12. [Bureau Desk / Administration](#12-bureau-desk--administration)
-13. [Technology Stack](#13-technology-stack)
-14. [Architecture & Data Flow](#14-architecture--data-flow)
-15. [MongoDB Collections](#15-mongodb-collections)
-16. [API Structure](#16-api-structure)
-17. [Environment Variables](#17-environment-variables)
-18. [Local Development](#18-local-development)
-19. [Google OAuth Setup](#19-google-oauth-setup)
-20. [MongoDB Atlas Setup](#20-mongodb-atlas-setup)
-21. [Resend Setup](#21-resend-setup)
-22. [UPI Payment Setup](#22-upi-payment-setup)
-23. [Vercel Deployment](#23-vercel-deployment)
-24. [Security Architecture](#24-security-architecture)
-25. [Project Structure](#25-project-structure)
-26. [Testing](#26-testing)
-27. [Future Features](#27-future-features)
-28. [License](#28-license)
+- **Letter Templates & Tactile Stationery**: 15 distinct, authentic paper finishes (Ivory Classic, Midnight Archive, Antique Vellum, Blush Pressed Rose, Love Letter, Apology, Thank You, Birthday, Congratulations, Encouragement, Goodbye, Time Capsule, Future Letter, Secret Letter, Custom Letter) with custom paper weights, authentic postal borders, and wax seal emblems.
+- **Physical Stationery Experience**: Editorial stationery desk with tactile sample cards, natural paper shadows, layered depth, and authentic high-contrast ink and typography.
+- **Letter Composer**: Multi-step correspondence flow allowing senders to select occasion, customize stationery, pen words with auto-saving drafts, upload keepsakes, choose verification, and schedule delivery.
+- **Draft Persistence**: Automatic client and server-side draft synchronization to ensure thoughts are never lost mid-composition.
+- **Delayed Delivery Intervals**: Mandatory intentional waiting periods:
+  - **48-Hour Minimum Delivery**: The signature waiting period cultivating patience.
+  - **7-Day Delivery**: For reflections meant for next week.
+  - **30-Day Delivery**: For monthly milestones and anticipated arrivals.
+  - **Custom Delivery Date**: Inscribe letters to be delivered on specific anniversaries or future years.
+- **User Accounts & Authentication**:
+  - Secure Email/Password registration and login.
+  - Google OAuth 2.0 single sign-on integration.
+  - Automatic account linking between Google and email accounts.
+- **JWT HTTP-Only Session Cookies**: Cryptographically signed `oldletters_session` cookies with `httpOnly`, `secure`, and `SameSite=Lax` protection against client-side tampering and XSS.
+- **Private Correspondence Archive**: Personal vault showing sent letters, transit countdowns, delivery tracking codes, and unsealing statuses.
+- **MongoDB Atlas Storage**: Scalable cloud database preserving letters, user profiles, verification tokens, and audit logs.
+- **GridFS Private Media**: Enclosed photographs and keepsakes securely stored in MongoDB GridFS buckets.
+- **Delivery Scheduler**: Automated background delivery engine dispatching arrival notifications when vault timers expire.
+- **Email Delivery via Resend**: Beautiful transactional email notifications informing recipients when their sealed dispatch has arrived.
+- **Admin Bureau Desk**: Administrative verification portal for inspecting letters, verifying manual transactions, and reviewing postal audit logs.
+- **Manual UPI Payment Workflow**: Traditional postal remittance workflow with QR code display, reference submission, and administrative verification.
 
 ---
 
-### 1. About OLD-LETTERS
+## Tech Stack
 
-OLD-LETTERS re-imagines digital correspondence as an intimate ceremonial act. Rather than encouraging rapid back-and-forth chatter, it introduces artificial latency—a mandatory minimum 48-hour delivery period. This intentional pause changes the writer's mindset, elevating ordinary text into meaningful keepsakes.
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, Framer Motion / Motion, Lucide Icons.
+- **Backend API**: Node.js, Express 4.
+- **Database**: MongoDB Atlas (native driver 7.x) with MongoDB GridFS for media files.
+- **Authentication**: Passport.js, Passport Google OAuth 2.0 (`passport-google-oauth20`), bcryptjs, JSON Web Tokens (`jsonwebtoken`), `cookie-parser`.
+- **Transactional Email**: Resend SDK (`resend`).
+- **Validation**: Zod schema validation.
+- **Hosting & Deployment**: Vercel (Edge Network + Serverless Functions via `api/index.ts` and `vercel.json`).
 
-### 2. Core Experience
-
-- **Physical Paper Presence**: Bespoke typography, realistic texture styling, authentic paper weight, margins, and custom wax seals.
-- **Sealing Ceremony**: Visual animation where the paper folds, slides into a lined envelope, and receives a stamped wax emblem.
-- **The 48-Hour Vault**: A strictly enforced waiting period where letters cannot be accelerated.
-- **Recipient Reveal**: A private unsealing screen where recipients break the seal, enter their verification code, and read the letter in an immersive, quiet reading mode.
-
-### 3. Features
-
-- **Unhurried Delivery Engine**: Enforces delivery intervals of 48 hours, 7 days, 30 days, or bespoke calendar dates.
-- **Private Envelope Architecture**: The recipient receives a unique link (`/letter/<secure-token>`). The actual content of the letter is never exposed in URL parameters or arrival emails.
-- **Zero Content Leakage**: Letters remain encrypted/protected server-side until verified.
-- **Reply Correspondence**: Recipients can pen reciprocal letters, creating an ongoing archival thread between two correspondents.
-- **Sender Archives**: Senders can revisit their sent dispatches, track postal statuses, and inspect postmarks.
-
-### 4. Letter Types
-
-OLD-LETTERS curates correspondence prompts tailored for deliberate writing:
-- **LOVE**: Unrushed confessions and deep declarations.
-- **APOLOGY**: Humble words that require space and quiet reflection.
-- **THANK YOU**: Honoring kindness that deserves permanent recognition.
-- **I MISS YOU**: Bridges across physical distance and time zones.
-- **FRIENDSHIP**: Celebrating enduring companionship over years.
-- **BIRTHDAY**: Timeless tributes honoring another year of life.
-- **CONFESSION**: Quiet truths intended for recipient eyes alone.
-- **CONGRATULATIONS**: Saluting discipline, milestones, and perseverance.
-- **ENCOURAGEMENT**: Steadfast warmth during seasons of doubt.
-- **JUST BECAUSE**: Spontaneous appreciation without needing an occasion.
-- **CUSTOM**: Blank canvas for bespoke correspondence.
-
-### 5. Templates & Stationery
-
-Each template combines authentic color theory, font pairings, and physical accents:
-1. **Ivory Studio**: Clean warm off-white surface with sharp editorial serif typography and dark charcoal ink.
-2. **Typewritten Sheet**: Crisp mechanical typewriter monospace on warm stone paper with black ribbon accents.
-3. **Air Courier**: Modern aerogramme with signature blue and red aviation margins and editorial sans text.
-4. **Muted Wine**: Aged ivory vellum with burgundy fountain ink and antique seal emblem.
-5. **Midnight Ink**: Soft archival cream parchment inscribed with deep nocturnal indigo ink.
-6. **Ruled Notebook**: Subtle feint ruled ledger lines with honest handwriting styling.
-7. **Modern Ledger**: Contemporary architectural grid alignment for measured thought.
-8. **Archival Mount**: Gallery mount cardstock with aperture for photographic enclosures.
-
-### 6. Delivery System
-
-The delivery engine runs on an automated cron architecture:
-- Schedulers query letters whose `status === 'SCHEDULED'` and `deliveryDate <= current_time`.
-- Uses **atomic MongoDB updates** (`findOneAndUpdate`) to guarantee strict idempotency—preventing double deliveries or duplicate emails.
-- Generates high-entropy cryptographic delivery tokens via Node `crypto.randomBytes(32)`.
-- Dispatches transactional arrival emails via **Resend** without exposing the letter body.
-
-### 7. Recipient Verification
-
-Before any letter body or media is decrypted, recipients verify their identity through one of three methods chosen by the sender:
-- **DIRECT**: The recipient opens the secure link directly.
-- **GMAIL OTP**: A 6-digit one-time code is dispatched via Resend to the recipient's registered Gmail/email. The code expires in 10 minutes and is locked after 5 failed attempts.
-- **SECRET PASSPHRASE**: A confidential passphrase or cipher known only to the sender and recipient, hashed with `bcrypt` server-side.
-
-### 8. Authentication System
-
-The application features a built-in session authentication engine without third-party vendor lock-in:
-- **Email + Password**: Hashed with `bcrypt` (10 rounds). Passwords are never logged or returned in responses.
-- **Session Management**: Secure, signed HTTP-only cookies (`oldletters_session`) using JWT.
-- **Strict Sender Ownership**: Letters created via `/api/letters` automatically inherit `senderId = req.user.id`. The client cannot spoof sender identities.
-
-### 9. Google Sign-In
-
-Integrated using Passport Google OAuth 2.0:
-- When a user clicks **"Continue with Google"**, they are redirected to Google's consent screen.
-- On callback, the backend validates their identity and looks up existing users by `googleId` or `email`.
-- **Intelligent Account Linking**: If an email previously registered via email/password logs in with Google, the accounts are linked seamlessly and `authProvider` is updated to `"BOTH"`.
-
-### 10. Paid Experiences
-
-Senders can enrich their correspondence with intimate sensory features:
-- **Voice Note (₹99)**: Private audio recording sealed inside the letter envelope.
-- **Video Note (₹149)**: High-fidelity private video message embedded on archival paper.
-- **Live Meeting / Salon (₹299)**: Private scheduled video ceremony to open the letter together.
-
-### 11. Manual UPI Payment System
-
-OLD-LETTERS uses India's Unified Payments Interface (UPI) for a human, deliberate payment flow:
-1. The user selects a paid feature (Voice Note, Video Note, Live Meeting).
-2. The Bureau displays an official UPI QR code and UPI ID (`oldletters@okhdfcbank`).
-3. The user scans using any UPI app (Google Pay, PhonePe, Paytm, BHIM, CRED).
-4. The user submits their **UTR / Reference Number** (and optional transaction screenshot).
-5. The payment record is created in MongoDB with status strictly **`PENDING`**.
-6. A Bureau postmaster verifies the bank reference manually and approves the feature.
-7. Features are unlocked **only** upon server-side admin approval.
-
-### 12. Bureau Desk / Administration
-
-The Post Office Bureau Desk provides administrators with oversight:
-- Review pending UPI transactions with UTR references and screenshots.
-- Approve or reject payments with administrative notes.
-- Inspect real-time delivery events and postal audit logs.
-- Manually trigger delivery scheduler cycles.
-- Protected server-side by `requireAdmin` middleware.
-
-### 13. Technology Stack
-
-- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4, Motion / Framer Motion, Lucide Icons.
-- **Backend**: Node.js, Express, MongoDB Atlas native driver, Passport.js.
-- **Security**: Bcrypt, JSON Web Tokens, HTTP-only secure cookies.
-- **Emails**: Resend API.
-- **Scheduling**: Vercel Cron / Express Scheduler Endpoint.
+*(Migration note: OLD-LETTERS was migrated from an earlier Supabase prototype to a self-contained Express + MongoDB Atlas + JWT cookie architecture for complete database independence and serverless flexibility).*
 
 ---
 
-### 14. Architecture & Data Flow
+## Architecture
 
 ```
-                      +-------------------+
-                      |   Client Browser  |
-                      |   (Vite + React)  |
-                      +---------+---------+
-                                |
-                     HTTP / JSON| Cookies
-                                v
-                      +-------------------+
-                      | Express API Server|
-                      |    (server.ts)    |
-                      +----+---------+----+
-                           |         |
-         +-----------------+         +-----------------+
-         |                                             |
-         v                                             v
-+-------------------+                         +-------------------+
-|   MongoDB Atlas   |                         |  External APIs    |
-+-------------------+                         +-------------------+
-| • users           |                         | • Google OAuth    |
-| • letters         |                         | • Resend Email    |
-| • letterRecipients|                         | • UPI Gateway     |
-| • deliveryTokens  |                         +-------------------+
-| • otpCodes        |                                   ^
-| • payments        |                                   |
-| • paidFeatures    |                         +---------+---------+
-| • deliveryEvents  |                         | Delivery Scheduler|
-| • auditLogs       |                         |  (/api/scheduler) |
-+-------------------+                         +-------------------+
+┌────────────────────────────────────────────────────────┐
+│                   CLIENT (Vite SPA)                   │
+│         React 19 + TypeScript + Tailwind CSS           │
+└───────────────────────────┬────────────────────────────┘
+                            │ /api/* requests
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│               BACKEND (Express API Router)             │
+│            Serverless on Vercel (`api/index.ts`)       │
+│               Standalone in Dev (`server.ts`)          │
+└─────────────┬──────────────────────────┬───────────────┘
+              │                          │
+              ▼                          ▼
+┌───────────────────────────┐  ┌─────────────────────────┐
+│       MONGODB ATLAS       │  │      EXTERNAL APIS      │
+│  - User Accounts          │  │  - Google OAuth 2.0     │
+│  - Letters & Recipients   │  │  - Resend Email Service │
+│  - Tokens & OTP Hashes    │  └─────────────────────────┘
+│  - GridFS Keepsake Media  │
+└───────────────────────────┘
 ```
 
-#### Scheduler Execution Flow:
-```
-Scheduler Trigger (Vercel Cron / Internal Runner)
-   ↓
-Find status="SCHEDULED" & deliveryDate <= NOW
-   ↓
-Atomic findOneAndUpdate (status="DELIVERED") [Idempotency Guard]
-   ↓
-Generate 32-byte Cryptographic Token
-   ↓
-Store SHA-256(token) in deliveryTokens
-   ↓
-Dispatch Arrival Email via Resend with URL: /letter/<rawToken>
-   ↓
-Log LETTER_DELIVERED & RECIPIENT_EMAIL_SENT in deliveryEvents
-```
+- **Frontend**: Vite SPA serving fast, responsive client-side routing.
+- **Backend**: Express router managing authentication, letter creation, scheduling, verification, and media retrieval.
+- **Database**: MongoDB Atlas holding collections with indexes on `senderId`, `trackingCode`, and `deliveryDate`.
+- **Authentication**: bcrypt password hashing + JWT signed tokens stored inside `oldletters_session` HTTP-only cookies + Google OAuth 2.0.
+- **Media**: GridFS bucket (`letterMedia`) for storing attachments directly in MongoDB without requiring external third-party image hosts.
+- **Email**: Resend transactional email API dispatching arrival notifications when letters reach their scheduled date.
+- **Deployment**: Vercel Serverless Functions (`api/index.ts` + `vercel.json` rewrites).
 
 ---
 
-### 15. MongoDB Collections
+## Environment Variables
 
-| Collection | Description | Primary Key / Unique Indexes |
-|---|---|---|
-| `users` | Correspondent profiles, credentials, auth providers | `_id`, `email` (unique), `googleId` (sparse unique) |
-| `letters` | Core letters, stationery styling, postmarks, delivery dates | `_id`, `trackingCode` (unique), `senderId`, `status` |
-| `letterRecipients`| Registered recipient name and email for each letter | `_id`, `letterId`, `email` |
-| `letterTemplates` | Curated stationery configurations and emblems | `_id`, `slug` (unique) |
-| `deliveryTokens` | Hashed delivery links (`SHA-256`) with expiry | `_id`, `tokenHash` (unique), `expiresAt` |
-| `otpCodes` | 6-digit hashed verification codes with attempt limits | `_id`, `email`, `letterId`, `expiresAt` |
-| `verificationAttempts` | Security rate limiting records | `_id`, `identifier` |
-| `letterMedia` | Metadata and storage keys for private attachments | `_id`, `letterId`, `userId` |
-| `payments` | UPI reference numbers, amounts, manual review status | `_id`, `status`, `userId`, `letterId` |
-| `paidFeatures` | Unlocked sensory features tied to approved payments | `_id`, `paymentId`, `status` |
-| `liveSessions` | Scheduled opening ceremonies and salons | `_id`, `letterId` |
-| `notifications`| In-app correspondent dispatch alerts | `_id`, `userId` |
-| `adminUsers` | Authorized bureau postal administrators | `_id`, `email` (unique) |
-| `auditLogs` | Append-only security audit log of all bureau actions | `_id`, `timestamp`, `action` |
+Configure these variables in your local `.env` file or in your **Vercel Project Settings → Environment Variables**:
 
----
+| Variable | Description | Required? | Example / Default |
+|---|---|---|---|
+| `MONGODB_URI` | MongoDB Atlas connection string | **Required in Prod** | `mongodb+srv://user:pass@cluster.mongodb.net/?retryWrites=true&w=majority` |
+| `MONGODB_DB_NAME` | Database name | Optional | `oldletters` |
+| `JWT_SECRET` | Secret key for signing JWT session cookies | **Required** | `openssl rand -hex 32` |
+| `SESSION_SECRET` | Fallback alias for `JWT_SECRET` | Optional | `openssl rand -hex 32` |
+| `APP_URL` | Public production URL of the app | **Required in Prod** | `https://your-project.vercel.app` (or `http://localhost:3000`) |
+| `GOOGLE_CLIENT_ID` | Google OAuth Client ID from Google Cloud Console | Optional (Required for Google Login) | `xxxxxxxx.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth Client Secret | Optional (Required for Google Login) | `GOCSPX-xxxxxxxx` |
+| `GOOGLE_CALLBACK_URL` | Google OAuth redirect callback URL | Optional | `https://your-project.vercel.app/api/auth/google/callback` |
+| `RESEND_API_KEY` | Resend API key for transactional email | Optional | `re_xxxxxxxx` |
+| `RESEND_FROM_EMAIL` | Sender address for delivery notices | Optional | `post@old-letters.in` |
+| `ADMIN_EMAIL` | Bureau administrator email | Optional | `admin@old-letters.in` |
+| `ADMIN_SECRET` | Secret header key for admin verification bypass | Optional | `your-secret-admin-key` |
+| `CRON_SECRET` | Secret bearer token for automated dispatch cron | Optional | `your-cron-secret-key` |
+| `PORT` | Local server port | Optional | `3000` |
+| `UPI_ID` | Virtual Payment Address for manual payments | Optional | `oldletters@okhdfcbank` |
+| `UPI_DISPLAY_NAME` | Payee name on UPI intent | Optional | `OLD-LETTERS CORRESPONDENCE` |
+| `PAYMENT_QR_URL` | Path to UPI QR asset | Optional | `/assets/upi-qr.png` |
 
-### 16. API Structure
-
-#### Authentication
-- `POST /api/auth/register` — Create new correspondent account with email & password.
-- `POST /api/auth/login` — Sign in with email & password.
-- `GET /api/auth/google` — Initiate Google OAuth 2.0 authentication.
-- `GET /api/auth/google/callback` — Google OAuth redirect callback.
-- `GET /api/auth/me` — Retrieve active session profile.
-- `POST /api/auth/logout` — Terminate session and clear cookie.
-- `POST /api/auth/request-otp` — Request 6-digit email sign-in code.
-- `POST /api/auth/verify-otp` — Verify code and generate session.
-
-#### Letters & Archive
-- `GET /api/letters` — Fetch correspondent's private letter archive (requires authentication).
-- `POST /api/letters` — Seal and post a letter (enforces 48-hour delivery minimum; binds `senderId`).
-- `GET /api/letters/:id` — Retrieve single letter record with IDOR verification.
-- `GET /api/templates` — List active stationery templates.
-
-#### Recipient Experience
-- `GET /api/delivery/token/:token` — Retrieve unsealed letter metadata (safely masks email; zero content returned).
-- `POST /api/delivery/request-otp` — Dispatch verification code to recipient's email.
-- `POST /api/delivery/verify` — Verify OTP or cipher passphrase to unlock and unseal letter body.
-
-#### Payments & Bureau Desk
-- `GET /api/config/payment` — Public UPI QR code and payment metadata.
-- `POST /api/payments/create` — Submit manual UPI transaction reference (starts strictly as `PENDING`).
-- `GET /api/payments` — View personal payment status.
-- `GET /api/admin/payments` — Bureau administrator review desk (requires admin session).
-- `POST /api/admin/payments/:id/approve` — Approve UPI payment & unlock feature.
-- `POST /api/admin/payments/:id/reject` — Reject invalid reference & cancel feature.
-- `GET /api/admin/audit-logs` — Read immutable bureau audit log.
-
-#### Delivery Scheduler
-- `POST /api/scheduler/tick` or `POST /api/cron/delivery` — Idempotent delivery runner (protected by `CRON_SECRET`).
+*Never commit real API keys, passwords, or secrets to the Git repository.*
 
 ---
 
-### 17. Environment Variables
+## Local Development
 
-Create a `.env` file in the root directory:
+### 1. Install Dependencies
+```bash
+npm install
+```
+
+### 2. Configure Environment
+Copy `.env.example` to `.env`:
+```bash
+cp .env.example .env
+```
+Fill in `MONGODB_URI` and `JWT_SECRET`. If testing Google Sign-In locally, provide `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+### 3. Run Development Server
+```bash
+npm run dev
+```
+This runs Express and Vite concurrently on `http://localhost:3000`. Express handles `/api/*` routes while Vite provides instant hot-module replacement for the frontend.
+
+---
+
+## Build & Test Scripts
+
+All scripts are defined in `package.json`:
 
 ```bash
-# MongoDB Atlas Database Connection
-MONGODB_URI="mongodb+srv://<username>:<password>@cluster0.mongodb.net/old_letters?retryWrites=true&w=majority"
-MONGODB_DB_NAME="old_letters"
+# Type check and lint codebase
+npm run lint
 
-# Server-Side Session & JWT Secret
-SESSION_SECRET="your-strong-random-session-secret"
+# Build Vite frontend assets to dist/
+npm run build
 
-# Google OAuth 2.0 Credentials (Google Cloud Console)
-GOOGLE_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET="your-google-client-secret"
-GOOGLE_CALLBACK_URL="http://localhost:3000/api/auth/google/callback"
+# Verify backend MongoDB module connectivity
+npm run test:backend
 
-# Resend Transactional Email API (https://resend.com)
-RESEND_API_KEY="re_123456789"
-RESEND_FROM_EMAIL="post@old-letters.in"
-ADMIN_EMAIL="admin@old-letters.in"
-
-# Application Deployment URL
-APP_URL="http://localhost:3000"
-
-# Vercel Cron Delivery Scheduler Secret
-CRON_SECRET="your-cron-secret-key"
-ADMIN_SECRET="your-admin-secret-key"
-
-# Manual UPI Payment Gateway Configuration
-UPI_ID="oldletters@okhdfcbank"
-UPI_DISPLAY_NAME="OLD-LETTERS CORRESPONDENCE"
-PAYMENT_QR_URL="/assets/upi-qr.png"
-
-# Private Object Storage
-STORAGE_PROVIDER="cloudinary"
-STORAGE_BUCKET=""
-STORAGE_ACCESS_KEY=""
-STORAGE_SECRET_KEY=""
+# Start production server locally
+npm start
 ```
 
-*Note: Never expose `MONGODB_URI`, `GOOGLE_CLIENT_SECRET`, or `RESEND_API_KEY` to client-side `VITE_` variables.*
-
 ---
 
-### 18. Local Development
+## MongoDB Atlas Setup
 
-1. **Install Dependencies**:
-   ```bash
-   npm install
+1. **Create an Account**: Sign up at [mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas).
+2. **Create a Cluster**: Deploy a free M0 Sandbox or dedicated cluster in your preferred cloud region.
+3. **Create Database User**: Under **Security → Database Access**, create a user with `Read and write to any database` privileges.
+4. **Configure Network Access**: Under **Security → Network Access**, add IP Address `0.0.0.0/0` (Allow Access from Anywhere) to permit connections from Vercel serverless functions.
+5. **Obtain Connection String**: Click **Clusters → Connect → Drivers (Node.js)**. Copy the connection URI:
    ```
-
-2. **Configure Environment Variables**:
-   Copy `.env.example` to `.env` and fill in credentials.
-
-3. **Seed Database**:
-   ```bash
-   npx tsx scripts/seed.ts
+   mongodb+srv://<username>:<password>@cluster0.mongodb.net/?retryWrites=true&w=majority
    ```
+6. **Set Variable**: Set `MONGODB_URI` in `.env` (local) and Vercel Project Settings (production).
+7. **Start the Application**: When the app starts, MongoDB will automatically create collections and establish indexes for high-speed queries.
 
-4. **Start Development Server**:
-   ```bash
-   npm run dev
+---
+
+## Google OAuth 2.0 Setup
+
+To enable **&ldquo;Continue with Google&rdquo;**:
+
+1. **Create Project**: Open the [Google Cloud Console](https://console.cloud.google.com/) and create a new project (e.g. `OLD-LETTERS`).
+2. **OAuth Consent Screen**:
+   - Go to **APIs & Services → OAuth consent screen**.
+   - Choose **External** user type.
+   - Enter App name (`OLD-LETTERS`), User support email, and Developer contact information.
+   - Scopes required: `.../auth/userinfo.email` and `.../auth/userinfo.profile`.
+3. **Create OAuth Client ID**:
+   - Navigate to **APIs & Services → Credentials → Create Credentials → OAuth Client ID**.
+   - Application type: **Web application**.
+   - Name: `OLD-LETTERS Web Client`.
+4. **Authorized JavaScript Origins**:
+   - Local: `http://localhost:3000`
+   - Production: `https://your-project.vercel.app`
+5. **Authorized Redirect URIs**:
+   - Local: `http://localhost:3000/api/auth/google/callback`
+   - Production: `https://your-project.vercel.app/api/auth/google/callback`
+6. **Save Credentials**: Copy your **Client ID** and **Client Secret**.
+7. **Configure Variables**:
+   ```env
+   GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+   GOOGLE_CLIENT_SECRET="GOCSPX-your-client-secret"
+   GOOGLE_CALLBACK_URL="https://your-project.vercel.app/api/auth/google/callback"
    ```
-   Open `http://localhost:3000` in your browser.
+8. **Production Verification**: Ensure the redirect URI in Google Cloud Console matches the exact production callback URL.
 
 ---
 
-### 19. Google OAuth Setup
+## Vercel Deployment
 
-To enable Google Sign-In:
-
-1. Visit [Google Cloud Console](https://console.cloud.google.com/).
-2. Create a new project named `OLD-LETTERS`.
-3. Navigate to **APIs & Services** → **OAuth consent screen**:
-   - User Type: **External**
-   - App Name: `OLD-LETTERS`
-   - User Support Email & Developer Contact: Your email
-   - Scopes: `.../auth/userinfo.email`, `.../auth/userinfo.profile`, `openid`
-4. Navigate to **Credentials** → **Create Credentials** → **OAuth Client ID**:
-   - Application Type: **Web application**
-   - Name: `OLD-LETTERS Web Client`
-   - **Authorized JavaScript origins**:
-     - `http://localhost:3000`
-     - `https://oldletters.vercel.app` (your production URL)
-   - **Authorized redirect URIs**:
-     - `http://localhost:3000/api/auth/google/callback`
-     - `https://oldletters.vercel.app/api/auth/google/callback`
-5. Copy the generated **Client ID** and **Client Secret** into your `.env`:
-   ```bash
-   GOOGLE_CLIENT_ID="<your-client-id>.apps.googleusercontent.com"
-   GOOGLE_CLIENT_SECRET="<your-client-secret>"
-   GOOGLE_CALLBACK_URL="http://localhost:3000/api/auth/google/callback"
-   ```
+1. **Push to GitHub**: Ensure all code is committed and pushed to your GitHub repository.
+2. **Import Project**: In the [Vercel Dashboard](https://vercel.com/), click **Add New → Project** and import your repository.
+3. **Framework Preset**: Vercel will detect `Vite`. Leave the Build Command as `npm run build` and Output Directory as `dist`.
+4. **Environment Variables**: Add all production variables:
+   - `MONGODB_URI`
+   - `JWT_SECRET`
+   - `APP_URL` (set to `https://your-project.vercel.app`)
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_CLIENT_SECRET`
+   - `GOOGLE_CALLBACK_URL` (`https://your-project.vercel.app/api/auth/google/callback`)
+   - `RESEND_API_KEY` (if using email)
+5. **Deploy**: Click **Deploy**. Vercel will build the frontend into `dist/` and configure the Serverless Function from `api/index.ts` via `vercel.json`.
+6. **Verify Endpoints**:
+   - Health check: `https://your-project.vercel.app/api/health`
+   - Session status: `https://your-project.vercel.app/api/auth/me`
+   - Google Sign-In: Click &ldquo;Continue with Google&rdquo; on your production site.
 
 ---
 
-### 20. MongoDB Atlas Setup
-
-1. Create a free M0 or production cluster on [MongoDB Atlas](https://www.mongodb.com/atlas).
-2. Under **Database Access**, create a database user with read and write privileges.
-3. Under **Network Access**, add `0.0.0.0/0` (allow access from anywhere for Vercel serverless execution).
-4. Click **Connect** → **Drivers** → select **Node.js** and copy the connection string.
-5. Set `MONGODB_URI` and `MONGODB_DB_NAME="old_letters"` in `.env`.
-
----
-
-### 21. Resend Setup
-
-1. Create an account on [Resend](https://resend.com/).
-2. Generate an API Key in the Resend dashboard.
-3. Add and verify your custom sending domain (e.g. `old-letters.in`), or use `onboarding@resend.dev` for testing.
-4. Set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in `.env`.
-
----
-
-### 22. UPI Payment Setup
-
-1. Place your official UPI QR code image at `public/assets/upi-qr.png`.
-2. Update `UPI_ID` (e.g. `oldletters@okhdfcbank`) and `UPI_DISPLAY_NAME` in `.env`.
-3. Senders will scan the QR code in any UPI application and submit their transaction UTR reference for administrative approval.
-
----
-
-### 23. Vercel Deployment
-
-1. Push your repository to GitHub.
-2. Import the repository into [Vercel](https://vercel.com/).
-3. Add all environment variables from `.env.example` into Vercel Project Settings.
-4. Ensure `vercel.json` contains the cron configuration for delivery dispatch:
-   ```json
-   {
-     "crons": [
-       {
-         "path": "/api/cron/delivery",
-         "schedule": "*/10 * * * *"
-       }
-     ]
-   }
-   ```
-5. Deploy. Vercel will trigger the delivery endpoint every 10 minutes using `CRON_SECRET`.
-
----
-
-### 24. Security Architecture
-
-- **Password Hashing**: Bcrypt with salt rounds = 10.
-- **Token Cryptography**: High-entropy 32-byte tokens generated using Node `crypto.randomBytes`. Stored only as `SHA-256` hashes in MongoDB.
-- **Zero Content Leakage**: Content remains locked until verification succeeds.
-- **Session Protection**: HTTP-only, `SameSite=Lax`, secure cookies.
-- **IDOR Prevention**: Letters query only against `senderId === req.user.id`.
-- **Server-Side Admin Validation**: Bureau mutations require authenticated admin session tokens.
-
----
-
-### 25. Project Structure
+## Authentication Flow
 
 ```
+VISITOR
+   │
+   ├─► Clicks "Write a Letter" / "Sign in"
+   │
+   ▼
+AUTH MODAL (Bureau Registry)
+   │
+   ├── Option A: Email & Password (Signup / Login)
+   │     │
+   │     ▼
+   │   POST /api/auth/signup OR /api/auth/login
+   │     │
+   │     ▼ (Verify credentials / bcrypt hash)
+   │
+   └── Option B: Continue with Google
+         │
+         ▼
+       GET /api/auth/google
+         │
+         ▼ (Google OAuth Consent Screen)
+         │
+       GET /api/auth/google/callback
+         │
+         ▼ (Link or create account in MongoDB)
+   │
+   ▼
+ISSUE HTTP-ONLY SESSION COOKIE
+   │ `oldletters_session` (JWT, 30 days, SameSite=Lax, Secure)
+   │
+   ▼
+COMPOSER DESK
+   │ Inscribe letter, select stationery, mount photograph
+   │
+   ▼
+REVIEW & POST
+   │ Select recipient verification (Passphrase, OTP, or Open)
+   │ Choose delivery delay (48 Hours, 7 Days, 30 Days, Custom)
+   │
+   ▼
+TEMPORAL DELIVERY VAULT
+   │ Locked until arrival timestamp
+   │
+   ▼
+RECIPIENT UNSEALING CEREMONY & ARCHIVE
+```
+
+---
+
+## Security Architecture
+
+- **Bcrypt Password Hashing**: User passwords are encrypted with bcrypt (10 salt rounds) before touching database records.
+- **HTTP-Only JWT Cookies**: Authentication tokens are stored in `oldletters_session` cookies configured with `httpOnly: true`, `secure: true`, and `sameSite: 'lax'`, preventing JavaScript token theft via XSS.
+- **Strict Server-Side Ownership**: Letters and archives can only be retrieved or updated by the authenticated author.
+- **Protected Administrative Endpoints**: Bureau moderation and payment verification endpoints require verified admin status or secret keys.
+- **Input Sanitization & Validation**: API payloads are validated using strict Zod schemas with character and size constraints.
+- **No Committed Secrets**: The repository contains only `.env.example` with blank placeholders. All live credentials remain in local environments or encrypted Vercel settings.
+
+---
+
+## Project Structure
+
+```
+old-letters/
+├── api/
+│   └── index.ts                 # Vercel serverless function entrypoint
 ├── components/
 │   └── ui/
-│       ├── demo.tsx             # Auth7 demo wrapper
-│       └── index.tsx            # Auth7 component (Login / Signup / Google)
+│       └── index.tsx            # Bureau authentication modal & form
 ├── scripts/
-│   ├── seed.ts                  # Stationery, admin, and Indian sample seed script
-│   └── test-backend.ts          # End-to-end authentication and security test suite
+│   ├── seed.ts                  # Database seeding script
+│   └── test-backend.ts          # Backend validation test
 ├── src/
-│   ├── assets/                  # Icons and visual assets
 │   ├── components/
-│   │   ├── admin/               # Bureau Desk & Payment Verification Modal
-│   │   ├── archive/             # Sender Archive View
-│   │   ├── auth/
-│   │   │   ├── AuthModal.tsx    # Modal wrapper for Auth7
-│   │   │   └── ProfileModal.tsx # Correspondent Seal & Profile Card
-│   │   ├── common/              # LoadingScreen & shared primitives
-│   │   ├── composer/            # 48-hour letter composer ceremony
-│   │   ├── landing/             # Editorial hero and stationery showcase
-│   │   ├── recipient/           # Unsealing ceremony, cipher & OTP verify
-│   │   └── Navigation.tsx       # Header with subtle correspondent controls
+│   │   ├── admin/               # Administrative verification desk
+│   │   ├── archive/             # Personal correspondence archive
+│   │   ├── auth/                # Profile and Auth modal containers
+│   │   ├── common/              # PaperSheet, EnvelopeObject, LoadingScreen
+│   │   ├── composer/            # LetterWriter, ReviewStep, StationeryGallery
+│   │   ├── landing/             # LandingHero, LandingScenes
+│   │   ├── legal/               # CookiePolicyView, PrivacyPolicyView, TermsOfServiceView
+│   │   ├── recipient/           # RecipientExperience, Unsealing ceremony
+│   │   └── ui/                  # Radial carousel, scroll triggers, footer
 │   ├── data/
-│   │   └── mockData.ts          # Stationery templates & sample correspondence
+│   │   └── mockData.ts          # Curated templates, letter types, archives
 │   ├── lib/
-│   │   ├── api.ts               # Clean backend API client
-│   │   ├── mongodb.ts           # Cached MongoDB Atlas connection & schemas
-│   │   └── utils.ts             # Tailwind merge utility (cn)
+│   │   ├── api.ts               # Frontend API client
+│   │   └── mongodb.ts           # MongoDB Atlas connection & collection schemas
 │   ├── types/
-│   │   ├── backend.ts           # Zod schemas and database record interfaces
-│   │   └── letter.ts            # Letter, Template, and Attachment types
-│   ├── App.tsx                  # Main router, auth gating, and state
-│   ├── index.css                # Tailwind CSS v4 entry
-│   └── main.tsx                 # React DOM mount point
-├── .env.example                 # Environment configuration template
-├── package.json                 # Project dependencies and build scripts
-├── server.ts                    # Node/Express API with MongoDB and Passport
+│   │   ├── backend.ts           # Zod validation schemas
+│   │   └── letter.ts            # Frontend letter & template interfaces
+│   ├── App.tsx                  # Root application router & state
+│   └── main.tsx                 # Client entrypoint
+├── .env.example                 # Environment variables specification
+├── index.html                   # HTML entrypoint
+├── package.json                 # Project dependencies & build scripts
+├── server.ts                    # Express application & standalone server
 ├── tsconfig.json                # TypeScript compiler configuration
-└── vite.config.ts               # Vite configuration
+├── vercel.json                  # Vercel serverless routing & SPA rewrites
+└── vite.config.ts               # Vite bundler configuration
 ```
 
 ---
 
-### 26. Testing
+## Troubleshooting
 
-Run the automated integration test suite:
+### 1. 404 NOT_FOUND on `/api/auth/google` on Vercel
+- **Cause**: Vercel was serving the project as a pure static site without serverless routing for Express.
+- **Resolution**: Ensure `api/index.ts` and `vercel.json` are present in the repository root. `vercel.json` must rewrite `/api/(.*)` to `/api`.
 
-```bash
-npx tsx scripts/test-backend.ts
-```
+### 2. Google OAuth Redirect URI Mismatch (`redirect_uri_mismatch`)
+- **Cause**: The redirect URI registered in Google Cloud Console does not match the actual callback URL.
+- **Resolution**: In Google Cloud Console under **OAuth 2.0 Client IDs**, verify that **Authorized redirect URIs** contains your exact domain:
+  `https://your-project.vercel.app/api/auth/google/callback` (no trailing slash).
 
-The test suite validates:
-1. Health check & MongoDB Atlas protocol verification.
-2. Email + Password signup.
-3. Duplicate account rejection.
-4. Invalid password rejection (generic 401 message).
-5. Valid credential login & session cookie issuance.
-6. Session verification via `/api/auth/me`.
-7. Session logout and cache clearing.
-8. Route protection on `/api/letters` (blocks unauthenticated access).
-9. Strict sender ID binding (prevents client spoofing).
-10. Letter retrieval restricted strictly to authenticated owner.
-11. Google OAuth flow & intelligent account linking (`authProvider = BOTH`).
-12. Admin route protection (403 for regular users, 200 for postmasters).
+### 3. MongoDB Connection Failure
+- **Cause**: Network access restriction or incorrect credentials in `MONGODB_URI`.
+- **Resolution**:
+  - In MongoDB Atlas, verify that **Network Access** allows `0.0.0.0/0`.
+  - Ensure special characters in database passwords are URL-encoded.
+  - Run `npm run test:backend` to confirm connectivity.
 
----
+### 4. Missing Environment Variables on Vercel
+- **Cause**: Variables configured locally in `.env` were not added to Vercel.
+- **Resolution**: Navigate to **Project Settings → Environment Variables** in Vercel, add the required keys (`MONGODB_URI`, `JWT_SECRET`, `APP_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`), and trigger a redeployment.
 
-### 27. Future Features
-
-- **Parchment Wax Kits**: Physical wax seal stampers mailed to correspondents.
-- **Calligraphy Recognition**: Inscribing digitized handwriting using stylus input.
-- **Audio Vinyl Pressing**: Turning voice notes into physical phonograph records.
+### 5. Session Not Persisting After Login
+- **Cause**: Browser blocking cross-site cookies or missing cookie attributes.
+- **Resolution**: Verify that cookies are configured with `path: '/'`, `sameSite: 'lax'`, and `secure: true` in production HTTPS environments.
 
 ---
 
-### 28. License
+## License
 
-Copyright © 2026 OLD-LETTERS Correspondence Bureau. All rights reserved.
-Licensed under the Apache-2.0 License.
+Copyright © 2026 OLD-LETTERS. All rights reserved.

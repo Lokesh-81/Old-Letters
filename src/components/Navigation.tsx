@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 
+export type AppView = 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient' | 'cookies' | 'privacy' | 'terms';
+
 interface NavigationProps {
-  currentView: 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient';
-  onNavigate: (view: 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient') => void;
+  currentView: AppView;
+  onNavigate: (view: AppView) => void;
   onOpenAdmin?: () => void;
   onOpenAuth?: () => void;
   onOpenProfile?: () => void;

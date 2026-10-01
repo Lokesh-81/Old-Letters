@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import { Letter, LetterType } from './types/letter';
 import { INITIAL_ARCHIVE_LETTERS } from './data/mockData';
-import { Navigation } from './components/Navigation';
+import { Navigation, AppView } from './components/Navigation';
 import { LandingHero } from './components/landing/LandingHero';
 import { LandingScenes } from './components/landing/LandingScenes';
 import { ComposerFlow } from './components/composer/ComposerFlow';
@@ -14,6 +14,9 @@ import { SenderArchive } from './components/archive/SenderArchive';
 import { RecipientExperience } from './components/recipient/RecipientExperience';
 import { HowItWorksView } from './components/HowItWorksView';
 import { LoadingScreen } from './components/common/LoadingScreen';
+import { CookiePolicyView } from './components/legal/CookiePolicyView';
+import { PrivacyPolicyView } from './components/legal/PrivacyPolicyView';
+import { TermsOfServiceView } from './components/legal/TermsOfServiceView';
 import { fetchLetters, getDeliveryMeta, getCurrentUser, logoutUser } from './lib/api';
 import { AdminPaymentModal } from './components/admin/AdminPaymentModal';
 import { AuthModal } from './components/auth/AuthModal';
@@ -26,6 +29,7 @@ export default function App() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [authInitialMode, setAuthInitialMode] = useState<'login' | 'signup'>('login');
   const [intendedDestination, setIntendedDestination] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
 
   const [currentUser, setCurrentUser] = useState<{
     id: string;
@@ -38,9 +42,7 @@ export default function App() {
   } | null>(null);
 
   const [recipientDeliveryToken, setRecipientDeliveryToken] = useState<string | undefined>(undefined);
-  const [currentView, setCurrentView] = useState<
-    'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient'
-  >('landing');
+  const [currentView, setCurrentView] = useState<AppView>('landing');
 
   // Stored correspondence letters
   const [letters, setLetters] = useState<Letter[]>(() => {
@@ -63,43 +65,84 @@ export default function App() {
   // Initial letter type passed to composer
   const [composerInitialType, setComposerInitialType] = useState<LetterType>('LOVE');
 
-  // On mount: check for routes, tokens, and sessions
+  // Unified navigation handler with browser history updates
+  const handleNavigate = (view: AppView) => {
+    if (view === 'landing') {
+      window.history.pushState(null, '', '/');
+    } else if (view === 'cookies' || view === 'privacy' || view === 'terms') {
+      window.history.pushState(null, '', `/${view}`);
+    }
+    setCurrentView(view);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // On mount & popstate: check for routes, tokens, and sessions
   useEffect(() => {
-    const path = window.location.pathname;
-    const match = path.match(/\/letter\/([a-zA-Z0-9_-]+)/);
-    const searchParams = new URLSearchParams(window.location.search);
-    const tokenFromUrl = match ? match[1] : searchParams.get('letter');
+    const handleLocationChange = () => {
+      const path = window.location.pathname;
+      const searchParams = new URLSearchParams(window.location.search);
+      const authParam = searchParams.get('auth');
 
-    if (tokenFromUrl) {
-      setRecipientDeliveryToken(tokenFromUrl);
-      getDeliveryMeta(tokenFromUrl)
-        .then((meta) => {
-          setActiveRecipientLetter((prev) => ({
-            ...prev,
-            trackingCode: meta.trackingCode,
-            senderName: meta.senderName,
-            recipientName: meta.recipientName,
-            verificationMethod: meta.verificationMethod,
-            status: meta.status as any,
-          }));
-          setCurrentView('recipient');
-        })
-        .catch(() => {
-          setCurrentView('recipient');
-        });
-    }
+      // Legal Pages
+      if (path === '/cookies') {
+        setCurrentView('cookies');
+      } else if (path === '/privacy') {
+        setCurrentView('privacy');
+      } else if (path === '/terms') {
+        setCurrentView('terms');
+      }
 
-    if (searchParams.get('admin') === 'true') {
-      setShowAdminModal(true);
-    }
+      // Google OAuth redirection feedback
+      if (authParam === 'google_not_configured') {
+        setAuthNotice('Google OAuth is not configured on this deployment. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your Vercel project environment variables.');
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (authParam === 'google_success') {
+        setAuthNotice('Signed in with Google successfully.');
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setTimeout(() => setAuthNotice(null), 5000);
+      } else if (authParam === 'error') {
+        setAuthNotice('Authentication could not be completed. Please try again.');
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setTimeout(() => setAuthNotice(null), 5000);
+      }
 
-    if (path === '/login' || searchParams.get('auth') === 'login') {
-      setAuthInitialMode('login');
-      setShowAuthModal(true);
-    } else if (path === '/signup' || searchParams.get('auth') === 'signup') {
-      setAuthInitialMode('signup');
-      setShowAuthModal(true);
-    }
+      const match = path.match(/\/letter\/([a-zA-Z0-9_-]+)/);
+      const tokenFromUrl = match ? match[1] : searchParams.get('letter');
+
+      if (tokenFromUrl) {
+        setRecipientDeliveryToken(tokenFromUrl);
+        getDeliveryMeta(tokenFromUrl)
+          .then((meta) => {
+            setActiveRecipientLetter((prev) => ({
+              ...prev,
+              trackingCode: meta.trackingCode,
+              senderName: meta.senderName,
+              recipientName: meta.recipientName,
+              verificationMethod: meta.verificationMethod,
+              status: meta.status as any,
+            }));
+            setCurrentView('recipient');
+          })
+          .catch(() => {
+            setCurrentView('recipient');
+          });
+      }
+
+      if (searchParams.get('admin') === 'true') {
+        setShowAdminModal(true);
+      }
+
+      if (path === '/login' || authParam === 'login') {
+        setAuthInitialMode('login');
+        setShowAuthModal(true);
+      } else if (path === '/signup' || authParam === 'signup') {
+        setAuthInitialMode('signup');
+        setShowAuthModal(true);
+      }
+    };
+
+    handleLocationChange();
+    window.addEventListener('popstate', handleLocationChange);
 
     // Load user session from backend
     getCurrentUser()
@@ -115,6 +158,8 @@ export default function App() {
         }
       })
       .catch(() => {});
+
+    return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
 
   // Helper to save posted letter to archive
@@ -221,21 +266,25 @@ export default function App() {
         <LoadingScreen durationMs={3000} onComplete={() => setShowLoading(false)} />
       )}
 
+      {/* Auth / Configuration Notification Banner */}
+      {authNotice && (
+        <div className="bg-amber-100/90 border-b border-amber-300/80 px-6 py-3 text-xs font-sans text-amber-950 flex items-center justify-between z-50">
+          <span>{authNotice}</span>
+          <button
+            type="button"
+            onClick={() => setAuthNotice(null)}
+            className="text-amber-800 hover:text-amber-950 font-mono text-xs uppercase cursor-pointer ml-4"
+          >
+            [Dismiss]
+          </button>
+        </div>
+      )}
+
       {/* Top Navigation Bar */}
       {currentView !== 'landing' && (
         <Navigation
           currentView={currentView}
-          onNavigate={(view) => {
-            if (view === 'recipient') {
-              handleOpenRecipientView();
-            } else if (view === 'archive') {
-              handleOpenArchive();
-            } else if (view === 'composer') {
-              handleStartWriting();
-            } else {
-              setCurrentView(view);
-            }
-          }}
+          onNavigate={handleNavigate}
           currentUser={currentUser}
           onOpenAuth={() => {
             setAuthInitialMode('login');
@@ -247,7 +296,7 @@ export default function App() {
             logoutUser();
             setCurrentUser(null);
             setLetters(INITIAL_ARCHIVE_LETTERS);
-            setCurrentView('landing');
+            handleNavigate('landing');
           }}
           onWriteClick={() => handleStartWriting()}
           isRecipientMode={isRecipientMode}
@@ -265,7 +314,7 @@ export default function App() {
                 if (el) {
                   el.scrollIntoView({ behavior: 'smooth' });
                 } else {
-                  setCurrentView('how-it-works');
+                  handleNavigate('how-it-works');
                 }
               }}
               onNavigate={(view) => {
@@ -274,7 +323,7 @@ export default function App() {
                 } else if (view === 'archive') {
                   handleOpenArchive();
                 } else {
-                  setCurrentView(view);
+                  handleNavigate(view);
                 }
               }}
             />
@@ -286,11 +335,24 @@ export default function App() {
                 if (el) {
                   el.scrollIntoView({ behavior: 'smooth' });
                 } else {
-                  setCurrentView('how-it-works');
+                  handleNavigate('how-it-works');
                 }
               }}
+              onNavigateLegal={handleNavigate}
             />
           </div>
+        )}
+
+        {currentView === 'cookies' && (
+          <CookiePolicyView onBack={() => handleNavigate('landing')} />
+        )}
+
+        {currentView === 'privacy' && (
+          <PrivacyPolicyView onBack={() => handleNavigate('landing')} />
+        )}
+
+        {currentView === 'terms' && (
+          <TermsOfServiceView onBack={() => handleNavigate('landing')} />
         )}
 
         {currentView === 'composer' && (

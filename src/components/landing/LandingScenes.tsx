@@ -10,12 +10,14 @@ interface LandingScenesProps {
   onSelectLetterType: (type: LetterType) => void;
   onStartWriting: () => void;
   onExploreHowItWorks?: () => void;
+  onNavigateLegal?: (view: 'cookies' | 'privacy' | 'terms') => void;
 }
 
 export const LandingScenes: React.FC<LandingScenesProps> = ({
   onSelectLetterType,
   onStartWriting,
   onExploreHowItWorks,
+  onNavigateLegal,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<LetterCategory>('ROMANTIC');
   const [selectedType, setSelectedType] = useState<LetterType>('LOVE');
@@ -412,6 +414,7 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
         signInLabel="WRITE A LETTER"
         onWriteClick={onStartWriting}
         onHowItWorksClick={onExploreHowItWorks}
+        onNavigateLegal={onNavigateLegal}
       />
     </div>
   );
