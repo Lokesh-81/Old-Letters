@@ -46,14 +46,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }}
     >
       <div className="relative w-full max-w-5xl bg-[#faf9f7] rounded-none md:rounded-2xl shadow-2xl overflow-hidden border border-stone-200">
-        {/* Visible, accessible Close [X] Button at top right */}
+        {/* Visible, high-contrast Close [X] Button at top right */}
         <button
           type="button"
           onClick={onClose}
           aria-label="Close sign-in modal"
-          className="absolute top-3.5 right-3.5 z-50 flex items-center justify-center w-9 h-9 rounded-full bg-stone-100/90 hover:bg-stone-200 text-stone-600 hover:text-stone-950 transition-all shadow-xs cursor-pointer border border-stone-300 focus:outline-none focus:ring-2 focus:ring-teal-800"
+          title="Close sign-in modal"
+          className="absolute top-3.5 right-3.5 z-50 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-stone-100 text-stone-700 hover:text-stone-950 font-sans text-xs font-semibold uppercase tracking-wider transition-all shadow-md cursor-pointer border border-stone-300 focus:outline-none focus:ring-2 focus:ring-teal-800"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <span>Close</span>
+          <svg className="w-3.5 h-3.5 text-stone-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>

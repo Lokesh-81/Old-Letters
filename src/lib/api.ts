@@ -525,15 +525,25 @@ export async function getCurrentUser(): Promise<{
   try {
     const res = await apiFetch('/auth/me');
     if (!res.ok) {
-      try { localStorage.removeItem('old_letters_user'); } catch {}
-      return null;
+      if (res.status === 401) {
+        try { localStorage.removeItem('old_letters_user'); } catch {}
+      }
+      const cached = localStorage.getItem('old_letters_user');
+      return cached ? JSON.parse(cached) : null;
     }
     const data = await safeParseJson<{ authenticated: boolean; user?: any }>(res, 'Failed to get current user');
     if (data.authenticated && data.user) {
       try { localStorage.setItem('old_letters_user', JSON.stringify(data.user)); } catch {}
       return data.user;
     }
-    try { localStorage.removeItem('old_letters_user'); } catch {}
+    // Only remove local storage if not in middle of google_success redirect
+    const isGoogleAuthRedirect = typeof window !== 'undefined' && window.location.search.includes('google_success');
+    if (!isGoogleAuthRedirect) {
+      try { localStorage.removeItem('old_letters_user'); } catch {}
+    } else {
+      const cached = localStorage.getItem('old_letters_user');
+      if (cached) return JSON.parse(cached);
+    }
     return null;
   } catch {
     try {

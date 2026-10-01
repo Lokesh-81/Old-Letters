@@ -40,6 +40,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const isProd = process.env.NODE_ENV === 'production';
 const JWT_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || 'old-letters-super-confidential-secret-key-1892';
@@ -70,8 +71,6 @@ app.use((req, res, next) => {
   const forwardedUri = (req.headers['x-forwarded-uri'] || req.headers['x-matched-path'] || req.headers['x-invoke-path']) as string | undefined;
   if (forwardedUri && forwardedUri.startsWith('/api') && !req.url.startsWith('/api')) {
     req.url = forwardedUri;
-  } else if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/?')) {
-    req.url = `/api${req.url.startsWith('/') ? '' : '/'}${req.url}`;
   }
 
   next();
@@ -121,12 +120,15 @@ export type AuthenticatedRequest = express.Request;
 
 // Helper to determine production cookie security
 function getCookieSecurity(req: express.Request): boolean {
-  return Boolean(
-    process.env.NODE_ENV === 'production' ||
-    req.secure ||
-    req.headers['x-forwarded-proto'] === 'https' ||
-    (req.hostname && !req.hostname.includes('localhost') && !req.hostname.includes('127.0.0.1'))
-  );
+  if (process.env.NODE_ENV === 'production') return true;
+  if (req.secure) return true;
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  if (typeof forwardedProto === 'string' && forwardedProto.toLowerCase().includes('https')) return true;
+  if (req.protocol === 'https') return true;
+  if (req.hostname && !req.hostname.includes('localhost') && !req.hostname.includes('127.0.0.1')) {
+    return true;
+  }
+  return false;
 }
 
 // Unified session cookie setter ensuring standard flags
@@ -158,19 +160,30 @@ function clearSessionCookie(res: express.Response, req: express.Request) {
 
 // Token Extraction & Session Authentication Middleware
 const authenticateToken: express.RequestHandler = (req, res, next) => {
-  let token = req.cookies?.oldletters_session;
+  let token =
+    req.cookies?.oldletters_session ||
+    req.cookies?.['oldletters_session'] ||
+    req.cookies?.token ||
+    req.cookies?.session;
 
   // Fallback to manual parsing if cookieParser didn't catch the cookie header
   if (!token && req.headers.cookie) {
-    const match = req.headers.cookie.match(/(?:^|;\s*)oldletters_session=([^;]+)/);
+    const match = req.headers.cookie.match(/(?:^|;\s*)(?:oldletters_session|token|session)=([^;]+)/);
     if (match) {
-      token = decodeURIComponent(match[1]);
+      token = decodeURIComponent(match[1].trim());
     }
   }
 
   // Fallback to Bearer token header
   if (!token && req.headers.authorization) {
-    token = req.headers.authorization.replace(/^Bearer\s+/i, '');
+    token = req.headers.authorization.replace(/^Bearer\s+/i, '').trim();
+  }
+
+  if (token && typeof token === 'string') {
+    token = token.trim();
+    if (token.startsWith('"') && token.endsWith('"')) {
+      token = token.slice(1, -1);
+    }
   }
 
   if (!token) {
@@ -420,42 +433,86 @@ app.get(['/api/auth/me', '/api/me', '/auth/me'], async (req: AuthenticatedReques
     return res.json({ authenticated: false, user: null });
   }
 
-  const db = await getDb();
-  const usersColl = db.collection('users');
-  const lettersColl = db.collection('letters');
+  let userDoc: any = null;
+  let lettersCount = 0;
 
-  let userDoc = null;
   try {
-    userDoc = await usersColl.findOne({ _id: new ObjectId(req.user.id) });
-  } catch {
-    userDoc = await usersColl.findOne({ email: req.user.email });
+    const db = await getDb();
+    const usersColl = db.collection('users');
+    const lettersColl = db.collection('letters');
+
+    if (req.user.id) {
+      try {
+        if (ObjectId.isValid(req.user.id)) {
+          userDoc = await usersColl.findOne({ _id: new ObjectId(req.user.id) });
+        }
+      } catch {}
+
+      if (!userDoc) {
+        try {
+          userDoc = await usersColl.findOne({ _id: req.user.id as any });
+        } catch {}
+      }
+    }
+
+    if (!userDoc && req.user.email) {
+      try {
+        userDoc = await usersColl.findOne({ email: req.user.email.toLowerCase() });
+      } catch {}
+    }
+
+    // If not found in DB but JWT is cryptographically verified, restore user doc
+    if (!userDoc && req.user.email) {
+      try {
+        const now = new Date();
+        const restoredUser: UserDoc = {
+          _id: req.user.id && ObjectId.isValid(req.user.id) ? new ObjectId(req.user.id) : new ObjectId(),
+          email: req.user.email.toLowerCase(),
+          fullName: req.user.fullName || req.user.email.split('@')[0] || 'Correspondent',
+          avatarUrl: req.user.avatarUrl,
+          role: req.user.role || (req.user.email === adminEmail || req.user.email === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER'),
+          authProvider: req.user.authProvider || 'GOOGLE',
+          emailVerified: req.user.emailVerified ?? true,
+          createdAt: now,
+          updatedAt: now,
+          lastLoginAt: now,
+        };
+        await usersColl.insertOne(restoredUser);
+        userDoc = restoredUser;
+      } catch {}
+    }
+
+    if (lettersColl) {
+      try {
+        lettersCount = await lettersColl.countDocuments({
+          $or: [
+            { senderId: userDoc?._id?.toString() || req.user.id },
+            { senderId: userDoc?._id || req.user.id },
+            { senderEmail: req.user.email },
+          ],
+        });
+      } catch {}
+    }
+  } catch (err) {
+    console.warn('[OLD-LETTERS auth/me notice]:', err);
   }
 
-  if (!userDoc) {
-    return res.json({ authenticated: false, user: null });
-  }
+  const resolvedUser = {
+    id: userDoc?._id ? userDoc._id.toString() : req.user.id,
+    email: userDoc?.email || req.user.email,
+    fullName: userDoc?.fullName || req.user.fullName || req.user.email?.split('@')[0] || 'Correspondent',
+    avatarUrl: userDoc?.avatarUrl || req.user.avatarUrl,
+    role: userDoc?.role || req.user.role || (req.user.email === adminEmail || req.user.email === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER'),
+    authProvider: userDoc?.authProvider || req.user.authProvider || 'GOOGLE',
+    emailVerified: userDoc?.emailVerified ?? req.user.emailVerified ?? true,
+    googleLinked: !!userDoc?.googleId || req.user.authProvider === 'GOOGLE' || req.user.authProvider === 'BOTH',
+    createdAt: userDoc?.createdAt ? (typeof userDoc.createdAt === 'string' ? userDoc.createdAt : userDoc.createdAt.toISOString()) : undefined,
+    lettersCount,
+  };
 
-  const lettersCount = await lettersColl.countDocuments({
-    $or: [
-      { senderId: userDoc._id.toString() },
-      { senderId: userDoc._id },
-    ],
-  });
-
-  res.json({
+  return res.json({
     authenticated: true,
-    user: {
-      id: userDoc._id.toString(),
-      email: userDoc.email,
-      fullName: userDoc.fullName,
-      avatarUrl: userDoc.avatarUrl,
-      role: userDoc.role || 'USER',
-      authProvider: userDoc.authProvider || 'EMAIL',
-      emailVerified: userDoc.emailVerified ?? false,
-      googleLinked: !!userDoc.googleId || userDoc.authProvider === 'GOOGLE' || userDoc.authProvider === 'BOTH',
-      createdAt: userDoc.createdAt ? userDoc.createdAt.toISOString() : undefined,
-      lettersCount,
-    },
+    user: resolvedUser,
   });
 });
 

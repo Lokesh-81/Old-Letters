@@ -33,8 +33,9 @@ export default function App() {
   const [authInitialMode, setAuthInitialMode] = useState<'login' | 'signup'>('login');
   const [intendedDestination, setIntendedDestination] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
 
-  // Initialize currentUser from local cache so authenticated state is preserved across redirects/refreshes
+  // Initialize currentUser synchronously from URL payload (post-OAuth redirect) or local cache so authenticated state is preserved across redirects/refreshes
   const [currentUser, setCurrentUser] = useState<{
     id: string;
     email: string;
@@ -45,6 +46,21 @@ export default function App() {
     emailVerified?: boolean;
   } | null>(() => {
     try {
+      if (typeof window !== 'undefined') {
+        const searchParams = new URLSearchParams(window.location.search);
+        if (searchParams.get('auth') === 'google_success') {
+          const userParam = searchParams.get('u');
+          if (userParam) {
+            const parsed = JSON.parse(decodeURIComponent(userParam));
+            if (parsed && (parsed.id || parsed.email)) {
+              try {
+                localStorage.setItem('old_letters_user', JSON.stringify(parsed));
+              } catch {}
+              return parsed;
+            }
+          }
+        }
+      }
       const saved = localStorage.getItem('old_letters_user');
       return saved ? JSON.parse(saved) : null;
     } catch {
@@ -125,10 +141,12 @@ export default function App() {
       } else if (authParam === 'google_success') {
         // Hydrate authenticated state synchronously from safe redirect payload if available
         const userParam = searchParams.get('u');
+        let hydratedUser: any = null;
         if (userParam) {
           try {
             const parsedUser = JSON.parse(decodeURIComponent(userParam));
             if (parsedUser && (parsedUser.id || parsedUser.email)) {
+              hydratedUser = parsedUser;
               setAndPersistUser(parsedUser);
             }
           } catch {
@@ -147,7 +165,12 @@ export default function App() {
             fetchLetters().then((l) => {
               if (l && l.length > 0) setLetters(l);
             });
+          } else if (hydratedUser) {
+            setAndPersistUser(hydratedUser);
           }
+          setAuthChecking(false);
+        }).catch(() => {
+          setAuthChecking(false);
         });
       } else if (authParam === 'error') {
         setAuthNotice('Authentication could not be completed. Please try again.');
@@ -207,11 +230,18 @@ export default function App() {
             }
           }).catch(() => {});
         } else {
-          // If server explicitly confirmed no session, clear cache
-          setAndPersistUser(null);
+          // Only clear if neither cookie nor local cache nor oauth redirect indicates active session
+          const hasLoggedInCookie = typeof document !== 'undefined' && document.cookie.includes('oldletters_logged_in=1');
+          const isGoogleSuccessUrl = typeof window !== 'undefined' && window.location.search.includes('google_success');
+          if (!hasLoggedInCookie && !isGoogleSuccessUrl) {
+            setAndPersistUser(null);
+          }
         }
+        setAuthChecking(false);
       })
-      .catch(() => {});
+      .catch(() => {
+        setAuthChecking(false);
+      });
 
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
@@ -244,7 +274,7 @@ export default function App() {
   const handleStartWriting = (type: LetterType = 'LOVE') => {
     setComposerInitialType(type);
 
-    // Check state or local storage cache to prevent premature prompt
+    // Check state, local storage cache, and cookies to prevent premature prompt
     let activeUser = currentUser;
     if (!activeUser) {
       try {
@@ -255,13 +285,31 @@ export default function App() {
       }
     }
 
-    if (!activeUser) {
-      setIntendedDestination('composer');
-      setAuthInitialMode('signup');
-      setShowAuthModal(true);
+    const hasLoggedInCookie = typeof document !== 'undefined' && document.cookie.includes('oldletters_logged_in=1');
+
+    if (activeUser || hasLoggedInCookie) {
+      setCurrentView('composer');
       return;
     }
-    setCurrentView('composer');
+
+    if (authChecking) {
+      // Session verification in flight; await backend check before popping modal
+      getCurrentUser().then((user) => {
+        if (user) {
+          setAndPersistUser(user);
+          setCurrentView('composer');
+        } else {
+          setIntendedDestination('composer');
+          setAuthInitialMode('signup');
+          setShowAuthModal(true);
+        }
+      });
+      return;
+    }
+
+    setIntendedDestination('composer');
+    setAuthInitialMode('signup');
+    setShowAuthModal(true);
   };
 
   // Intercept archive action
@@ -276,13 +324,30 @@ export default function App() {
       }
     }
 
-    if (!activeUser) {
-      setIntendedDestination('archive');
-      setAuthInitialMode('login');
-      setShowAuthModal(true);
+    const hasLoggedInCookie = typeof document !== 'undefined' && document.cookie.includes('oldletters_logged_in=1');
+
+    if (activeUser || hasLoggedInCookie) {
+      setCurrentView('archive');
       return;
     }
-    setCurrentView('archive');
+
+    if (authChecking) {
+      getCurrentUser().then((user) => {
+        if (user) {
+          setAndPersistUser(user);
+          setCurrentView('archive');
+        } else {
+          setIntendedDestination('archive');
+          setAuthInitialMode('login');
+          setShowAuthModal(true);
+        }
+      });
+      return;
+    }
+
+    setIntendedDestination('archive');
+    setAuthInitialMode('login');
+    setShowAuthModal(true);
   };
 
   // Recipient wants to pen a reply
