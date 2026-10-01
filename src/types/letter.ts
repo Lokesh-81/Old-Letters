@@ -159,6 +159,26 @@ export interface LetterAttachment {
   date?: string;
 }
 
+export interface RecipientMetadata {
+  trackingCode: string;
+  senderName: string;
+  recipientName: string;
+  recipientEmailMasked: string;
+  verificationMethod: 'otp' | 'passphrase' | 'open';
+  status: 'DRAFT' | 'SCHEDULED' | 'IN TRANSIT' | 'DELIVERED' | 'OPENED' | 'COMPLETED';
+  isDelivered: boolean;
+  isArrived: boolean;
+  canUnseal: boolean;
+  deliveryDate: string;
+  scheduledDeliveryAt: string;
+  waitingHours: number;
+  remainingMs: number;
+  remainingSeconds: number;
+  remainingHours: number;
+  templateId?: string;
+  postmarkCity?: string;
+}
+
 export interface Letter {
   id: string;
   trackingCode: string;

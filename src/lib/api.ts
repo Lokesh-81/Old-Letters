@@ -1,5 +1,5 @@
 import { CreateLetterInput, SubmitPaymentInput, AdminVerifyPaymentInput, PaymentRecord } from '../types/backend';
-import { Letter } from '../types/letter';
+import { Letter, RecipientMetadata } from '../types/letter';
 
 const API_BASE = '/api';
 
@@ -220,28 +220,49 @@ export async function postLetter(payload: CreateLetterInput): Promise<{
   }
 }
 
-export async function getDeliveryMeta(token: string): Promise<{
-  trackingCode: string;
-  senderName: string;
-  recipientName: string;
-  recipientEmailMasked: string;
-  verificationMethod: 'otp' | 'passphrase' | 'open';
-  status: string;
-  isDelivered: boolean;
-  deliveryDate: string;
-}> {
+export interface DeliveryMetaResult {
+  metadata: RecipientMetadata;
+  letter?: Letter;
+  isSealed: boolean;
+  isArrived: boolean;
+  canUnseal: boolean;
+  isVerified: boolean;
+}
+
+export async function getDeliveryMeta(token: string): Promise<DeliveryMetaResult> {
   try {
-    const res = await apiFetch(`/delivery/token/${token}`);
+    const headers: Record<string, string> = {};
+    try {
+      const storedRcpt = sessionStorage.getItem(`oldletters_rcpt_${token}`);
+      if (storedRcpt) {
+        headers['x-recipient-token'] = storedRcpt;
+      }
+    } catch {}
+
+    const res = await apiFetch(`/delivery/token/${token}`, { headers });
     const data = await safeParseJson<{
       success: boolean;
-      metadata: any;
+      metadata?: RecipientMetadata;
+      letter?: Letter;
+      isSealed?: boolean;
+      isArrived?: boolean;
+      canUnseal?: boolean;
+      isVerified?: boolean;
       error?: string;
     }>(res, 'Invalid or expired delivery link.');
 
-    if (!res.ok || !data.success) {
+    if (!res.ok || !data.success || !data.metadata) {
       throw new Error(data.error || 'The letter link is invalid or has expired.');
     }
-    return data.metadata;
+
+    return {
+      metadata: data.metadata,
+      letter: data.letter,
+      isSealed: data.isSealed ?? !data.isArrived,
+      isArrived: data.isArrived ?? data.metadata.isArrived,
+      canUnseal: data.canUnseal ?? data.metadata.canUnseal,
+      isVerified: data.isVerified ?? false,
+    };
   } catch (err: any) {
     if (err.message && !err.message.includes('Unexpected token') && !err.message.includes('is not valid JSON')) {
       throw err;
@@ -294,6 +315,7 @@ export async function verifyRecipientAccess(payload: {
 
   const data = await safeParseJson<{
     success: boolean;
+    recipientAccessToken?: string;
     letter?: Letter;
     error?: string;
   }>(res, 'Verification rejected.');
@@ -301,8 +323,17 @@ export async function verifyRecipientAccess(payload: {
   if (!res.ok || !data.success || !data.letter) {
     throw new Error(data.error || 'The verification code or cipher was incorrect.');
   }
+
+  // Preserve recipient verification session in sessionStorage for smooth refreshes
+  if (data.recipientAccessToken) {
+    try {
+      sessionStorage.setItem(`oldletters_rcpt_${payload.token}`, data.recipientAccessToken);
+    } catch {}
+  }
+
   return data.letter;
 }
+
 
 export async function fetchPaymentConfig(): Promise<{
   upiId: string;

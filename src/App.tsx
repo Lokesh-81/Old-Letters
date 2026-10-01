@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Letter, LetterType } from './types/letter';
+import { Letter, LetterType, RecipientMetadata } from './types/letter';
 import { INITIAL_ARCHIVE_LETTERS } from './data/mockData';
 import { Navigation, AppView } from './components/Navigation';
 import { LandingHero } from './components/landing/LandingHero';
@@ -97,10 +97,9 @@ export default function App() {
     return INITIAL_ARCHIVE_LETTERS;
   });
 
-  // Current active letter for recipient experience
-  const [activeRecipientLetter, setActiveRecipientLetter] = useState<Letter>(
-    INITIAL_ARCHIVE_LETTERS[0]
-  );
+  // Current active letter and metadata for recipient experience (STRICTLY null by default to prevent leakage)
+  const [activeRecipientLetter, setActiveRecipientLetter] = useState<Letter | null>(null);
+  const [recipientMetadata, setRecipientMetadata] = useState<RecipientMetadata | null>(null);
 
   // Initial letter type passed to composer
   const [composerInitialType, setComposerInitialType] = useState<LetterType>('LOVE');
@@ -186,18 +185,18 @@ export default function App() {
       if (tokenFromUrl) {
         setRecipientDeliveryToken(tokenFromUrl);
         getDeliveryMeta(tokenFromUrl)
-          .then((meta) => {
-            setActiveRecipientLetter((prev) => ({
-              ...prev,
-              trackingCode: meta.trackingCode,
-              senderName: meta.senderName,
-              recipientName: meta.recipientName,
-              verificationMethod: meta.verificationMethod,
-              status: meta.status as any,
-            }));
+          .then((res) => {
+            setRecipientMetadata(res.metadata);
+            if (res.letter) {
+              setActiveRecipientLetter(res.letter);
+            } else {
+              setActiveRecipientLetter(null);
+            }
             setCurrentView('recipient');
           })
           .catch(() => {
+            setRecipientMetadata(null);
+            setActiveRecipientLetter(null);
             setCurrentView('recipient');
           });
       }
@@ -257,15 +256,35 @@ export default function App() {
       }
       return updated;
     });
-    setActiveRecipientLetter(newLetter);
   };
 
   // Launch recipient mode for a specific letter
   const handleOpenRecipientView = (letterToOpen?: Letter) => {
-    if (letterToOpen) {
-      setActiveRecipientLetter(letterToOpen);
-    } else if (letters.length > 0) {
-      setActiveRecipientLetter(letters[0]);
+    const target = letterToOpen || (letters.length > 0 ? letters[0] : null);
+    if (target) {
+      setActiveRecipientLetter(target);
+      setRecipientMetadata({
+        trackingCode: target.trackingCode,
+        senderName: target.senderName,
+        recipientName: target.recipientName,
+        recipientEmailMasked: target.recipientEmail ? target.recipientEmail.replace(/(?<=.).(?=.*@)/g, '*') : '***@***.com',
+        verificationMethod: target.verificationMethod,
+        status: target.status,
+        isDelivered: target.status !== 'SCHEDULED',
+        isArrived: true,
+        canUnseal: true,
+        deliveryDate: target.scheduledDeliveryAt || new Date().toISOString(),
+        scheduledDeliveryAt: target.scheduledDeliveryAt || new Date().toISOString(),
+        waitingHours: target.waitingHours || 48,
+        remainingMs: 0,
+        remainingSeconds: 0,
+        remainingHours: 0,
+        templateId: target.templateId,
+        postmarkCity: target.postmarkCity || 'Hyderabad Bureau',
+      });
+    } else {
+      setActiveRecipientLetter(null);
+      setRecipientMetadata(null);
     }
     setCurrentView('recipient');
   };
@@ -547,8 +566,12 @@ export default function App() {
         {currentView === 'recipient' && (
           <RecipientExperience
             letter={activeRecipientLetter}
+            metadata={recipientMetadata}
             deliveryToken={recipientDeliveryToken}
-            onExit={() => setCurrentView('landing')}
+            onExit={() => {
+              window.history.pushState(null, '', '/');
+              setCurrentView('landing');
+            }}
             onReply={handleReplyToLetter}
           />
         )}
