@@ -119,9 +119,60 @@ declare global {
 
 export type AuthenticatedRequest = express.Request;
 
+// Helper to determine production cookie security
+function getCookieSecurity(req: express.Request): boolean {
+  return Boolean(
+    process.env.NODE_ENV === 'production' ||
+    req.secure ||
+    req.headers['x-forwarded-proto'] === 'https' ||
+    (req.hostname && !req.hostname.includes('localhost') && !req.hostname.includes('127.0.0.1'))
+  );
+}
+
+// Unified session cookie setter ensuring standard flags
+function setSessionCookie(res: express.Response, req: express.Request, token: string) {
+  const secure = getCookieSecurity(req);
+  res.cookie('oldletters_session', token, {
+    httpOnly: true,
+    secure,
+    sameSite: 'lax',
+    maxAge: 30 * 24 * 3600 * 1000,
+    path: '/',
+  });
+
+  // Client-accessible presence indicator cookie
+  res.cookie('oldletters_logged_in', '1', {
+    httpOnly: false,
+    secure,
+    sameSite: 'lax',
+    maxAge: 30 * 24 * 3600 * 1000,
+    path: '/',
+  });
+}
+
+function clearSessionCookie(res: express.Response, req: express.Request) {
+  const secure = getCookieSecurity(req);
+  res.clearCookie('oldletters_session', { path: '/', secure, sameSite: 'lax' });
+  res.clearCookie('oldletters_logged_in', { path: '/', secure, sameSite: 'lax' });
+}
+
 // Token Extraction & Session Authentication Middleware
 const authenticateToken: express.RequestHandler = (req, res, next) => {
-  const token = req.cookies?.oldletters_session || req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  let token = req.cookies?.oldletters_session;
+
+  // Fallback to manual parsing if cookieParser didn't catch the cookie header
+  if (!token && req.headers.cookie) {
+    const match = req.headers.cookie.match(/(?:^|;\s*)oldletters_session=([^;]+)/);
+    if (match) {
+      token = decodeURIComponent(match[1]);
+    }
+  }
+
+  // Fallback to Bearer token header
+  if (!token && req.headers.authorization) {
+    token = req.headers.authorization.replace(/^Bearer\s+/i, '');
+  }
+
   if (!token) {
     return next();
   }
@@ -364,6 +415,7 @@ app.get('/api/config/payment', (req, res) => {
 
 // Current Authenticated User Session
 app.get(['/api/auth/me', '/api/me', '/auth/me'], async (req: AuthenticatedRequest, res) => {
+  res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
   if (!req.user || !req.user.id) {
     return res.json({ authenticated: false, user: null });
   }
@@ -456,13 +508,7 @@ app.post(['/api/auth/register', '/api/auth/signup', '/auth/register', '/auth/sig
           emailVerified: true,
         };
         const sessionToken = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '30d' });
-        res.cookie('oldletters_session', sessionToken, {
-          httpOnly: true,
-          secure: isProd,
-          sameSite: 'lax',
-          maxAge: 30 * 24 * 3600 * 1000,
-          path: '/',
-        });
+        setSessionCookie(res, req, sessionToken);
         return res.json({ success: true, token: sessionToken, user: userPayload });
       }
 
@@ -495,15 +541,7 @@ app.post(['/api/auth/register', '/api/auth/signup', '/auth/register', '/auth/sig
     };
 
     const sessionToken = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '30d' });
-
-    res.cookie('oldletters_session', sessionToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'lax',
-      maxAge: 30 * 24 * 3600 * 1000,
-      path: '/',
-    });
-
+    setSessionCookie(res, req, sessionToken);
     res.json({ success: true, token: sessionToken, user: userPayload });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -551,15 +589,7 @@ app.post(['/api/auth/login', '/auth/login'], async (req, res) => {
     };
 
     const sessionToken = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '30d' });
-
-    res.cookie('oldletters_session', sessionToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'lax',
-      maxAge: 30 * 24 * 3600 * 1000,
-      path: '/',
-    });
-
+    setSessionCookie(res, req, sessionToken);
     res.json({ success: true, token: sessionToken, user: userPayload });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -605,15 +635,24 @@ app.get(['/api/auth/google/callback', '/auth/google/callback'], (req, res, next)
         error: 'Google authentication failed. Please try again.',
       });
     }
+
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: '30d' });
-    res.cookie('oldletters_session', token, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'lax',
-      maxAge: 30 * 24 * 3600 * 1000,
-      path: '/',
-    });
-    res.redirect('/?auth=google_success');
+    // Set standard production-safe HTTP-only session cookie
+    setSessionCookie(res, req, token);
+
+    // Provide safe user payload in the redirect URL for immediate, synchronous frontend state hydration
+    const safeUser = {
+      id: user.id || user._id?.toString(),
+      email: user.email,
+      fullName: user.fullName,
+      avatarUrl: user.avatarUrl,
+      role: user.role || 'USER',
+      authProvider: user.authProvider || 'GOOGLE',
+      emailVerified: true,
+    };
+    const userParam = encodeURIComponent(JSON.stringify(safeUser));
+
+    res.redirect(`/?auth=google_success&u=${userParam}`);
   })(req, res, next);
 });
 
@@ -679,13 +718,7 @@ app.post('/api/auth/google/test-login', async (req, res) => {
     };
 
     const sessionToken = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '30d' });
-    res.cookie('oldletters_session', sessionToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'lax',
-      maxAge: 30 * 24 * 3600 * 1000,
-      path: '/',
-    });
+    setSessionCookie(res, req, sessionToken);
 
     res.json({ success: true, user: userPayload, token: sessionToken });
   } catch (err: any) {
@@ -695,7 +728,7 @@ app.post('/api/auth/google/test-login', async (req, res) => {
 
 // Logout
 app.post(['/api/auth/logout', '/auth/logout'], (req, res) => {
-  res.clearCookie('oldletters_session', { path: '/' });
+  clearSessionCookie(res, req);
   res.json({ success: true, message: 'Logged out successfully.' });
 });
 
@@ -830,13 +863,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     };
 
     const sessionToken = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '30d' });
-
-    res.cookie('oldletters_session', sessionToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'lax',
-      maxAge: 30 * 24 * 3600 * 1000,
-    });
+    setSessionCookie(res, req, sessionToken);
 
     res.json({
       success: true,

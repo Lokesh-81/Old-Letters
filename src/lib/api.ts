@@ -70,6 +70,27 @@ export function normalizeApiError(
 }
 
 /**
+ * Core HTTP client guaranteeing credentials: 'include' across all requests.
+ * Ensures session cookies are sent for same-origin and cross-origin requests.
+ */
+export async function apiFetch(endpoint: string, init: RequestInit = {}): Promise<Response> {
+  const url = endpoint.startsWith('http')
+    ? endpoint
+    : `${API_BASE}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+
+  const headers = new Headers(init.headers || {});
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json');
+  }
+
+  return fetch(url, {
+    ...init,
+    headers,
+    credentials: 'include',
+  });
+}
+
+/**
  * Safely parse response as JSON. Never blindly call res.json() to prevent
  * syntax errors when server returns HTML error pages or non-JSON strings.
  */
@@ -85,7 +106,7 @@ async function safeParseJson<T = any>(res: Response, fallbackMessage: string): P
   const trimmed = text.trim();
 
   // If response is HTML or plain text error page (starts with <!DOCTYPE, <html, "The page c"...)
-  if (!contentType.includes('application/json') || trimmed.startsWith('<') || !trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+  if (!contentType.includes('application/json') || trimmed.startsWith('<') || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) {
     if (!res.ok) {
       if (res.status === 404) {
         throw new Error('The requested correspondence record could not be found.');
@@ -108,7 +129,7 @@ async function safeParseJson<T = any>(res: Response, fallbackMessage: string): P
 
 export async function fetchLetters(): Promise<Letter[]> {
   try {
-    const res = await fetch(`${API_BASE}/letters`);
+    const res = await apiFetch('/letters');
     if (!res.ok) {
       return [];
     }
@@ -132,11 +153,10 @@ export async function postLetter(payload: CreateLetterInput): Promise<{
   const localToken = `dt_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
 
   try {
-    const res = await fetch(`${API_BASE}/letters`, {
+    const res = await apiFetch('/letters', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
       },
       body: JSON.stringify(payload),
     });
@@ -159,14 +179,12 @@ export async function postLetter(payload: CreateLetterInput): Promise<{
       deliveryToken: data.deliveryToken || localToken,
     };
   } catch (err: any) {
-    // If backend returns a human validation error (e.g. 48 hours constraint), re-throw it cleanly
     if (err.message && !err.message.includes('Unexpected token') && !err.message.includes('is not valid JSON')) {
       throw err;
     }
 
     console.warn('[OLD-LETTERS] Network dispatch fallback activated:', err.message);
 
-    // Fallback seamless local sealing if server proxy returns HTML
     const fallbackLetter: Letter = {
       id: `ol-${Date.now()}`,
       trackingCode: generatedCode,
@@ -213,9 +231,7 @@ export async function getDeliveryMeta(token: string): Promise<{
   deliveryDate: string;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/delivery/token/${token}`, {
-      headers: { 'Accept': 'application/json' },
-    });
+    const res = await apiFetch(`/delivery/token/${token}`);
     const data = await safeParseJson<{
       success: boolean;
       metadata: any;
@@ -238,11 +254,10 @@ export async function requestOtp(token: string): Promise<{
   message: string;
   devOtpHint?: string;
 }> {
-  const res = await fetch(`${API_BASE}/delivery/request-otp`, {
+  const res = await apiFetch('/delivery/request-otp', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
     },
     body: JSON.stringify({ token }),
   });
@@ -269,11 +284,10 @@ export async function verifyRecipientAccess(payload: {
   otp?: string;
   passphrase?: string;
 }): Promise<Letter> {
-  const res = await fetch(`${API_BASE}/delivery/verify`, {
+  const res = await apiFetch('/delivery/verify', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
     },
     body: JSON.stringify(payload),
   });
@@ -296,9 +310,7 @@ export async function fetchPaymentConfig(): Promise<{
   paymentQrUrl: string;
 }> {
   try {
-    const res = await fetch(`${API_BASE}/config/payment`, {
-      headers: { 'Accept': 'application/json' },
-    });
+    const res = await apiFetch('/config/payment');
     const data = await safeParseJson<{
       upiId?: string;
       upiDisplayName?: string;
@@ -322,11 +334,10 @@ export async function submitUpiPayment(payload: SubmitPaymentInput): Promise<{
   payment: PaymentRecord;
   message: string;
 }> {
-  const res = await fetch(`${API_BASE}/payments/create`, {
+  const res = await apiFetch('/payments/create', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
     },
     body: JSON.stringify(payload),
   });
@@ -349,9 +360,7 @@ export async function submitUpiPayment(payload: SubmitPaymentInput): Promise<{
 
 export async function fetchAdminPayments(): Promise<PaymentRecord[]> {
   try {
-    const res = await fetch(`${API_BASE}/admin/payments`, {
-      headers: { 'Accept': 'application/json' },
-    });
+    const res = await apiFetch('/admin/payments');
     const data = await safeParseJson<{ payments?: PaymentRecord[] }>(
       res,
       'Failed to load payments'
@@ -366,11 +375,10 @@ export async function verifyAdminPayment(payload: AdminVerifyPaymentInput): Prom
   payment: PaymentRecord;
   message: string;
 }> {
-  const res = await fetch(`${API_BASE}/admin/payments/${payload.paymentId}/verify`, {
+  const res = await apiFetch(`/admin/payments/${payload.paymentId}/verify`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
     },
     body: JSON.stringify({
       status: payload.status,
@@ -398,9 +406,8 @@ export async function triggerSchedulerTick(): Promise<{
   deliveredCount: number;
   processed: any[];
 }> {
-  const res = await fetch(`${API_BASE}/scheduler/tick`, {
+  const res = await apiFetch('/scheduler/tick', {
     method: 'POST',
-    headers: { 'Accept': 'application/json' },
   });
   return safeParseJson(res, 'Scheduler tick execution completed');
 }
@@ -410,9 +417,9 @@ export async function requestAuthOtp(email: string): Promise<{
   message: string;
   devOtpHint?: string;
 }> {
-  const res = await fetch(`${API_BASE}/auth/request-otp`, {
+  const res = await apiFetch('/auth/request-otp', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
   });
   return safeParseJson(res, 'Failed to request authentication code');
@@ -423,20 +430,27 @@ export async function verifyAuthOtp(email: string, otp: string, fullName?: strin
   user: { id: string; email: string; fullName: string };
   token?: string;
 }> {
-  const res = await fetch(`${API_BASE}/auth/verify-otp`, {
+  const res = await apiFetch('/auth/verify-otp', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, otp, fullName }),
   });
-  return safeParseJson(res, 'Authentication verification failed');
+  const data = await safeParseJson<{
+    success: boolean;
+    user: any;
+    token?: string;
+  }>(res, 'Authentication verification failed');
+  if (data.user) {
+    try { localStorage.setItem('old_letters_user', JSON.stringify(data.user)); } catch {}
+  }
+  return data;
 }
 
 export async function updateLetter(id: string, updates: Partial<CreateLetterInput>): Promise<Letter> {
-  const res = await fetch(`${API_BASE}/letters/${id}`, {
+  const res = await apiFetch(`/letters/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
     },
     body: JSON.stringify(updates),
   });
@@ -454,9 +468,8 @@ export async function updateLetter(id: string, updates: Partial<CreateLetterInpu
 }
 
 export async function deleteLetter(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/letters/${id}`, {
+  const res = await apiFetch(`/letters/${id}`, {
     method: 'DELETE',
-    headers: { 'Accept': 'application/json' },
   });
 
   const data = await safeParseJson<{ success: boolean; error?: string }>(
@@ -474,9 +487,8 @@ export async function finalizeLetterPost(id: string): Promise<{
   trackingCode: string;
   deliveryToken?: string;
 }> {
-  const res = await fetch(`${API_BASE}/letters/${id}/post`, {
+  const res = await apiFetch(`/letters/${id}/post`, {
     method: 'POST',
-    headers: { 'Accept': 'application/json' },
   });
 
   const data = await safeParseJson<{
@@ -511,25 +523,32 @@ export async function getCurrentUser(): Promise<{
   lettersCount?: number;
 } | null> {
   try {
-    const res = await fetch(`${API_BASE}/auth/me`, {
-      headers: { 'Accept': 'application/json' },
-    });
-    if (!res.ok) return null;
+    const res = await apiFetch('/auth/me');
+    if (!res.ok) {
+      try { localStorage.removeItem('old_letters_user'); } catch {}
+      return null;
+    }
     const data = await safeParseJson<{ authenticated: boolean; user?: any }>(res, 'Failed to get current user');
     if (data.authenticated && data.user) {
+      try { localStorage.setItem('old_letters_user', JSON.stringify(data.user)); } catch {}
       return data.user;
     }
+    try { localStorage.removeItem('old_letters_user'); } catch {}
     return null;
   } catch {
+    try {
+      const cached = localStorage.getItem('old_letters_user');
+      if (cached) return JSON.parse(cached);
+    } catch {}
     return null;
   }
 }
 
 export async function logoutUser(): Promise<void> {
   try {
-    await fetch(`${API_BASE}/auth/logout`, {
+    try { localStorage.removeItem('old_letters_user'); } catch {}
+    await apiFetch('/auth/logout', {
       method: 'POST',
-      headers: { 'Accept': 'application/json' },
     });
   } catch {
     // Silent fail
@@ -543,11 +562,10 @@ export async function signupUser(payload: {
 }): Promise<{ user: any; token?: string }> {
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}/auth/signup`, {
+    res = await apiFetch('/auth/signup', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Accept: 'application/json',
       },
       body: JSON.stringify(payload),
     });
@@ -585,6 +603,10 @@ export async function signupUser(payload: {
     throw new Error('Something went wrong. Please try again.');
   }
 
+  try {
+    localStorage.setItem('old_letters_user', JSON.stringify(data.user));
+  } catch {}
+
   return { user: data.user, token: data.token };
 }
 
@@ -594,11 +616,10 @@ export async function loginUser(payload: {
 }): Promise<{ user: any; token?: string }> {
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}/auth/login`, {
+    res = await apiFetch('/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Accept: 'application/json',
       },
       body: JSON.stringify(payload),
     });
@@ -636,7 +657,9 @@ export async function loginUser(payload: {
     throw new Error('Something went wrong. Please try again.');
   }
 
+  try {
+    localStorage.setItem('old_letters_user', JSON.stringify(data.user));
+  } catch {}
+
   return { user: data.user, token: data.token };
 }
-
-

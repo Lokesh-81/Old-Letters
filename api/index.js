@@ -1857,8 +1857,44 @@ var adminEmail = process.env.ADMIN_EMAIL || "admin@old-letters.in";
 function hashSha2562(val) {
   return crypto2.createHash("sha256").update(val).digest("hex");
 }
+function getCookieSecurity(req) {
+  return Boolean(
+    process.env.NODE_ENV === "production" || req.secure || req.headers["x-forwarded-proto"] === "https" || req.hostname && !req.hostname.includes("localhost") && !req.hostname.includes("127.0.0.1")
+  );
+}
+function setSessionCookie(res, req, token) {
+  const secure = getCookieSecurity(req);
+  res.cookie("oldletters_session", token, {
+    httpOnly: true,
+    secure,
+    sameSite: "lax",
+    maxAge: 30 * 24 * 3600 * 1e3,
+    path: "/"
+  });
+  res.cookie("oldletters_logged_in", "1", {
+    httpOnly: false,
+    secure,
+    sameSite: "lax",
+    maxAge: 30 * 24 * 3600 * 1e3,
+    path: "/"
+  });
+}
+function clearSessionCookie(res, req) {
+  const secure = getCookieSecurity(req);
+  res.clearCookie("oldletters_session", { path: "/", secure, sameSite: "lax" });
+  res.clearCookie("oldletters_logged_in", { path: "/", secure, sameSite: "lax" });
+}
 var authenticateToken = (req, res, next) => {
-  const token = req.cookies?.oldletters_session || req.headers.authorization?.replace(/^Bearer\s+/i, "");
+  let token = req.cookies?.oldletters_session;
+  if (!token && req.headers.cookie) {
+    const match = req.headers.cookie.match(/(?:^|;\s*)oldletters_session=([^;]+)/);
+    if (match) {
+      token = decodeURIComponent(match[1]);
+    }
+  }
+  if (!token && req.headers.authorization) {
+    token = req.headers.authorization.replace(/^Bearer\s+/i, "");
+  }
   if (!token) {
     return next();
   }
@@ -2058,6 +2094,7 @@ app.get("/api/config/payment", (req, res) => {
   });
 });
 app.get(["/api/auth/me", "/api/me", "/auth/me"], async (req, res) => {
+  res.setHeader("Cache-Control", "private, no-cache, no-store, must-revalidate");
   if (!req.user || !req.user.id) {
     return res.json({ authenticated: false, user: null });
   }
@@ -2137,13 +2174,7 @@ app.post(["/api/auth/register", "/api/auth/signup", "/auth/register", "/auth/sig
           emailVerified: true
         };
         const sessionToken2 = jwt.sign(userPayload2, JWT_SECRET, { expiresIn: "30d" });
-        res.cookie("oldletters_session", sessionToken2, {
-          httpOnly: true,
-          secure: isProd,
-          sameSite: "lax",
-          maxAge: 30 * 24 * 3600 * 1e3,
-          path: "/"
-        });
+        setSessionCookie(res, req, sessionToken2);
         return res.json({ success: true, token: sessionToken2, user: userPayload2 });
       }
       return res.status(400).json({ success: false, error: "An account with this email already exists." });
@@ -2171,13 +2202,7 @@ app.post(["/api/auth/register", "/api/auth/signup", "/auth/register", "/auth/sig
       emailVerified: false
     };
     const sessionToken = jwt.sign(userPayload, JWT_SECRET, { expiresIn: "30d" });
-    res.cookie("oldletters_session", sessionToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      maxAge: 30 * 24 * 3600 * 1e3,
-      path: "/"
-    });
+    setSessionCookie(res, req, sessionToken);
     res.json({ success: true, token: sessionToken, user: userPayload });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -2214,13 +2239,7 @@ app.post(["/api/auth/login", "/auth/login"], async (req, res) => {
       emailVerified: user.emailVerified ?? false
     };
     const sessionToken = jwt.sign(userPayload, JWT_SECRET, { expiresIn: "30d" });
-    res.cookie("oldletters_session", sessionToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      maxAge: 30 * 24 * 3600 * 1e3,
-      path: "/"
-    });
+    setSessionCookie(res, req, sessionToken);
     res.json({ success: true, token: sessionToken, user: userPayload });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -2262,14 +2281,18 @@ app.get(["/api/auth/google/callback", "/auth/google/callback"], (req, res, next)
       });
     }
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: "30d" });
-    res.cookie("oldletters_session", token, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      maxAge: 30 * 24 * 3600 * 1e3,
-      path: "/"
-    });
-    res.redirect("/?auth=google_success");
+    setSessionCookie(res, req, token);
+    const safeUser = {
+      id: user.id || user._id?.toString(),
+      email: user.email,
+      fullName: user.fullName,
+      avatarUrl: user.avatarUrl,
+      role: user.role || "USER",
+      authProvider: user.authProvider || "GOOGLE",
+      emailVerified: true
+    };
+    const userParam = encodeURIComponent(JSON.stringify(safeUser));
+    res.redirect(`/?auth=google_success&u=${userParam}`);
   })(req, res, next);
 });
 app.post("/api/auth/google/test-login", async (req, res) => {
@@ -2328,20 +2351,14 @@ app.post("/api/auth/google/test-login", async (req, res) => {
       emailVerified: user.emailVerified
     };
     const sessionToken = jwt.sign(userPayload, JWT_SECRET, { expiresIn: "30d" });
-    res.cookie("oldletters_session", sessionToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      maxAge: 30 * 24 * 3600 * 1e3,
-      path: "/"
-    });
+    setSessionCookie(res, req, sessionToken);
     res.json({ success: true, user: userPayload, token: sessionToken });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 app.post(["/api/auth/logout", "/auth/logout"], (req, res) => {
-  res.clearCookie("oldletters_session", { path: "/" });
+  clearSessionCookie(res, req);
   res.json({ success: true, message: "Logged out successfully." });
 });
 app.post("/api/auth/request-otp", async (req, res) => {
@@ -2455,12 +2472,7 @@ app.post("/api/auth/verify-otp", async (req, res) => {
       emailVerified: true
     };
     const sessionToken = jwt.sign(userPayload, JWT_SECRET, { expiresIn: "30d" });
-    res.cookie("oldletters_session", sessionToken, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      maxAge: 30 * 24 * 3600 * 1e3
-    });
+    setSessionCookie(res, req, sessionToken);
     res.json({
       success: true,
       token: sessionToken,

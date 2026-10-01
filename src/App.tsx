@@ -34,6 +34,7 @@ export default function App() {
   const [intendedDestination, setIntendedDestination] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
 
+  // Initialize currentUser from local cache so authenticated state is preserved across redirects/refreshes
   const [currentUser, setCurrentUser] = useState<{
     id: string;
     email: string;
@@ -42,7 +43,27 @@ export default function App() {
     avatarUrl?: string;
     authProvider?: string;
     emailVerified?: boolean;
-  } | null>(null);
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem('old_letters_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const setAndPersistUser = (user: any | null) => {
+    setCurrentUser(user);
+    try {
+      if (user) {
+        localStorage.setItem('old_letters_user', JSON.stringify(user));
+      } else {
+        localStorage.removeItem('old_letters_user');
+      }
+    } catch {
+      // Safe fallback
+    }
+  };
 
   const [recipientDeliveryToken, setRecipientDeliveryToken] = useState<string | undefined>(undefined);
   const [currentView, setCurrentView] = useState<AppView>('landing');
@@ -102,13 +123,27 @@ export default function App() {
         setShowAuthModal(true);
         window.history.replaceState({}, document.title, window.location.pathname);
       } else if (authParam === 'google_success') {
+        // Hydrate authenticated state synchronously from safe redirect payload if available
+        const userParam = searchParams.get('u');
+        if (userParam) {
+          try {
+            const parsedUser = JSON.parse(decodeURIComponent(userParam));
+            if (parsedUser && (parsedUser.id || parsedUser.email)) {
+              setAndPersistUser(parsedUser);
+            }
+          } catch {
+            // Safe fallback
+          }
+        }
+
         setAuthNotice('Signed in with Google successfully.');
         window.history.replaceState({}, document.title, window.location.pathname);
         setTimeout(() => setAuthNotice(null), 5000);
-        // Refresh current user session
+
+        // Fetch authoritative session from /api/auth/me using credentials: 'include'
         getCurrentUser().then((user) => {
           if (user) {
-            setCurrentUser(user);
+            setAndPersistUser(user);
             fetchLetters().then((l) => {
               if (l && l.length > 0) setLetters(l);
             });
@@ -164,13 +199,16 @@ export default function App() {
     getCurrentUser()
       .then((user) => {
         if (user) {
-          setCurrentUser(user);
+          setAndPersistUser(user);
           // Fetch authenticated letters
           fetchLetters().then((data) => {
             if (data && data.length > 0) {
               setLetters(data);
             }
           }).catch(() => {});
+        } else {
+          // If server explicitly confirmed no session, clear cache
+          setAndPersistUser(null);
         }
       })
       .catch(() => {});
@@ -205,7 +243,19 @@ export default function App() {
   // Intercept writing action: prompt auth if unauthenticated without losing destination
   const handleStartWriting = (type: LetterType = 'LOVE') => {
     setComposerInitialType(type);
-    if (!currentUser) {
+
+    // Check state or local storage cache to prevent premature prompt
+    let activeUser = currentUser;
+    if (!activeUser) {
+      try {
+        const saved = localStorage.getItem('old_letters_user');
+        if (saved) activeUser = JSON.parse(saved);
+      } catch {
+        // Fallback
+      }
+    }
+
+    if (!activeUser) {
       setIntendedDestination('composer');
       setAuthInitialMode('signup');
       setShowAuthModal(true);
@@ -216,7 +266,17 @@ export default function App() {
 
   // Intercept archive action
   const handleOpenArchive = () => {
-    if (!currentUser) {
+    let activeUser = currentUser;
+    if (!activeUser) {
+      try {
+        const saved = localStorage.getItem('old_letters_user');
+        if (saved) activeUser = JSON.parse(saved);
+      } catch {
+        // Fallback
+      }
+    }
+
+    if (!activeUser) {
       setIntendedDestination('archive');
       setAuthInitialMode('login');
       setShowAuthModal(true);
@@ -260,7 +320,7 @@ export default function App() {
 
   // Auth success handler: restores intended flow seamlessly
   const handleAuthSuccess = (user: any) => {
-    setCurrentUser(user);
+    setAndPersistUser(user);
     setShowAuthModal(false);
     fetchLetters().then(setLetters).catch(() => {});
 
@@ -310,7 +370,7 @@ export default function App() {
           onOpenAdmin={() => setShowAdminModal(true)}
           onLogout={() => {
             logoutUser();
-            setCurrentUser(null);
+            setAndPersistUser(null);
             setLetters(INITIAL_ARCHIVE_LETTERS);
             handleNavigate('landing');
           }}
@@ -481,7 +541,7 @@ export default function App() {
         onOpenArchive={handleOpenArchive}
         onLogout={() => {
           logoutUser();
-          setCurrentUser(null);
+          setAndPersistUser(null);
           setLetters(INITIAL_ARCHIVE_LETTERS);
           setCurrentView('landing');
         }}
