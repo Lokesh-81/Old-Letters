@@ -146,7 +146,7 @@ export default function App() {
     setComposerInitialType(type);
     if (!currentUser) {
       setIntendedDestination('composer');
-      setAuthInitialMode('login');
+      setAuthInitialMode('signup');
       setShowAuthModal(true);
       return;
     }
@@ -203,7 +203,7 @@ export default function App() {
     setShowAuthModal(false);
     fetchLetters().then(setLetters).catch(() => {});
 
-    if (intendedDestination === 'composer') {
+    if (intendedDestination === 'composer' || intendedDestination === 'seal-and-send') {
       setCurrentView('composer');
       setIntendedDestination(null);
     } else if (intendedDestination === 'archive') {
@@ -296,6 +296,19 @@ export default function App() {
         {currentView === 'composer' && (
           <ComposerFlow
             initialType={composerInitialType}
+            initialStep={intendedDestination === 'seal-and-send' ? 'review' : 'compose'}
+            currentUser={currentUser}
+            onRequestAuth={(action) => {
+              if (action === 'post') {
+                setIntendedDestination('seal-and-send');
+                setAuthInitialMode('signup');
+                setShowAuthModal(true);
+              } else {
+                setIntendedDestination('composer');
+                setAuthInitialMode('signup');
+                setShowAuthModal(true);
+              }
+            }}
             onLetterPosted={handleLetterPosted}
             onPreviewRecipient={(postedLtr) => {
               setActiveRecipientLetter(postedLtr);
@@ -347,6 +360,28 @@ export default function App() {
       <AuthModal
         isOpen={showAuthModal}
         initialMode={authInitialMode}
+        promptTitle={
+          intendedDestination === 'seal-and-send'
+            ? 'Before a letter can leave your desk,\nwe need to know who is sending it.'
+            : intendedDestination === 'composer'
+            ? 'Before a letter can leave your desk,\nwe need to know who is sending it.'
+            : undefined
+        }
+        promptSubtitle={
+          intendedDestination === 'seal-and-send'
+            ? 'Create your correspondence account before sealing and sending your letter.'
+            : intendedDestination === 'composer'
+            ? 'Create your correspondence account before sending your first letter.'
+            : undefined
+        }
+        onGuestPreview={
+          intendedDestination === 'composer'
+            ? () => {
+                setShowAuthModal(false);
+                setCurrentView('composer');
+              }
+            : undefined
+        }
         onClose={() => {
           setShowAuthModal(false);
           setIntendedDestination(null);
@@ -359,6 +394,8 @@ export default function App() {
         isOpen={showProfileModal}
         onClose={() => setShowProfileModal(false)}
         user={currentUser}
+        lettersCount={letters.length}
+        onOpenArchive={handleOpenArchive}
         onLogout={() => {
           logoutUser();
           setCurrentUser(null);

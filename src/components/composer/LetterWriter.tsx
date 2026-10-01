@@ -240,6 +240,7 @@ export const LetterWriter: React.FC<LetterWriterProps> = ({
             onSignoffChange={(val) => onChange({ signoff: val })}
             onSenderChange={(val) => onChange({ senderName: val })}
             onDateChange={(val) => onChange({ letterDate: val })}
+            onUploadPhoto={() => setShowPhotoModal(true)}
           />
         </div>
       </div>

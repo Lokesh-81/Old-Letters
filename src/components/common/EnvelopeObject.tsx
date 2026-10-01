@@ -36,10 +36,25 @@ export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
   showStamp = true,
   size = 'md',
 }) => {
-  const t = customTemplate || TEMPLATES.find((tpl) => tpl.id === templateId) || TEMPLATES[0];
+  const normalizedId =
+    templateId === 'ivory'
+      ? 'ivory-classic'
+      : templateId === 'typewritten'
+      ? 'typewriter'
+      : templateId === 'burgundy'
+      ? 'love-letter'
+      : templateId === 'diary'
+      ? 'personal-diary'
+      : templateId === 'midnight'
+      ? 'midnight-correspondence'
+      : templateId;
 
-  const effectiveSealColor = sealColor || t.sealColor || '#5c1d24';
-  const effectiveSealEmblem = sealEmblem || t.sealEmblem || '❦';
+  const t = customTemplate || TEMPLATES.find((tpl) => tpl.id === normalizedId) || TEMPLATES[0];
+
+  const effectiveSealColor = sealColor || t.waxSealStyle?.color || (t as any).sealColor || '#5c1d24';
+  const effectiveSealEmblem = sealEmblem || t.waxSealStyle?.emblem || (t as any).sealEmblem || '❦';
+  const envelopeBg = t.envelopeStyle?.bgColor || (t as any).envelopeBg || '#ede7dc';
+  const envelopeFlapBg = t.envelopeStyle?.flapColor || (t as any).envelopeFlapBg || '#dfd7ca';
 
   const sizeClasses = {
     sm: 'w-72 h-44 text-xs',
@@ -51,8 +66,9 @@ export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
     <div className={`relative select-none ${sizeClasses} ${className}`}>
       {/* Outer Luxury Envelope Shell */}
       <div
-        className="relative w-full h-full rounded-sm overflow-hidden transition-all duration-700 bg-[#ede7dc]"
+        className="relative w-full h-full rounded-sm overflow-hidden transition-all duration-700"
         style={{
+          backgroundColor: envelopeBg,
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.1)',
         }}
       >
@@ -73,7 +89,7 @@ export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
           <div
             className="absolute bottom-0 inset-x-0 h-1/2 opacity-70"
             style={{
-              backgroundColor: '#e4dcd0',
+              backgroundColor: envelopeFlapBg,
               clipPath: 'polygon(0% 100%, 50% 18%, 100% 100%)',
             }}
           />
@@ -82,7 +98,7 @@ export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
           <div
             className="absolute inset-y-0 left-0 w-1/2 opacity-60"
             style={{
-              backgroundColor: '#dfd6c8',
+              backgroundColor: envelopeFlapBg,
               clipPath: 'polygon(0% 0%, 0% 100%, 75% 50%)',
             }}
           />
@@ -91,7 +107,7 @@ export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
           <div
             className="absolute inset-y-0 right-0 w-1/2 opacity-60"
             style={{
-              backgroundColor: '#dfd6c8',
+              backgroundColor: envelopeFlapBg,
               clipPath: 'polygon(100% 0%, 100% 100%, 25% 50%)',
             }}
           />
@@ -100,7 +116,7 @@ export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
           <div
             className="absolute top-0 inset-x-0 h-3/5 origin-top transition-transform duration-700 ease-out"
             style={{
-              backgroundColor: '#e8e0d4',
+              backgroundColor: envelopeFlapBg,
               clipPath: 'polygon(0% 0%, 100% 0%, 50% 100%)',
               boxShadow: isOpen ? 'none' : '0 6px 16px rgba(0,0,0,0.15)',
               transform: isOpen ? 'rotateX(180deg)' : 'rotateX(0deg)',

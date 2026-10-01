@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { LETTER_TYPES, TEMPLATES } from '../../data/mockData';
-import { LetterTemplate, LetterType } from '../../types/letter';
+import { LETTER_TYPES, LETTER_CATEGORIES, TEMPLATES } from '../../data/mockData';
+import { LetterTemplate, LetterType, LetterCategory } from '../../types/letter';
 import { PaperSheet } from '../common/PaperSheet';
 import Footer23 from '../ui/index';
 import ScrollTriggered from '../ui/scroll-triggered';
@@ -17,6 +17,7 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
   onStartWriting,
   onExploreHowItWorks,
 }) => {
+  const [selectedCategory, setSelectedCategory] = useState<LetterCategory>('ROMANTIC');
   const [selectedType, setSelectedType] = useState<LetterType>('LOVE');
   const [activeTemplateIndex, setActiveTemplateIndex] = useState(0);
 
@@ -31,6 +32,8 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
       setActiveTemplateIndex(idx);
     }
   };
+
+  const currentCategoryTypes = LETTER_TYPES.filter((lt) => lt.category === selectedCategory);
 
   return (
     <div className="w-full bg-[#faf9f7] text-teal-900">
@@ -233,26 +236,48 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
       {/* SCENE: INTENTION & OCCASION */}
       <section id="letter-types" className="py-28 px-6 sm:px-12 border-t border-[#eae4da] bg-[#f4f2ec]">
         <div className="max-w-6xl mx-auto space-y-16">
-          <div className="space-y-3">
+          <div className="space-y-4">
             <h2 className="text-4xl sm:text-6xl text-teal-900 font-extralight" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
               What will you say?
             </h2>
             <p className="text-teal-900/80 text-lg sm:text-xl max-w-xl" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
               Select an intention. Each correspondence category carries its own emotional cadence.
             </p>
+
+            {/* Category tabs */}
+            <div className="flex items-center gap-2 flex-wrap pt-2">
+              {LETTER_CATEGORIES.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(cat.id);
+                    const firstInCat = LETTER_TYPES.find((lt) => lt.category === cat.id);
+                    if (firstInCat) setSelectedType(firstInCat.type);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-sans uppercase tracking-wider transition-all cursor-pointer ${
+                    selectedCategory === cat.id
+                      ? 'bg-teal-900 text-white font-medium shadow-xs'
+                      : 'bg-white border border-[#eae4da] text-stone-600 hover:text-stone-900 hover:bg-stone-50'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
             {/* Left: 3D Stacked Card Drawer */}
-            <div className="lg:col-span-5 space-y-3 perspective-1000">
-              {LETTER_TYPES.slice(0, 6).map((item, idx) => {
+            <div className="lg:col-span-5 space-y-3 perspective-1000 max-h-[560px] overflow-y-auto pr-1">
+              {currentCategoryTypes.map((item, idx) => {
                 const isSelected = selectedType === item.type;
                 return (
                   <button
                     key={item.type}
                     type="button"
                     onClick={() => setSelectedType(item.type)}
-                    className={`w-full p-5 text-left rounded-xs transition-all duration-300 cursor-pointer flex items-center justify-between border ${
+                    className={`w-full p-4 sm:p-5 text-left rounded-xs transition-all duration-300 cursor-pointer flex items-center justify-between border ${
                       isSelected
                         ? 'bg-white border-teal-900 shadow-paper-md translate-x-2'
                         : 'bg-[#faf9f7]/90 border-[#eae4da] text-stone-600 hover:bg-white hover:text-teal-900'
@@ -264,13 +289,13 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
                     }}
                   >
                     <div>
-                      <div className="text-2xl text-teal-900 font-normal" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-                        {item.type}
+                      <div className="text-xl sm:text-2xl text-teal-900 font-normal" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+                        {item.name}
                       </div>
                       <div className="text-xs text-stone-500 mt-0.5">{item.tagline}</div>
                     </div>
                     {isSelected && (
-                      <span className="text-xs font-mono text-teal-800 font-semibold">
+                      <span className="text-[10px] font-mono text-teal-800 font-semibold uppercase tracking-wider">
                         SELECTED
                       </span>
                     )}
@@ -324,7 +349,7 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
               </h2>
             </div>
             <div className="italic text-teal-900/80 max-w-sm text-base" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-              Explore 8 bespoke paper finishes with our interactive radial stationery compass.
+              Explore our collection of authentic tactile stationery designs with our interactive radial stationery compass.
             </div>
           </div>
 
@@ -334,9 +359,9 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
               templates={TEMPLATES}
               activeTemplateId={currentTemplate.id}
               onSelectTemplate={handleTemplateFromRadial}
-              radius={240}
+              radius={275}
               thumbnailSize={110}
-              centerSize={380}
+              centerSize={320}
             />
 
             {/* Selected Template Live Paper Sheet Preview */}
@@ -354,10 +379,10 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
               >
                 <PaperSheet
                   template={currentTemplate}
-                  date="29 September 2026"
+                  date="12 October 2026"
                   greeting="Dear Vasantha,"
-                  content="I am writing this on the balcony as the evening cools down over the city. I wanted to tell you how much I admire the way you pay attention to people."
-                  signoff="Yours,"
+                  content="I am writing this on the balcony as the evening cools down over the city. I wanted to tell you something I rarely say properly: how much I value your presence in my life."
+                  signoff="With affection,"
                   senderName="Lokesh"
                   isEditing={false}
                 />

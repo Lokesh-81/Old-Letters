@@ -365,6 +365,73 @@ export async function verifyAuthOtp(email: string, otp: string, fullName?: strin
   return safeParseJson(res, 'Authentication verification failed');
 }
 
+export async function updateLetter(id: string, updates: Partial<CreateLetterInput>): Promise<Letter> {
+  const res = await fetch(`${API_BASE}/letters/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify(updates),
+  });
+
+  const data = await safeParseJson<{ success: boolean; letter: Letter; error?: string }>(
+    res,
+    'Failed to update correspondence.'
+  );
+
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Failed to update correspondence.');
+  }
+
+  return data.letter;
+}
+
+export async function deleteLetter(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/letters/${id}`, {
+    method: 'DELETE',
+    headers: { 'Accept': 'application/json' },
+  });
+
+  const data = await safeParseJson<{ success: boolean; error?: string }>(
+    res,
+    'Failed to remove correspondence.'
+  );
+
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Failed to remove correspondence.');
+  }
+}
+
+export async function finalizeLetterPost(id: string): Promise<{
+  letter: Letter;
+  trackingCode: string;
+  deliveryToken?: string;
+}> {
+  const res = await fetch(`${API_BASE}/letters/${id}/post`, {
+    method: 'POST',
+    headers: { 'Accept': 'application/json' },
+  });
+
+  const data = await safeParseJson<{
+    success: boolean;
+    letter: Letter;
+    trackingCode: string;
+    deliveryToken?: string;
+    error?: string;
+  }>(res, 'Failed to seal and dispatch correspondence.');
+
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Failed to seal and dispatch correspondence.');
+  }
+
+  return {
+    letter: data.letter,
+    trackingCode: data.trackingCode,
+    deliveryToken: data.deliveryToken,
+  };
+}
+
 export async function getCurrentUser(): Promise<{
   id: string;
   email: string;
@@ -373,6 +440,9 @@ export async function getCurrentUser(): Promise<{
   avatarUrl?: string;
   authProvider?: string;
   emailVerified?: boolean;
+  googleLinked?: boolean;
+  createdAt?: string;
+  lettersCount?: number;
 } | null> {
   try {
     const res = await fetch(`${API_BASE}/auth/me`, {

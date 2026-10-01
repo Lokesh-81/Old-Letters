@@ -257,11 +257,13 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
           ) : (
             <div className="w-80 h-56 sm:w-96 sm:h-64 relative flex items-center justify-center cursor-pointer group">
               <EnvelopeObject
+                template={template}
+                templateId={activeLetter.templateId}
                 recipientName={activeLetter.recipientName}
                 senderName={activeLetter.senderName}
                 date={activeLetter.letterDate}
-                sealColor={template.sealColor}
-                sealEmblem={template.sealEmblem}
+                sealColor={template.waxSealStyle?.color}
+                sealEmblem={template.waxSealStyle?.emblem}
                 isSealed={true}
                 interactiveSeal={true}
                 onSealClick={handleOpenEnvelope}
@@ -295,17 +297,20 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
 
           <div className="relative w-80 h-56 sm:w-96 sm:h-64 flex items-center justify-center">
             <EnvelopeObject
+              template={template}
+              templateId={activeLetter.templateId}
               recipientName={activeLetter.recipientName}
               senderName={activeLetter.senderName}
               date={activeLetter.letterDate}
-              sealColor={template.sealColor}
-              sealEmblem={template.sealEmblem}
+              sealColor={template.waxSealStyle?.color}
+              sealEmblem={template.waxSealStyle?.emblem}
               isSealed={false}
+              isOpen={true}
             />
           </div>
 
           <div className="font-serif italic text-xl text-stone-700 animate-pulse">
-            Breaking wax impression and drawing out parchment...
+            Breaking {template.waxSealStyle?.name || 'wax'} seal and drawing out {template.name} parchment...
           </div>
         </main>
       )}
@@ -319,6 +324,8 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
               <span>DISPATCH REF: {activeLetter.trackingCode}</span>
               <span>·</span>
               <span className="text-teal-900 font-medium">{activeLetter.type}</span>
+              <span>·</span>
+              <span className="text-stone-500">{template.name}</span>
             </div>
             <div>
               SEALED IN TRANSIT FOR {activeLetter.waitingHours || 48} HOURS
@@ -328,6 +335,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
           {/* Archival Paper Sheet */}
           <div className="w-full flex justify-center shadow-paper-lg">
             <PaperSheet
+              template={template}
               templateId={activeLetter.templateId}
               date={activeLetter.letterDate}
               greeting={activeLetter.greeting}

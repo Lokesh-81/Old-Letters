@@ -1,19 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
-import { Letter, LetterAttachment, LetterType } from '../../types/letter';
-import { LETTER_TYPES, TEMPLATES } from '../../data/mockData';
+import { Letter, LetterAttachment, LetterType, LetterCategory } from '../../types/letter';
+import { LETTER_TYPES, LETTER_CATEGORIES, TEMPLATES } from '../../data/mockData';
 import { PaperSheet } from '../common/PaperSheet';
 import { EnvelopeObject } from '../common/EnvelopeObject';
+import { StationeryGallery } from './StationeryGallery';
 import { PostingCeremony } from './PostingCeremony';
 import { postLetter } from '../../lib/api';
 import { UpiPaymentModal } from '../payment/UpiPaymentModal';
 
 interface ComposerFlowProps {
   initialType?: LetterType;
+  initialStep?: ComposerStep;
   onLetterPosted: (letter: Letter) => void;
   onPreviewRecipient: (letter: Letter) => void;
   onViewArchive: () => void;
   onCancel: () => void;
+  currentUser?: {
+    id: string;
+    email: string;
+    fullName: string;
+    role?: string;
+  } | null;
+  onRequestAuth?: (action: 'post' | 'write') => void;
 }
 
 type ComposerStep = 'stationery' | 'compose' | 'dispatch' | 'delivery' | 'review';
@@ -55,12 +64,15 @@ const POSTAL_TEMPOS = [
 
 export const ComposerFlow: React.FC<ComposerFlowProps> = ({
   initialType = 'LOVE',
+  initialStep = 'compose',
   onLetterPosted,
   onPreviewRecipient,
   onViewArchive,
   onCancel,
+  currentUser,
+  onRequestAuth,
 }) => {
-  const [activeStep, setActiveStep] = useState<ComposerStep>('compose');
+  const [activeStep, setActiveStep] = useState<ComposerStep>(initialStep);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [isPosting, setIsPosting] = useState(false);
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
@@ -73,6 +85,7 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
   const [photoCaption, setPhotoCaption] = useState('');
   const [selectedTempoId, setSelectedTempoId] = useState<'48h' | '7d' | '30d' | 'custom'>('48h');
   const [customDateInput, setCustomDateInput] = useState('');
+  const [activeLetterCategory, setActiveLetterCategory] = useState<LetterCategory>('ROMANTIC');
 
   // 3D Desk interactive tilt state
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
@@ -88,40 +101,74 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
   const minDeliveryMs = Date.now() + 48 * 3600 * 1000;
   const defaultDeliveryAt = new Date(minDeliveryMs).toISOString();
 
-  // Working letter state with natural Indian defaults
-  const [draft, setDraft] = useState<Letter>({
-    id: `ol-${Date.now()}`,
-    trackingCode: `OL-${Math.floor(1000 + Math.random() * 9000)}-${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`,
-    type: initialType,
-    templateId: 'ivory',
-    senderName: 'Lokesh',
-    senderEmail: 'lokesh@oldletters.in',
-    recipientName: 'Vasantha',
-    recipientEmail: 'vasantha@correspondence.in',
-    letterDate: todayFormatted,
-    greeting: 'Dear Vasantha,',
-    content: `I am writing this on the balcony as the evening cools down over the city.
+  // Working letter state with natural defaults & localStorage draft recovery
+  const [draft, setDraft] = useState<Letter>(() => {
+    try {
+      const saved = localStorage.getItem('old_letters_working_draft');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (currentUser) {
+          parsed.senderName = currentUser.fullName || parsed.senderName;
+          parsed.senderEmail = currentUser.email || parsed.senderEmail;
+        }
+        return parsed;
+      }
+    } catch {
+      // Safe fallback
+    }
+
+    const defaultSender = currentUser?.fullName || 'Correspondent';
+    const defaultEmail = currentUser?.email || 'correspondent@oldletters.in';
+
+    return {
+      id: `ol-${Date.now()}`,
+      trackingCode: `OL-${Math.floor(1000 + Math.random() * 9000)}-${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`,
+      type: initialType,
+      templateId: 'ivory',
+      senderName: defaultSender,
+      senderEmail: defaultEmail,
+      recipientName: 'Vasantha',
+      recipientEmail: 'vasantha@correspondence.in',
+      letterDate: todayFormatted,
+      greeting: 'Dear Vasantha,',
+      content: `I am writing this on the balcony as the evening cools down over the city.
 
 I wanted to tell you something I rarely say properly: how much I value your presence in my life. In a world where everyone is perpetually rushing to the next appointment, your calm presence is a gift.
 
 I chose the 48-hour post because some words deserve to be waited for. Take your time with this.`,
-    signoff: 'Yours in correspondence,',
-    attachments: [],
-    verificationMethod: 'open',
-    postedAt: new Date().toISOString(),
-    scheduledDeliveryAt: defaultDeliveryAt,
-    waitingHours: 48,
-    status: 'IN TRANSIT',
-    postmarkCity: 'Hyderabad Bureau',
+      signoff: 'Yours in correspondence,',
+      attachments: [],
+      verificationMethod: 'open',
+      postedAt: new Date().toISOString(),
+      scheduledDeliveryAt: defaultDeliveryAt,
+      waitingHours: 48,
+      status: 'IN TRANSIT',
+      postmarkCity: 'Hyderabad Bureau',
+    };
   });
 
+  // Sync draft sender info with currentUser if session is established
+  useEffect(() => {
+    if (currentUser) {
+      setDraft((prev) => ({
+        ...prev,
+        senderName: currentUser.fullName || prev.senderName,
+        senderEmail: currentUser.email || prev.senderEmail,
+      }));
+    }
+  }, [currentUser]);
+
+  // Persist working draft to localStorage so words are never lost
   useEffect(() => {
     setSaveIndicator('typing');
+    try {
+      localStorage.setItem('old_letters_working_draft', JSON.stringify(draft));
+    } catch {}
     const timer = setTimeout(() => {
       setSaveIndicator('saved');
     }, 500);
     return () => clearTimeout(timer);
-  }, [draft.content, draft.greeting, draft.signoff, draft.senderName, draft.recipientName]);
+  }, [draft.content, draft.greeting, draft.signoff, draft.senderName, draft.recipientName, draft.scheduledDeliveryAt, draft.templateId, draft.type]);
 
   const updateDraft = (updates: Partial<Letter>) => {
     setDraft((prev) => ({ ...prev, ...updates }));
@@ -242,15 +289,29 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
 
   // Seal & Post execution with safe backend response handling
   const handleExecutePost = async () => {
+    // IMPORTANT PRODUCT RULE: Must be authenticated to post a letter
+    if (!currentUser) {
+      try {
+        localStorage.setItem('old_letters_working_draft', JSON.stringify(draft));
+      } catch {}
+      if (onRequestAuth) {
+        onRequestAuth('post');
+      }
+      return;
+    }
+
     try {
       setIsSubmittingPost(true);
       setPostError(null);
 
+      const senderName = currentUser.fullName || draft.senderName || 'Correspondent';
+      const senderEmail = currentUser.email || draft.senderEmail || 'correspondent@oldletters.in';
+
       const result = await postLetter({
         type: draft.type,
         templateId: draft.templateId,
-        senderName: draft.senderName || 'Lokesh',
-        senderEmail: draft.senderEmail || 'lokesh@oldletters.in',
+        senderName,
+        senderEmail,
         recipientName: draft.recipientName || 'Vasantha',
         recipientEmail: draft.recipientEmail || 'vasantha@correspondence.in',
         greeting: draft.greeting,
@@ -268,9 +329,15 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
         ...draft,
         id: result.letter.id,
         trackingCode: result.trackingCode,
+        senderName,
+        senderEmail,
         status: 'SCHEDULED',
         postedAt: new Date().toISOString(),
       };
+
+      try {
+        localStorage.removeItem('old_letters_working_draft');
+      } catch {}
 
       setGeneratedDeliveryToken(result.deliveryToken);
       onLetterPosted(finalized);
@@ -435,8 +502,8 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                   recipientName={draft.recipientName}
                   senderName={draft.senderName}
                   date={draft.letterDate}
-                  sealColor={activeTemplate.sealColor}
-                  sealEmblem={activeTemplate.sealEmblem}
+                  sealColor={activeTemplate.waxSealStyle?.color || (activeTemplate as any).sealColor}
+                  sealEmblem={activeTemplate.waxSealStyle?.emblem || (activeTemplate as any).sealEmblem}
                   isSealed={true}
                   size="sm"
                 />
@@ -523,6 +590,72 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                 exit="exit"
                 className="space-y-6"
               >
+                {/* Occasion / Letter Type Selector Bar */}
+                <div className="bg-[#f9f7f4] border border-[#eae4da] p-3.5 rounded-sm space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono tracking-widest uppercase text-stone-500">
+                      OCCASION & INTENTION · {draft.type}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => goToStep('stationery')}
+                      className="text-[11px] font-sans text-teal-900 font-medium hover:underline flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span>Paper: {activeTemplate.name}</span>
+                      <span
+                        className="w-2.5 h-2.5 rounded-full inline-block border border-stone-300"
+                        style={{ backgroundColor: activeTemplate.paperColor }}
+                      />
+                      <span>→</span>
+                    </button>
+                  </div>
+
+                  {/* Category Filter Tabs */}
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
+                    {LETTER_CATEGORIES.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveLetterCategory(cat.id);
+                          const firstType = cat.types[0];
+                          updateDraft({ type: firstType });
+                        }}
+                        className={`px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider font-sans whitespace-nowrap transition-colors cursor-pointer ${
+                          activeLetterCategory === cat.id
+                            ? 'bg-teal-900 text-white font-medium'
+                            : 'bg-white border border-[#eae4da] text-stone-600 hover:text-stone-900'
+                        }`}
+                      >
+                        {cat.name}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Specific Intentions within selected Category */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    {LETTER_TYPES.filter((lt) => lt.category === activeLetterCategory).map((lt) => {
+                      const isSelected = draft.type === lt.type;
+                      return (
+                        <button
+                          key={lt.type}
+                          type="button"
+                          onClick={() => {
+                            updateDraft({ type: lt.type });
+                          }}
+                          className={`px-2.5 py-1 text-xs rounded-xs transition-colors cursor-pointer ${
+                            isSelected
+                              ? 'bg-white border border-teal-900 font-medium text-teal-950 shadow-2xs'
+                              : 'bg-white/80 border border-stone-200 text-stone-600 hover:bg-white'
+                          }`}
+                        >
+                          {lt.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <label className="block text-[11px] font-mono text-stone-500 uppercase tracking-wider">
                     Salutation Greeting
@@ -616,7 +749,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
               </motion.div>
             )}
 
-            {/* STEP 2: STATIONERY TEMPLATES */}
+            {/* STEP 2: STATIONERY TEMPLATES GALLERY */}
             {activeStep === 'stationery' && (
               <motion.div
                 key="step-stationery"
@@ -627,80 +760,15 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                 exit="exit"
                 className="space-y-6"
               >
-                <div>
-                  <label className="block text-[11px] font-mono text-stone-500 uppercase tracking-wider mb-3">
-                    Letter Type & Occasion
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {LETTER_TYPES.map((lt) => {
-                      const isSelected = draft.type === lt.type;
-                      return (
-                        <button
-                          key={lt.type}
-                          type="button"
-                          onClick={() => updateDraft({ type: lt.type })}
-                          className={`p-3 text-left border rounded-xs transition-colors cursor-pointer ${
-                            isSelected
-                              ? 'bg-white border-[#141618] shadow-xs text-stone-950 font-medium'
-                              : 'bg-[#faf8f5] border-[#eae4da] text-stone-600 hover:bg-white'
-                          }`}
-                        >
-                          <div className="font-serif text-base">{lt.type}</div>
-                          <div className="text-[10px] text-stone-500 truncate">{lt.tagline}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-[#eae4da]">
-                  <label className="block text-[11px] font-mono text-stone-500 uppercase tracking-wider mb-3">
-                    Archival Parchment Paper Surface
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {TEMPLATES.map((tpl) => {
-                      const isSelected = draft.templateId === tpl.id;
-                      return (
-                        <button
-                          key={tpl.id}
-                          type="button"
-                          onClick={() => updateDraft({ templateId: tpl.id })}
-                          className={`p-4 text-left border rounded-xs transition-colors cursor-pointer flex items-center justify-between ${
-                            isSelected
-                              ? 'bg-white border-[#141618] shadow-xs text-stone-900 font-medium'
-                              : 'bg-[#faf8f5] border-[#eae4da] text-stone-600 hover:bg-white'
-                          }`}
-                        >
-                          <div>
-                            <div className="font-serif text-base text-stone-900">{tpl.name}</div>
-                            <div className="text-[11px] text-stone-500">{tpl.tagline}</div>
-                          </div>
-                          <span
-                            className="w-4 h-4 rounded-full border border-stone-300 shadow-xs shrink-0"
-                            style={{ backgroundColor: tpl.paperColor }}
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-[#eae4da] flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => goToStep('compose')}
-                    className="text-xs font-mono text-stone-500 hover:text-stone-900 cursor-pointer"
-                  >
-                    ← Back to Writing
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => goToStep('dispatch')}
-                    className="px-5 py-2.5 bg-teal-900 hover:bg-teal-800 text-white text-xs font-sans font-medium uppercase tracking-wider rounded-xs cursor-pointer shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] active:scale-[0.96]"
-                  >
-                    Recipient →
-                  </button>
-                </div>
+                <StationeryGallery
+                  selectedTemplateId={draft.templateId}
+                  onSelectTemplate={(tpl) => updateDraft({ templateId: tpl.id })}
+                  onConfirmStationery={(tpl) => {
+                    updateDraft({ templateId: tpl.id });
+                    goToStep('compose');
+                  }}
+                  onBackToCompose={() => goToStep('compose')}
+                />
               </motion.div>
             )}
 

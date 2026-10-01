@@ -189,7 +189,7 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
             </div>
 
             <div className="text-center font-serif italic text-stone-400 text-sm">
-              Ready to be impressed with the {template.name} wax seal ({template.sealEmblem}).
+              Ready to be impressed with the {template.name} wax seal ({template.waxSealStyle?.emblem || '✒'}).
             </div>
           </div>
 

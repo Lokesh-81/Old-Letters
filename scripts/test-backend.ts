@@ -114,13 +114,22 @@ async function runTests() {
     throw new Error('Logged out session check failed');
   }
 
-  // TEST 8: Protected Archive Route (401 when unauthenticated)
-  console.log('\n[TEST 8] Protected Archive Route (Expect 401 when unauthenticated)...');
-  const unauthArchive = await request('/api/letters');
-  console.log('Unauthenticated archive status (expect 401):', unauthArchive.status);
-  if (unauthArchive.status !== 401) {
-    throw new Error('Unauthenticated access to /api/letters was not blocked with 401');
-  }
+  // TEST 8: Protected Endpoints (Expect 401 Unauthorized for all unauthenticated calls)
+  console.log('\n[TEST 8] Verifying 401 Unauthorized across all protected endpoints...');
+  const unauthLetters = await request('/api/letters');
+  const unauthArchive = await request('/api/archive');
+  const unauthPostLetter = await request('/api/letters', { method: 'POST', body: JSON.stringify({}) });
+  const unauthFinalizePost = await request('/api/letters/sample-id/post', { method: 'POST' });
+  const unauthPutLetter = await request('/api/letters/sample-id', { method: 'PUT', body: JSON.stringify({}) });
+  const unauthDeleteLetter = await request('/api/letters/sample-id', { method: 'DELETE' });
+
+  if (unauthLetters.status !== 401) throw new Error('GET /api/letters not blocked with 401');
+  if (unauthArchive.status !== 401) throw new Error('GET /api/archive not blocked with 401');
+  if (unauthPostLetter.status !== 401) throw new Error('POST /api/letters not blocked with 401');
+  if (unauthFinalizePost.status !== 401) throw new Error('POST /api/letters/:id/post not blocked with 401');
+  if (unauthPutLetter.status !== 401) throw new Error('PUT /api/letters/:id not blocked with 401');
+  if (unauthDeleteLetter.status !== 401) throw new Error('DELETE /api/letters/:id not blocked with 401');
+  console.log('SUCCESS: All 6 endpoints returned 401 Unauthorized when unauthenticated.');
 
   // TEST 9: Protected Letter Creation & Strict Sender ID Ownership
   console.log('\n[TEST 9] Protected Letter Creation with Authenticated Sender ID...');

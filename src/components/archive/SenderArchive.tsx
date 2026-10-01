@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Letter } from '../../types/letter';
+import { TEMPLATES } from '../../data/mockData';
 
 interface SenderArchiveProps {
   letters: Letter[];
@@ -79,28 +80,55 @@ export const SenderArchive: React.FC<SenderArchiveProps> = ({
             year: 'numeric',
           });
 
+          const tpl = TEMPLATES.find((t) => t.id === ltr.templateId) || TEMPLATES[0];
+
           return (
             <div
               key={ltr.id}
               className="py-10 group flex flex-col md:flex-row md:items-center justify-between gap-6 transition-colors hover:bg-stone-50 px-4 -mx-4 rounded-xs"
             >
-              {/* Left Column: Recipient & Excerpt */}
-              <div className="space-y-3 max-w-xl">
-                <div className="flex items-center gap-3 text-xs font-mono text-stone-500 uppercase tracking-wider">
-                  <span>TO {ltr.recipientName}</span>
-                  <span>·</span>
-                  <span className="text-teal-900 font-medium">{ltr.type}</span>
-                  <span>·</span>
-                  <span>{ltr.letterDate}</span>
+              {/* Left Column: Miniature Swatch + Recipient & Excerpt */}
+              <div className="flex items-start gap-5 max-w-xl">
+                {/* Miniature stationery paper swatch with wax seal badge */}
+                <div
+                  className="shrink-0 w-16 h-20 rounded-xs border shadow-sm p-1.5 flex flex-col justify-between select-none relative group-hover:scale-105 transition-transform"
+                  style={{
+                    backgroundColor: tpl.paperColor,
+                    borderColor: tpl.borderColor || '#cbbda5',
+                    color: tpl.inkColor,
+                  }}
+                  title={`Stationery: ${tpl.name}`}
+                >
+                  <div className="text-[8px] font-mono uppercase tracking-tighter opacity-60 leading-none">
+                    {tpl.name.split(' ')[0]}
+                  </div>
+                  <div className="flex justify-end">
+                    <span
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] shadow-2xs"
+                      style={{ backgroundColor: tpl.waxSealStyle.color, color: '#fef08a' }}
+                    >
+                      {tpl.waxSealStyle.emblem}
+                    </span>
+                  </div>
                 </div>
 
-                <h3 className="font-serif text-3xl sm:text-4xl text-teal-900 font-light group-hover:text-teal-800 transition-colors">
-                  To {ltr.recipientName}
-                </h3>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 text-xs font-mono text-stone-500 uppercase tracking-wider">
+                    <span>TO {ltr.recipientName}</span>
+                    <span>·</span>
+                    <span className="text-teal-900 font-medium">{ltr.type}</span>
+                    <span>·</span>
+                    <span className="text-stone-400">{tpl.name}</span>
+                  </div>
 
-                <p className="font-serif italic text-stone-600 text-base leading-relaxed line-clamp-2">
-                  "{ltr.content}"
-                </p>
+                  <h3 className="font-serif text-3xl sm:text-4xl text-teal-900 font-light group-hover:text-teal-800 transition-colors">
+                    To {ltr.recipientName}
+                  </h3>
+
+                  <p className="font-serif italic text-stone-600 text-base leading-relaxed line-clamp-2">
+                    "{ltr.content}"
+                  </p>
+                </div>
               </div>
 
               {/* Right Column: Status & Action */}
@@ -135,3 +163,4 @@ export const SenderArchive: React.FC<SenderArchiveProps> = ({
     </div>
   );
 };
+

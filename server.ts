@@ -327,6 +327,8 @@ app.get(['/api/auth/me', '/api/me'], async (req: AuthenticatedRequest, res) => {
 
   const db = await getDb();
   const usersColl = db.collection('users');
+  const lettersColl = db.collection('letters');
+
   let userDoc = null;
   try {
     userDoc = await usersColl.findOne({ _id: new ObjectId(req.user.id) });
@@ -338,6 +340,13 @@ app.get(['/api/auth/me', '/api/me'], async (req: AuthenticatedRequest, res) => {
     return res.json({ authenticated: false, user: null });
   }
 
+  const lettersCount = await lettersColl.countDocuments({
+    $or: [
+      { senderId: userDoc._id.toString() },
+      { senderId: userDoc._id },
+    ],
+  });
+
   res.json({
     authenticated: true,
     user: {
@@ -348,6 +357,9 @@ app.get(['/api/auth/me', '/api/me'], async (req: AuthenticatedRequest, res) => {
       role: userDoc.role || 'USER',
       authProvider: userDoc.authProvider || 'EMAIL',
       emailVerified: userDoc.emailVerified ?? false,
+      googleLinked: !!userDoc.googleId || userDoc.authProvider === 'GOOGLE' || userDoc.authProvider === 'BOTH',
+      createdAt: userDoc.createdAt ? userDoc.createdAt.toISOString() : undefined,
+      lettersCount,
     },
   });
 });
@@ -794,54 +806,55 @@ app.get('/api/templates', async (req, res) => {
 // LETTERS: ARCHIVE & POSTING (Protected & Sender-Authoritative)
 // ====================================================================
 
+// Helper for mapping letter documents for API responses
+async function mapLetterDocToResponse(ltr: any, db: any, reqUser?: SessionUser) {
+  const recipientsColl = db.collection('letterRecipients');
+  const recipient = await recipientsColl.findOne({ letterId: ltr._id });
+  return {
+    id: ltr._id.toString(),
+    trackingCode: ltr.trackingCode,
+    type: ltr.letterType,
+    templateId: ltr.templateId,
+    senderName: reqUser?.fullName || 'Correspondent',
+    senderEmail: reqUser?.email || 'correspondent@oldletters.in',
+    recipientName: recipient?.displayName || 'Recipient',
+    recipientEmail: recipient?.email || 'recipient@correspondence.in',
+    letterDate: new Date(ltr.createdAt).toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    }),
+    greeting: ltr.salutation,
+    content: ltr.body,
+    signoff: ltr.signoff,
+    attachments: ltr.attachments || [],
+    verificationMethod: ltr.recipientVerificationMethod,
+    postedAt: ltr.postedAt ? ltr.postedAt.toISOString() : ltr.createdAt.toISOString(),
+    scheduledDeliveryAt: ltr.deliveryDate ? ltr.deliveryDate.toISOString() : undefined,
+    waitingHours: ltr.waitingHours || 48,
+    status: ltr.status,
+    postmarkCity: ltr.postmarkCity || 'Hyderabad Bureau',
+  };
+}
+
 // 2. Letters Archive: GET all letters for current authenticated sender
-app.get('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get(['/api/letters', '/api/archive'], requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const db = await getDb();
     const lettersColl = db.collection('letters');
-    const recipientsColl = db.collection('letterRecipients');
     const senderId = req.user!.id;
 
-    // Strict ownership: Only retrieve letters penned by this sender (or sample letters in dev)
+    // Strict ownership: Only retrieve letters penned by this authenticated sender
     const query: any = {
       $or: [
         { senderId },
         { senderId: new ObjectId(senderId) },
-        { senderId: 'default-user' },
       ],
     };
 
     const rawLetters = await (await lettersColl.find(query)).sort({ createdAt: -1 }).toArray();
-
     const mapped = await Promise.all(
-      rawLetters.map(async (ltr: any) => {
-        const recipient = await recipientsColl.findOne({ letterId: ltr._id });
-        return {
-          id: ltr._id.toString(),
-          trackingCode: ltr.trackingCode,
-          type: ltr.letterType,
-          templateId: ltr.templateId,
-          senderName: req.user?.fullName || 'Correspondent',
-          senderEmail: req.user?.email || 'correspondent@oldletters.in',
-          recipientName: recipient?.displayName || 'Recipient',
-          recipientEmail: recipient?.email || 'recipient@correspondence.in',
-          letterDate: new Date(ltr.createdAt).toLocaleDateString('en-US', {
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric',
-          }),
-          greeting: ltr.salutation,
-          content: ltr.body,
-          signoff: ltr.signoff,
-          attachments: ltr.attachments || [],
-          verificationMethod: ltr.recipientVerificationMethod,
-          postedAt: ltr.postedAt ? ltr.postedAt.toISOString() : ltr.createdAt.toISOString(),
-          scheduledDeliveryAt: ltr.deliveryDate.toISOString(),
-          waitingHours: ltr.waitingHours || 48,
-          status: ltr.status,
-          postmarkCity: ltr.postmarkCity || 'Hyderabad Bureau',
-        };
-      })
+      rawLetters.map((ltr: any) => mapLetterDocToResponse(ltr, db, req.user))
     );
 
     res.json({ success: true, letters: mapped });
@@ -997,12 +1010,185 @@ app.get('/api/letters/:id', requireAuth, async (req: AuthenticatedRequest, res) 
 
     // Verify ownership or admin privileges
     const isAdmin = await verifyAdminServerSide(req);
-    const isOwner = letter.senderId?.toString() === req.user!.id || letter.senderId === 'default-user';
+    const isOwner = letter.senderId?.toString() === req.user!.id;
     if (!isOwner && !isAdmin) {
       return res.status(403).json({ success: false, error: 'Access denied to this correspondence.' });
     }
 
-    res.json({ success: true, letter });
+    const mapped = await mapLetterDocToResponse(letter, db, req.user);
+    res.json({ success: true, letter: mapped });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Finalize and Post / Seal a draft letter by ID (Strictly authenticated & ownership verified)
+app.post('/api/letters/:id/post', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = req.params.id;
+    const db = await getDb();
+    const lettersColl = db.collection('letters');
+    const tokensColl = db.collection('deliveryTokens');
+    const eventsColl = db.collection('deliveryEvents');
+
+    let letter = null;
+    try {
+      letter = await lettersColl.findOne({ _id: new ObjectId(id) });
+    } catch {
+      letter = await lettersColl.findOne({ trackingCode: id });
+    }
+
+    if (!letter) {
+      return res.status(404).json({ success: false, error: 'Letter not found.' });
+    }
+
+    if (letter.senderId?.toString() !== req.user!.id) {
+      return res.status(403).json({ success: false, error: 'Access denied: You can only post your own correspondence.' });
+    }
+
+    const now = new Date();
+    await lettersColl.updateOne(
+      { _id: letter._id },
+      {
+        $set: {
+          status: 'SCHEDULED',
+          postedAt: now,
+          updatedAt: now,
+        },
+      }
+    );
+
+    let rawDeliveryToken = '';
+    const existingToken = await tokensColl.findOne({ letterId: letter._id });
+    if (!existingToken) {
+      rawDeliveryToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = hashSha256(rawDeliveryToken);
+      await tokensColl.insertOne({
+        _id: new ObjectId(),
+        letterId: letter._id,
+        tokenHash,
+        expiresAt: new Date(now.getTime() + 30 * 24 * 3600 * 1000),
+        createdAt: now,
+      });
+    }
+
+    await eventsColl.insertOne({
+      _id: new ObjectId(),
+      letterId: letter._id,
+      eventType: 'LETTER_POSTED',
+      metadata: { trackingCode: letter.trackingCode },
+      createdAt: now,
+    });
+
+    const updated = await lettersColl.findOne({ _id: letter._id });
+    const mapped = await mapLetterDocToResponse(updated, db, req.user);
+
+    res.json({
+      success: true,
+      letter: mapped,
+      trackingCode: letter.trackingCode,
+      deliveryToken: rawDeliveryToken || undefined,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update a letter or draft by ID (Strictly authenticated & ownership verified)
+app.put('/api/letters/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = req.params.id;
+    const db = await getDb();
+    const lettersColl = db.collection('letters');
+    const recipientsColl = db.collection('letterRecipients');
+
+    let letter = null;
+    try {
+      letter = await lettersColl.findOne({ _id: new ObjectId(id) });
+    } catch {
+      letter = await lettersColl.findOne({ trackingCode: id });
+    }
+
+    if (!letter) {
+      return res.status(404).json({ success: false, error: 'Letter not found.' });
+    }
+
+    if (letter.senderId?.toString() !== req.user!.id) {
+      return res.status(403).json({ success: false, error: 'Access denied: You can only edit your own correspondence.' });
+    }
+
+    const {
+      salutation,
+      greeting,
+      body,
+      content,
+      signoff,
+      recipientName,
+      recipientEmail,
+      templateId,
+      letterType,
+      type,
+      scheduledDeliveryAt,
+      waitingHours,
+      verificationMethod,
+    } = req.body;
+
+    const updateFields: any = { updatedAt: new Date() };
+    if (greeting !== undefined || salutation !== undefined) updateFields.salutation = greeting ?? salutation;
+    if (content !== undefined || body !== undefined) updateFields.body = content ?? body;
+    if (signoff !== undefined) updateFields.signoff = signoff;
+    if (templateId !== undefined) updateFields.templateId = templateId;
+    if (type !== undefined || letterType !== undefined) updateFields.letterType = type ?? letterType;
+    if (waitingHours !== undefined) updateFields.waitingHours = waitingHours;
+    if (scheduledDeliveryAt !== undefined) updateFields.deliveryDate = new Date(scheduledDeliveryAt);
+    if (verificationMethod !== undefined) updateFields.recipientVerificationMethod = verificationMethod;
+
+    await lettersColl.updateOne({ _id: letter._id }, { $set: updateFields });
+
+    if (recipientName || recipientEmail) {
+      const recipientUpdate: any = {};
+      if (recipientName) recipientUpdate.displayName = recipientName;
+      if (recipientEmail) recipientUpdate.email = recipientEmail.toLowerCase();
+      await recipientsColl.updateOne({ letterId: letter._id }, { $set: recipientUpdate });
+    }
+
+    const updated = await lettersColl.findOne({ _id: letter._id });
+    const mapped = await mapLetterDocToResponse(updated, db, req.user);
+    res.json({ success: true, letter: mapped });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Delete a letter or draft by ID (Strictly authenticated & ownership verified)
+app.delete('/api/letters/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = req.params.id;
+    const db = await getDb();
+    const lettersColl = db.collection('letters');
+    const recipientsColl = db.collection('letterRecipients');
+    const tokensColl = db.collection('deliveryTokens');
+
+    let letter = null;
+    try {
+      letter = await lettersColl.findOne({ _id: new ObjectId(id) });
+    } catch {
+      letter = await lettersColl.findOne({ trackingCode: id });
+    }
+
+    if (!letter) {
+      return res.status(404).json({ success: false, error: 'Letter not found.' });
+    }
+
+    if (letter.senderId?.toString() !== req.user!.id) {
+      return res.status(403).json({ success: false, error: 'Access denied: You can only delete your own correspondence.' });
+    }
+
+    await lettersColl.deleteOne({ _id: letter._id });
+    await recipientsColl.deleteMany({ letterId: letter._id });
+    await tokensColl.deleteMany({ letterId: letter._id });
+
+    res.json({ success: true, message: 'Correspondence removed.' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

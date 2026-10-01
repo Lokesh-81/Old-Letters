@@ -27,9 +27,19 @@ export interface Auth7Props {
   onSuccess?: (user: { id: string; email: string; fullName: string; role?: string; avatarUrl?: string }) => void;
   onCancel?: () => void;
   initialMode?: 'login' | 'signup';
+  promptTitle?: string;
+  promptSubtitle?: string;
+  onGuestPreview?: () => void;
 }
 
-export default function Auth7({ onSuccess, onCancel, initialMode = 'login' }: Auth7Props) {
+export default function Auth7({
+  onSuccess,
+  onCancel,
+  initialMode = 'login',
+  promptTitle,
+  promptSubtitle,
+  onGuestPreview,
+}: Auth7Props) {
   const [isLogin, setIsLogin] = useState(initialMode === 'login');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -130,13 +140,15 @@ export default function Auth7({ onSuccess, onCancel, initialMode = 'login' }: Au
             >
               {/* Title & Subtitle */}
               <div className="mb-6 text-center">
-                <h1 className="text-2xl sm:text-3xl font-normal text-teal-950 font-serif tracking-tight">
-                  {isLogin ? 'Return to your correspondence.' : 'Begin your correspondence.'}
+                <h1 className="text-2xl sm:text-3xl font-normal text-teal-950 font-serif tracking-tight whitespace-pre-line leading-tight">
+                  {isLogin
+                    ? (promptTitle || 'Return to your correspondence.')
+                    : (promptTitle || 'Before a letter can leave your desk,\nwe need to know who is sending it.')}
                 </h1>
                 <p className="text-xs sm:text-sm font-sans text-stone-600 mt-2 font-light">
                   {isLogin
-                    ? 'Access your private letters, scheduled dispatches, and archives.'
-                    : 'Craft letters with patience, sealed in wax until the appointed hour.'}
+                    ? (promptSubtitle || 'Access your private letters, scheduled dispatches, and archives.')
+                    : (promptSubtitle || 'Create your correspondence account before sending your first letter.')}
                 </p>
               </div>
 
@@ -220,7 +232,7 @@ export default function Auth7({ onSuccess, onCancel, initialMode = 'login' }: Au
                       ? 'Confirming Seal...'
                       : isLogin
                       ? 'SIGN IN'
-                      : 'CREATE ACCOUNT'}
+                      : 'CREATE YOUR CORRESPONDENCE ACCOUNT'}
                   </button>
                 </div>
               </form>
@@ -278,6 +290,19 @@ export default function Auth7({ onSuccess, onCancel, initialMode = 'login' }: Au
                   </>
                 )}
               </div>
+
+              {/* Optional Guest Preview Link */}
+              {onGuestPreview && (
+                <div className="mt-4 text-center">
+                  <button
+                    type="button"
+                    onClick={onGuestPreview}
+                    className="text-xs font-serif italic text-stone-500 hover:text-teal-900 transition-colors cursor-pointer"
+                  >
+                    Or preview the writing experience as a guest →
+                  </button>
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
         </div>

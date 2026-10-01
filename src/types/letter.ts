@@ -1,38 +1,154 @@
+export type LetterCategory =
+  | 'ROMANTIC'
+  | 'PERSONAL'
+  | 'EMOTIONAL'
+  | 'CELEBRATION'
+  | 'SPECIAL';
+
 export type LetterType =
+  // ROMANTIC
   | 'LOVE'
-  | 'APOLOGY'
-  | 'BIRTHDAY'
-  | 'THANK YOU'
-  | 'I MISS YOU'
-  | 'FRIENDSHIP'
   | 'CONFESSION'
-  | 'CONGRATULATIONS'
-  | 'ENCOURAGEMENT'
+  | 'I MISS YOU'
+  | 'ANNIVERSARY'
+  | 'FIRST LOVE'
+  // PERSONAL
   | 'JUST BECAUSE'
+  | 'FRIENDSHIP'
+  | 'THINKING OF YOU'
+  | 'LONG DISTANCE'
+  | 'MEMORIES'
+  // EMOTIONAL
+  | 'APOLOGY'
+  | 'THANK YOU'
+  | "I'M PROUD OF YOU"
+  | 'ENCOURAGEMENT'
+  | 'GOODBYE'
+  // CELEBRATION
+  | 'BIRTHDAY'
+  | 'CONGRATULATIONS'
+  | 'NEW BEGINNING'
+  | 'ACHIEVEMENT'
+  // SPECIAL
+  | 'OPEN WHEN'
+  | 'TIME CAPSULE'
+  | 'FUTURE LETTER'
+  | 'SECRET LETTER'
   | 'CUSTOM';
 
 export type TemplateCategory =
-  | 'CLASSIC'
   | 'ROMANTIC'
   | 'PERSONAL'
+  | 'EMOTIONAL'
   | 'CELEBRATION'
-  | 'MINIMAL';
+  | 'SPECIAL'
+  | 'CLASSIC'
+  | 'VINTAGE'
+  | 'ARCHIVAL';
 
 export interface LetterTemplate {
   id: string;
   name: string;
   category: TemplateCategory;
+  suitableCategories?: LetterCategory[];
   description: string;
-  paperBg: string;
-  paperColor: string;
-  textColor: string;
-  fontFamily: 'serif' | 'display' | 'editorial' | 'typewriter' | 'sans';
-  accentBorder?: string;
-  sealColor: string;
-  sealEmblem: string;
-  envelopeBg: string;
-  envelopeFlapBg: string;
   tagline: string;
+  // Contrast-safe theme tokens
+  paperBackground: string;
+  paperForeground: string;
+  paperMuted: string;
+  paperAccent: string;
+  paperBorder: string;
+  // Legacy & convenience accessors
+  paperColor: string;
+  paperBg: string;
+  inkColor: string;
+  textColor: string;
+  fontFamily: 'serif' | 'display' | 'editorial' | 'typewriter' | 'handwriting' | 'sans';
+  borderStyle:
+    | 'antique-double'
+    | 'midnight-gold'
+    | 'antique-vellum'
+    | 'blush-rose'
+    | 'crimson-filigree'
+    | 'apology-minimal'
+    | 'thankyou-foliage'
+    | 'birthday-garland'
+    | 'congratulations-laurel'
+    | 'encouragement-botanical'
+    | 'goodbye-deckled'
+    | 'capsule-docket'
+    | 'future-celestial'
+    | 'secret-cipher'
+    | 'custom-bespoke'
+    | 'airmail-chevron'
+    | 'typewriter-rule'
+    | 'notebook-margin'
+    | 'postcard-split'
+    | 'photo-corners'
+    | 'vellum-layered'
+    | 'herbarium-grid'
+    | string;
+  borderColor?: string;
+  backgroundTexture:
+    | 'rag-paper'
+    | 'linen'
+    | 'aged-parchment'
+    | 'blush-vellum'
+    | 'night-sky'
+    | 'ruled-blue'
+    | 'vellum-frost'
+    | 'kraft'
+    | 'cotton-wove'
+    | 'deckle-cream'
+    | string;
+  paperWeight?: string;
+  textureDescription?: string;
+  reverseSideDetails?: {
+    title: string;
+    description: string;
+    markings?: string;
+  };
+  decorations: {
+    cornerFlourish?: boolean;
+    headerMark?: string;
+    watermark?: string;
+    liningDetail?: string;
+    stampType?: string;
+    botanicalAccent?: string;
+  };
+  envelopeStyle: {
+    bgColor: string;
+    flapColor: string;
+    liningPattern?: string;
+    borderAccent?: string;
+  };
+  waxSealStyle: {
+    color: string;
+    emblem: string;
+    name: string;
+  };
+  sealColor?: string;
+  sealEmblem?: string;
+  accentBorder?: string;
+  envelopeBg?: string;
+  envelopeFlapBg?: string;
+  postalMarks: {
+    postmarkText?: string;
+    cachetCity?: string;
+    airMailBadge?: boolean;
+    docketNumber?: string;
+    stampName?: string;
+    stampIllustration?: string;
+    cancellationDate?: string;
+  };
+  sampleSalutation: string;
+  sampleBody: string;
+  sampleSignoff: string;
+  sampleRecipient: string;
+  sampleSender: string;
+  sampleCity: string;
+  sampleDate: string;
 }
 
 export interface LetterAttachment {
