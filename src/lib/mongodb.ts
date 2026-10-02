@@ -13,6 +13,19 @@ export interface UserDoc extends Document {
   googleId?: string;
   role: 'USER' | 'ADMIN';
   emailVerified: boolean;
+  termsAccepted: boolean;
+  privacyAccepted: boolean;
+  termsVersion: string;
+  privacyVersion: string;
+  legalConsentAt: Date;
+  notificationPreferences?: {
+    letterDispatched: boolean;
+    deliveryUpdates: boolean;
+    preArrival: boolean;
+    arrival: boolean;
+    paymentUpdates: boolean;
+  };
+  status?: 'ACTIVE' | 'SUSPENDED' | 'DELETED';
   createdAt: Date;
   updatedAt: Date;
   lastLoginAt?: Date;
@@ -473,6 +486,7 @@ export async function setupDatabaseIndexes(): Promise<void> {
     // 6. deliveryEvents indexes
     const deliveryEvents = db.collection('deliveryEvents');
     await deliveryEvents.createIndex({ letterId: 1 });
+    await deliveryEvents.createIndex({ letterId: 1, eventType: 1 }, { unique: true, sparse: true });
 
     // 7. users indexes
     const users = db.collection('users');

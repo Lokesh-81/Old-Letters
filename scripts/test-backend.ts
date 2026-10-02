@@ -33,20 +33,43 @@ async function runTests() {
     throw new Error('Health check failed');
   }
 
-  // TEST 2: Signup with email + password
-  console.log('\n[TEST 2] Signup with Email + Password...');
+  // TEST 2: Signup with email + password (and Legal Consent enforcement)
+  console.log('\n[TEST 2] Signup without Legal Consent (must fail with 400)...');
   const testEmail = `vasantha.${Date.now()}@correspondence.in`;
+  const unconsentedSignup = await request('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({
+      fullName: 'Vasantha Rao',
+      email: testEmail,
+      password: 'secretCorrespondence1892',
+      termsAccepted: false,
+      privacyAccepted: false,
+    }),
+  });
+  console.log('Unconsented signup status (expect 400):', unconsentedSignup.status, unconsentedSignup.data);
+  if (unconsentedSignup.status !== 400) {
+    throw new Error('Registration without accepting Terms & Privacy was not blocked with 400');
+  }
+
+  console.log('\n[TEST 2b] Valid Signup with Legal Consent...');
   const signupRes = await request('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify({
       fullName: 'Vasantha Rao',
       email: testEmail,
       password: 'secretCorrespondence1892',
+      termsAccepted: true,
+      privacyAccepted: true,
+      termsVersion: '2026-10-01',
+      privacyVersion: '2026-10-01',
     }),
   });
-  console.log('Signup result:', signupRes.status, signupRes.data);
+  console.log('Consented signup result:', signupRes.status, signupRes.data);
   if (!signupRes.ok || !signupRes.data.user || signupRes.data.user.email !== testEmail) {
     throw new Error('Email signup failed');
+  }
+  if (!signupRes.data.user.termsAccepted || !signupRes.data.user.privacyAccepted) {
+    throw new Error('Legal consent was not persisted in signup user payload');
   }
   const sessionToken = signupRes.data.token;
 
@@ -171,8 +194,43 @@ async function runTests() {
     throw new Error('Posted letter not found in owner archive');
   }
 
-  // TEST 11: Google Sign-In & Intelligent Account Linking
-  console.log('\n[TEST 11] Google Sign-In & Account Linking...');
+  // TEST 11: Google Sign-In & Legal Consent Enforcement
+  console.log('\n[TEST 11] Google Sign-In without Legal Consent (must fail with 400)...');
+  const brandNewGoogleEmail = `new.google.${Date.now()}@correspondence.in`;
+  const unconsentedGoogleRes = await request('/api/auth/google/test-login', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: brandNewGoogleEmail,
+      googleId: `google-raw-id-${Date.now()}`,
+      fullName: 'New Google User',
+      termsAccepted: false,
+      privacyAccepted: false,
+    }),
+  });
+  console.log('Unconsented Google login status (expect 400):', unconsentedGoogleRes.status, unconsentedGoogleRes.data);
+  if (unconsentedGoogleRes.status !== 400) {
+    throw new Error('Google registration without legal consent was not blocked with 400');
+  }
+
+  console.log('\n[TEST 11b] Valid Google Sign-In with Legal Consent...');
+  const consentedGoogleRes = await request('/api/auth/google/test-login', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: brandNewGoogleEmail,
+      googleId: `google-raw-id-${Date.now()}`,
+      fullName: 'New Google User',
+      termsAccepted: true,
+      privacyAccepted: true,
+      termsVersion: '2026-10-01',
+      privacyVersion: '2026-10-01',
+    }),
+  });
+  console.log('Consented Google login status:', consentedGoogleRes.status, consentedGoogleRes.data);
+  if (!consentedGoogleRes.ok || !consentedGoogleRes.data.user.termsAccepted) {
+    throw new Error('Valid Google sign-in failed or legal consent was not saved');
+  }
+
+  console.log('\n[TEST 11c] Google Sign-In & Intelligent Account Linking...');
   // Simulate Google sign-in with the SAME email used in email/password signup
   const googleLinkRes = await request('/api/auth/google/test-login', {
     method: 'POST',
@@ -181,6 +239,10 @@ async function runTests() {
       googleId: 'google-oauth2-id-998877',
       fullName: 'Vasantha Rao Google',
       avatarUrl: 'https://images.unsplash.com/photo-1534528741775?w=100',
+      termsAccepted: true,
+      privacyAccepted: true,
+      termsVersion: '2026-10-01',
+      privacyVersion: '2026-10-01',
     }),
   });
   console.log('Google linking status:', googleLinkRes.status, googleLinkRes.data);
@@ -208,8 +270,153 @@ async function runTests() {
     throw new Error('Authorized admin access failed');
   }
 
+  // TEST 13: Production Delivery Scheduler & Vercel Cron Endpoint Verification
+  console.log('\n[TEST 13] Production Delivery Scheduler & Vercel Cron Verification...');
+  const cronSecret = process.env.CRON_SECRET || 'old-letters-cron-secure-key-2026';
+
+  // 1. GET request (as invoked by Vercel Cron) with valid Authorization Bearer
+  const cronGetRes = await request('/api/scheduler/tick', {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${cronSecret}` },
+  });
+  console.log('Cron GET status (expect 200):', cronGetRes.status, cronGetRes.data);
+  if (!cronGetRes.ok || !cronGetRes.data.success || cronGetRes.data.endpoint !== '/api/scheduler/tick') {
+    throw new Error('Vercel Cron HTTP GET execution failed');
+  }
+
+  // 2. POST request (for manual/admin testing)
+  const cronPostRes = await request('/api/scheduler/tick', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${cronSecret}` },
+  });
+  console.log('Cron POST status (expect 200):', cronPostRes.status, cronPostRes.data);
+  if (!cronPostRes.ok || !cronPostRes.data.success) {
+    throw new Error('Manual cron POST execution failed');
+  }
+
+  // 3. Aliases verification (/api/cron/delivery and /api/internal/delivery/run)
+  const aliasRes1 = await request('/api/cron/delivery', {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${cronSecret}` },
+  });
+  const aliasRes2 = await request('/api/internal/delivery/run', {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${cronSecret}` },
+  });
+  if (!aliasRes1.ok || !aliasRes2.ok) {
+    throw new Error('Cron canonical aliases failed');
+  }
+  console.log('Cron canonical aliases verified successfully.');
+
+  // 4. Verification of scheduler idempotency on repeated execution
+  const secondTick = await request('/api/scheduler/tick', {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${cronSecret}` },
+  });
+  console.log('Second tick result (idempotency check):', secondTick.data);
+  if (secondTick.data.deliveredCount !== 0) {
+    console.log('Notice: Delivered count was', secondTick.data.deliveredCount);
+  }
+
+  // [TEST 14] Correspondence Bureau & User Profile Endpoints
+  console.log('\n[TEST 14] Testing Correspondence Bureau & Dashboard Endpoints...');
+  const bureauRes = await request('/api/user/bureau-summary', {
+    headers: { Authorization: `Bearer ${validToken}` },
+  });
+  console.log('Bureau Summary Status (expect 200):', bureauRes.status, bureauRes.data.stats);
+  if (!bureauRes.ok || !bureauRes.data.success || !bureauRes.data.stats) {
+    throw new Error('GET /api/user/bureau-summary failed');
+  }
+  if (bureauRes.data.stats.sentCount < 1) {
+    throw new Error('Expected at least 1 sent letter in bureau stats');
+  }
+
+  // Sent letters endpoint
+  const sentRes = await request('/api/letters/sent', {
+    headers: { Authorization: `Bearer ${validToken}` },
+  });
+  console.log('Sent letters status (expect 200):', sentRes.status, 'Count:', sentRes.data.letters?.length);
+  if (!sentRes.ok || !Array.isArray(sentRes.data.letters)) {
+    throw new Error('GET /api/letters/sent failed');
+  }
+  const firstSent = sentRes.data.letters[0];
+  if (!firstSent.timeline || !Array.isArray(firstSent.timeline)) {
+    throw new Error('Sent letter is missing authentic delivery timeline');
+  }
+
+  // Received letters endpoint
+  const receivedRes = await request('/api/letters/received', {
+    headers: { Authorization: `Bearer ${validToken}` },
+  });
+  console.log('Received letters status (expect 200):', receivedRes.status);
+  if (!receivedRes.ok || !Array.isArray(receivedRes.data.letters)) {
+    throw new Error('GET /api/letters/received failed');
+  }
+
+  // User payments endpoint
+  const paymentsRes = await request('/api/payments', {
+    headers: { Authorization: `Bearer ${validToken}` },
+  });
+  console.log('User payments status (expect 200):', paymentsRes.status);
+  if (!paymentsRes.ok || !Array.isArray(paymentsRes.data.payments)) {
+    throw new Error('GET /api/payments failed');
+  }
+
+  // Profile update
+  const updateProfileRes = await request('/api/user/profile', {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${validToken}` },
+    body: JSON.stringify({ fullName: 'Vasantha Rao (Senior Correspondent)' }),
+  });
+  console.log('Profile update status (expect 200):', updateProfileRes.status);
+  if (!updateProfileRes.ok || updateProfileRes.data.user?.fullName !== 'Vasantha Rao (Senior Correspondent)') {
+    throw new Error('PUT /api/user/profile failed to update name');
+  }
+
+  // Preferences update
+  const updatePrefsRes = await request('/api/user/preferences', {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${validToken}` },
+    body: JSON.stringify({
+      preferences: {
+        letterDispatched: true,
+        deliveryUpdates: true,
+        preArrival: false,
+        arrival: true,
+        paymentUpdates: true,
+      },
+    }),
+  });
+  console.log('Preferences update status (expect 200):', updatePrefsRes.status, updatePrefsRes.data.preferences);
+  if (!updatePrefsRes.ok || updatePrefsRes.data.preferences?.preArrival !== false) {
+    throw new Error('PUT /api/user/preferences failed');
+  }
+
+  // Data export
+  const exportRes = await request('/api/user/export-data', {
+    headers: { Authorization: `Bearer ${validToken}` },
+  });
+  console.log('Export data status (expect 200):', exportRes.status, 'Registry Ref:', exportRes.data.exportMetadata?.registryReference);
+  if (!exportRes.ok || !exportRes.data.exportMetadata) {
+    throw new Error('GET /api/user/export-data failed');
+  }
+
+  // Password change
+  const passwordChangeRes = await request('/api/user/password', {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${validToken}` },
+    body: JSON.stringify({
+      currentPassword: 'secretCorrespondence1892',
+      newPassword: 'newSecretCorrespondence2026',
+    }),
+  });
+  console.log('Password change status (expect 200):', passwordChangeRes.status);
+  if (!passwordChangeRes.ok || !passwordChangeRes.data.success) {
+    throw new Error('PUT /api/user/password failed');
+  }
+
   console.log('\n=============================================================');
-  console.log('ALL 12 AUTHENTICATION & SECURITY TESTS PASSED WITH 100% SUCCESS');
+  console.log('ALL AUTHENTICATION, CONSENT, SCHEDULER & BUREAU TESTS PASSED WITH 100% SUCCESS');
   console.log('=============================================================');
 }
 

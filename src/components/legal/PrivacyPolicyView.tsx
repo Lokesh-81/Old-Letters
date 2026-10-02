@@ -1,4 +1,5 @@
 import React from 'react';
+import { CURRENT_PRIVACY_VERSION } from '../../types/backend';
 
 interface LegalPageProps {
   onBack: () => void;
@@ -18,7 +19,7 @@ export const PrivacyPolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
               Privacy Policy
             </h1>
             <div className="text-xs font-mono text-stone-400 mt-1">
-              Last updated: October 1, 2026
+              Version: {CURRENT_PRIVACY_VERSION} · Last Updated: October 1, 2026 · Bureau Registry Ref: PRIV-1892
             </div>
           </div>
 
@@ -32,92 +33,155 @@ export const PrivacyPolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
         </div>
 
         {/* Informational Policy Notice */}
-        <div className="p-4 bg-amber-50/70 border border-amber-200/80 rounded-xs text-xs font-sans text-amber-900 leading-relaxed">
-          <span className="font-semibold uppercase tracking-wider text-[10px] block mb-0.5">
-            Informational Legal Notice
+        <div className="p-4 bg-[#f4efe6] border border-[#e3dacf] rounded-xs text-xs font-sans text-stone-800 leading-relaxed">
+          <span className="font-semibold uppercase tracking-wider text-[10px] font-mono text-teal-900 block mb-1">
+            Privacy Transparency Notice (Version {CURRENT_PRIVACY_VERSION})
           </span>
-          This Privacy Policy describes how OLD-LETTERS handles personal correspondence, authentication, and technical data.
-          It is an informational policy template for user transparency and should be reviewed for jurisdictional legal compliance.
+          This Privacy Policy accurately discloses the specific personal data, correspondence metadata, security credentials,
+          and technical records processed by OLD-LETTERS. We hold your correspondence with strict confidentiality and never sell your personal information.
         </div>
 
         {/* Content Body */}
         <div className="space-y-8 font-sans text-stone-700 text-sm leading-relaxed">
+          {/* Section 1 */}
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
               1. The Sanctity of Private Correspondence
             </h2>
             <p className="font-light">
-              At OLD-LETTERS, we treat every digital letter with the inviolable confidentiality traditionally accorded to sealed physical post.
-              Your correspondence belongs entirely to you and your designated recipient. We never sell, rent, or trade your words,
-              contact details, or reading habits with advertisers or third-party marketing companies.
+              At OLD-LETTERS, private communication is treated with the dignity and inviolable confidentiality traditionally accorded to wax-sealed paper post.
+              We do not mine your letters for advertising, train public AI models on your private messages, or sell, rent, or trade your contact information
+              with third-party marketing brokers.
             </p>
           </section>
 
+          {/* Section 2 */}
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              2. Information We Collect
+              2. Information We Collect & Process
             </h2>
             <p className="font-light">
-              We collect only the information necessary to compose, seal, schedule, and deliver your letters:
+              We collect and process only the data strictly required to compose, seal, schedule, verify, and deliver your letters:
             </p>
-            <ul className="list-disc pl-5 space-y-1.5 font-light text-xs sm:text-sm">
-              <li><strong>Account Credentials:</strong> Your full name, email address, and cryptographically hashed password (via bcrypt), or your Google profile identifier when using Google OAuth.</li>
-              <li><strong>Correspondence Details:</strong> Letter type, stationery theme, salutation, body text, valediction, sender name, recipient name, recipient email address, and scheduled delivery timestamp.</li>
-              <li><strong>Enclosed Media:</strong> Archival photographs or keepsake attachments you upload, stored securely in private object storage (MongoDB GridFS).</li>
-              <li><strong>Delivery & Verification Records:</strong> Cryptographic verification tokens, one-time passcode (OTP) verification hashes, and dispatch timestamps.</li>
+            <ul className="list-disc pl-5 space-y-2 font-light text-xs sm:text-sm">
+              <li>
+                <strong>Account & Profile Information:</strong> Full name, email address, password cryptographically hashed using <em>bcrypt</em> (we never store plain-text passwords), and profile avatar URLs.
+              </li>
+              <li>
+                <strong>Google Account Information:</strong> When you choose to authenticate via Google OAuth, we receive your verified Google email address, profile display name, avatar photograph URL, and unique Google account identifier. We do not access your Google contacts, Google Drive, or personal Google inbox.
+              </li>
+              <li>
+                <strong>Legal Consent Records:</strong> Timestamps of legal agreement (<code>legalConsentAt</code>), accepted version identifiers (<code>termsVersion</code>, <code>privacyVersion</code>), and boolean consent indicators (<code>termsAccepted</code>, <code>privacyAccepted</code>).
+              </li>
+              <li>
+                <strong>Sender & Recipient Information:</strong> Sender display name, sender email, recipient display name, and recipient destination email address.
+              </li>
+              <li>
+                <strong>Letter Content & Styling:</strong> Salutation greeting, letter body text, signoff closing, selected paper stationery theme, typography settings, wax seal color/emblem, and postmark city.
+              </li>
+              <li>
+                <strong>Letter Metadata & Scheduling:</strong> Tracking code (e.g. <code>OL-1892-A</code>), creation timestamp, scheduled delivery arrival date and time, waiting interval (minimum 48 hours), transit lifecycle status (<code>SCHEDULED</code>, <code>DELIVERED</code>, <code>OPENED</code>), and unsealing timestamps.
+              </li>
+              <li>
+                <strong>Multimedia Enclosures & Attachments:</strong> Archival photographs, voice notes, or video keepsakes you choose to upload, stored in encrypted private database object storage (MongoDB GridFS).
+              </li>
+              <li>
+                <strong>Security & Verification Credentials:</strong> Cryptographic SHA-256 hashes of one-time passcodes (OTPs), hashed secret passphrases, delivery access tokens, and rate-limiting attempt counters to prevent unauthorized unsealing.
+              </li>
+              <li>
+                <strong>Payment & Verification Records:</strong> When requesting paid correspondence features, we record the chosen feature code, amount, currency, manual UPI transaction reference (UTR number), optional uploaded payment receipt screenshot, and administrative verification decisions (approved, rejected, verified timestamp, admin notes).
+              </li>
+              <li>
+                <strong>Delivery Dispatch & Lifecycle Events:</strong> Event records for dispatched notices (T+0h dispatch receipt, T+24h halfway waiting update, T+47.5h pre-arrival notice, and T+48h arrival eligibility notification) including delivery timestamps and dispatch status.
+              </li>
+              <li>
+                <strong>Session & Essential Cookies:</strong> An HTTP-only, secure JSON Web Token (JWT) session cookie (<code>oldletters_session</code>) and local browser cookie consent choices (<code>oldletters_cookie_consent</code>).
+              </li>
             </ul>
           </section>
 
+          {/* Section 3 */}
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              3. How Your Information Is Used
+              3. Purpose & Legal Basis for Processing
             </h2>
             <p className="font-light">
-              Your data is utilized exclusively for:
+              Your personal data and correspondence are processed exclusively for:
             </p>
             <ul className="list-disc pl-5 space-y-1.5 font-light text-xs sm:text-sm">
-              <li>Authenticating your account session and providing access to your private correspondence archive.</li>
-              <li>Holding letters in our delivery vault until their scheduled arrival interval has elapsed.</li>
-              <li>Dispatching ceremonial notification emails to the recipient via our postal delivery mailroom (Gmail SMTP).</li>
-              <li>Verifying recipient identity prior to granting access to the unsealing ceremony.</li>
+              <li>Authenticating your user session and providing access to your private correspondence archive.</li>
+              <li>Holding sealed letters securely in our transit vault until the scheduled arrival time.</li>
+              <li>Sending automated ceremonial notifications (T+0h, T+24h, T+47.5h, and T+48h) via our mailroom.</li>
+              <li>Verifying recipient credentials (tokens, passphrases, or OTP codes) before permitting unsealing.</li>
+              <li>Administering and verifying optional manual UPI feature payments.</li>
+              <li>Preventing spam, abuse, unauthorized access, and malicious activity.</li>
             </ul>
           </section>
 
+          {/* Section 4 */}
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              4. Data Security & Storage
+              4. Third-Party Infrastructure & Service Providers
             </h2>
             <p className="font-light">
-              All correspondence is stored within secure MongoDB Atlas databases with end-to-end transport encryption (TLS/HTTPS).
-              Passwords are salted and hashed using bcrypt; passwords are never stored in plain text. Session tokens are issued as HTTP-only,
-              secure JWT cookies that cannot be accessed by client-side scripts.
-            </p>
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="font-serif text-xl text-teal-950 font-medium">
-              5. Third-Party Processors
-            </h2>
-            <p className="font-light">
-              We partner with trusted, industry-standard service providers strictly to perform core application functions:
+              We rely on trusted, industry-standard third-party providers strictly for operational infrastructure:
             </p>
             <ul className="list-disc pl-5 space-y-1.5 font-light text-xs sm:text-sm">
-              <li><strong>MongoDB Atlas:</strong> Managed cloud database for reliable, encrypted letter and account storage.</li>
-              <li><strong>Google OAuth 2.0:</strong> Optional single sign-on authentication service.</li>
-              <li><strong>Gmail SMTP:</strong> Transactional email service for delivery notifications.</li>
-              <li><strong>Vercel:</strong> Cloud hosting and serverless execution platform.</li>
+              <li><strong>MongoDB Atlas:</strong> Secure cloud database provider where correspondence records, accounts, and encrypted attachments are housed with transport and resting encryption.</li>
+              <li><strong>Google OAuth 2.0:</strong> Optional single sign-on authentication provider.</li>
+              <li><strong>Gmail SMTP:</strong> Transactional email delivery service used strictly to dispatch automated correspondence and arrival notifications.</li>
+              <li><strong>Vercel:</strong> Cloud hosting platform executing our application and scheduled cron delivery workers.</li>
             </ul>
           </section>
 
+          {/* Section 5 */}
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              6. Your Rights & Data Deletion
+              5. Data Security Measures
             </h2>
             <p className="font-light">
-              You have the right to inspect your archived correspondence, update your account information, or request the permanent deletion
-              of your account and associated letters. To request complete deletion of your records, contact our postal administrator at
-              <code className="font-mono text-xs ml-1">admin@old-letters.in</code>.
+              We implement comprehensive technical and organizational safeguards:
             </p>
+            <ul className="list-disc pl-5 space-y-1.5 font-light text-xs sm:text-sm">
+              <li>All web traffic and API endpoints are encrypted in transit via Transport Layer Security (TLS/HTTPS).</li>
+              <li>Account passwords are salted and hashed using bcrypt; plain-text passwords are never recorded or logged.</li>
+              <li>Session tokens are issued as secure, HTTP-only JWT cookies that cannot be accessed or tampered with by client-side browser scripts.</li>
+              <li>Recipient verification secrets and OTPs are stored only as one-way SHA-256 hashes with strict attempt limits.</li>
+              <li>Sealed letter contents remain encrypted and locked against recipient display until the scheduled delivery timestamp has arrived.</li>
+            </ul>
+          </section>
+
+          {/* Section 6 */}
+          <section className="space-y-3">
+            <h2 className="font-serif text-xl text-teal-950 font-medium">
+              6. Data Retention & Deletion Rights
+            </h2>
+            <p className="font-light">
+              Correspondence records and archived letters are retained in your personal sender archive so long as your account remains active.
+              You have the right at any time to:
+            </p>
+            <ul className="list-disc pl-5 space-y-1.5 font-light text-xs sm:text-sm">
+              <li>Inspect your archived correspondence and delivery records.</li>
+              <li>Update your account display name or credentials.</li>
+              <li>Request the complete and permanent deletion of your account, correspondence history, and attached media.</li>
+            </ul>
+            <p className="font-light text-xs text-stone-500">
+              To request account deletion or data export, contact our postal administrator at <code className="font-mono text-xs text-teal-950">admin@oldletters.in</code>.
+            </p>
+          </section>
+
+          {/* Section 7 */}
+          <section className="space-y-3">
+            <h2 className="font-serif text-xl text-teal-950 font-medium">
+              7. Contact & Data Protection Inquiries
+            </h2>
+            <p className="font-light">
+              If you have questions, feedback, or data privacy requests concerning this Privacy Policy, please contact our Postal Desk:
+            </p>
+            <div className="font-mono text-xs bg-white p-3 border border-[#eae4da] rounded-xs space-y-1">
+              <div>Email: <a href="mailto:admin@oldletters.in" className="text-teal-900 underline">admin@oldletters.in</a></div>
+              <div>Bureau Reference: Central Postal Conservancy · Privacy & Data Protection Registry</div>
+            </div>
           </section>
         </div>
 
@@ -131,7 +195,7 @@ export const PrivacyPolicyView: React.FC<LegalPageProps> = ({ onBack }) => {
             ← Back to Correspondence Desk
           </button>
           <span className="text-[10px] font-mono text-stone-400">
-            OLD-LETTERS REGISTRY NO. P-1892
+            OLD-LETTERS PRIVACY REGISTRY · PRIV-{CURRENT_PRIVACY_VERSION}
           </span>
         </div>
       </div>

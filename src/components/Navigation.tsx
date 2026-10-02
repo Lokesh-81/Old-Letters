@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export type AppView = 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient' | 'cookies' | 'privacy' | 'terms';
+export type AppView = 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient' | 'cookies' | 'privacy' | 'terms' | 'profile';
 
 interface NavigationProps {
   currentView: AppView;
@@ -8,6 +8,7 @@ interface NavigationProps {
   onOpenAdmin?: () => void;
   onOpenAuth?: () => void;
   onOpenProfile?: () => void;
+  onNavigateBureauTab?: (tab: 'overview' | 'sent' | 'received' | 'payments' | 'settings' | 'legal') => void;
   currentUser?: { id: string; email: string; fullName: string; role?: string } | null;
   onLogout?: () => void;
   onWriteClick?: () => void;
@@ -20,6 +21,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   onOpenAdmin,
   onOpenAuth,
   onOpenProfile,
+  onNavigateBureauTab,
   currentUser,
   onLogout,
   onWriteClick,
@@ -43,6 +45,11 @@ export const Navigation: React.FC<NavigationProps> = ({
   }
 
   const firstName = currentUser?.fullName?.split(' ')[0] || currentUser?.email.split('@')[0] || 'Correspondent';
+
+  const handleSelectMenu = (action: () => void) => {
+    setDropdownOpen(false);
+    action();
+  };
 
   return (
     <header className="sticky top-0 z-40 w-full bg-[#faf9f7]/95 backdrop-blur-md border-b border-[#eae4da] transition-colors">
@@ -105,45 +112,107 @@ export const Navigation: React.FC<NavigationProps> = ({
 
               {/* Editorial Account Dropdown */}
               {dropdownOpen && (
-                <div className="absolute right-0 mt-2 w-44 rounded-md bg-[#faf9f7] shadow-xl border border-[#eae4da] py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 font-sans text-xs">
+                <div className="absolute right-0 mt-2 w-52 rounded-md bg-[#faf9f7] shadow-xl border border-[#eae4da] py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 font-sans text-xs">
                   <div className="px-3 py-2 border-b border-stone-200/60 mb-1">
                     <p className="font-serif text-sm font-medium text-stone-900 truncate">{currentUser.fullName}</p>
-                    <p className="text-[10px] text-stone-500 truncate">{currentUser.email}</p>
+                    <p className="text-[10px] text-stone-500 font-mono truncate">{currentUser.email}</p>
                   </div>
 
+                  {/* My Bureau / Profile */}
                   <button
                     type="button"
-                    onClick={() => {
-                      setDropdownOpen(false);
-                      onNavigate('archive');
-                    }}
-                    className="w-full text-left px-3 py-2 text-stone-700 hover:bg-stone-100/80 transition-colors flex items-center justify-between cursor-pointer"
+                    onClick={() =>
+                      handleSelectMenu(() => {
+                        onNavigateBureauTab?.('overview');
+                        onNavigate('profile');
+                      })
+                    }
+                    className="w-full text-left px-3 py-2 text-stone-800 hover:bg-stone-100/80 transition-colors flex items-center justify-between cursor-pointer font-medium"
                   >
-                    <span>Archive</span>
-                    <span className="text-[10px] font-mono text-stone-400">⌘A</span>
+                    <span>My Bureau</span>
+                    <span className="text-[10px] font-mono text-stone-400">Overview</span>
                   </button>
 
-                  {onOpenProfile && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        onOpenProfile();
-                      }}
-                      className="w-full text-left px-3 py-2 text-stone-700 hover:bg-stone-100/80 transition-colors cursor-pointer"
-                    >
-                      Profile
-                    </button>
-                  )}
+                  {/* My Letters */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleSelectMenu(() => {
+                        onNavigateBureauTab?.('sent');
+                        onNavigate('profile');
+                      })
+                    }
+                    className="w-full text-left px-3 py-2 text-stone-700 hover:bg-stone-100/80 transition-colors flex items-center justify-between cursor-pointer"
+                  >
+                    <span>My Letters</span>
+                    <span className="text-[10px] font-mono text-stone-400">Sent & Rcvd</span>
+                  </button>
+
+                  {/* Payment History */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleSelectMenu(() => {
+                        onNavigateBureauTab?.('payments');
+                        onNavigate('profile');
+                      })
+                    }
+                    className="w-full text-left px-3 py-2 text-stone-700 hover:bg-stone-100/80 transition-colors flex items-center justify-between cursor-pointer"
+                  >
+                    <span>Payment History</span>
+                    <span className="text-[10px] font-mono text-stone-400">UPI</span>
+                  </button>
+
+                  {/* Settings */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleSelectMenu(() => {
+                        onNavigateBureauTab?.('settings');
+                        onNavigate('profile');
+                      })
+                    }
+                    className="w-full text-left px-3 py-2 text-stone-700 hover:bg-stone-100/80 transition-colors cursor-pointer"
+                  >
+                    Settings
+                  </button>
+
+                  {/* Privacy & Security */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleSelectMenu(() => {
+                        onNavigateBureauTab?.('legal');
+                        onNavigate('profile');
+                      })
+                    }
+                    className="w-full text-left px-3 py-2 text-stone-700 hover:bg-stone-100/80 transition-colors cursor-pointer"
+                  >
+                    Privacy & Security
+                  </button>
+
+                  {/* Terms & Privacy policies */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleSelectMenu(() => {
+                        onNavigate('terms');
+                      })
+                    }
+                    className="w-full text-left px-3 py-2 text-stone-600 hover:bg-stone-100/80 transition-colors cursor-pointer text-[11px]"
+                  >
+                    Terms & Privacy
+                  </button>
 
                   {currentUser.role === 'ADMIN' && onOpenAdmin && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        onOpenAdmin();
-                      }}
-                      className="w-full text-left px-3 py-2 text-amber-800 hover:bg-amber-50/80 transition-colors cursor-pointer"
+                      onClick={() =>
+                        handleSelectMenu(() => {
+                          onOpenAdmin();
+                        })
+                      }
+                      className="w-full text-left px-3 py-2 text-amber-800 hover:bg-amber-50/80 transition-colors cursor-pointer font-medium"
                     >
                       Bureau Desk
                     </button>
@@ -154,13 +223,14 @@ export const Navigation: React.FC<NavigationProps> = ({
                   {onLogout && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        onLogout();
-                      }}
+                      onClick={() =>
+                        handleSelectMenu(() => {
+                          onLogout();
+                        })
+                      }
                       className="w-full text-left px-3 py-2 text-red-700 hover:bg-red-50/80 transition-colors cursor-pointer"
                     >
-                      Logout
+                      Sign Out
                     </button>
                   )}
                 </div>

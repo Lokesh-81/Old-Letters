@@ -26,6 +26,8 @@ import {
   SubmitPaymentSchema,
   AdminVerifyPaymentSchema,
   RecipientVerifySchema,
+  CURRENT_TERMS_VERSION,
+  CURRENT_PRIVACY_VERSION,
 } from './src/types/backend';
 import {
   getDb,
@@ -310,13 +312,37 @@ function ensureGoogleStrategy(): boolean {
           clientSecret: clientSecret,
           callbackURL: callbackUrl,
           proxy: true,
+          passReqToCallback: true,
         },
-        async (accessToken, refreshToken, profile, done) => {
+        async (req: any, accessToken: string, refreshToken: string, profile: any, done: any) => {
           try {
             const email = profile.emails?.[0]?.value?.toLowerCase();
             if (!email) {
               return done(new Error('No email found in Google profile'), undefined);
             }
+
+            // Extract explicit pre-authentication consent from session cookie or OAuth state
+            let consentData: any = null;
+            if (req.cookies?.oldletters_oauth_consent) {
+              try {
+                consentData = typeof req.cookies.oldletters_oauth_consent === 'string'
+                  ? JSON.parse(req.cookies.oldletters_oauth_consent)
+                  : req.cookies.oldletters_oauth_consent;
+              } catch {}
+            }
+            if (!consentData && req.query?.state) {
+              try {
+                const rawState = Buffer.from(String(req.query.state), 'base64').toString('utf8');
+                consentData = JSON.parse(rawState);
+              } catch {}
+            }
+
+            const hasExplicitConsent = Boolean(
+              consentData &&
+              consentData.termsAccepted === true &&
+              consentData.privacyAccepted === true
+            );
+
             const db = await getDb();
             const usersColl = db.collection('users');
             const now = new Date();
@@ -324,10 +350,20 @@ function ensureGoogleStrategy(): boolean {
             // 1. Check if user already exists by googleId
             let user = await usersColl.findOne({ googleId: profile.id });
             if (user) {
-              await usersColl.updateOne(
-                { _id: user._id },
-                { $set: { lastLoginAt: now, updatedAt: now } }
-              );
+              const consentValid = hasExplicitConsent || (user.termsAccepted && user.privacyAccepted && user.termsVersion === CURRENT_TERMS_VERSION);
+              if (!consentValid) {
+                return done(new Error('CONSENT_REQUIRED'), undefined);
+              }
+
+              const updateFields: any = { lastLoginAt: now, updatedAt: now };
+              if (hasExplicitConsent) {
+                updateFields.termsAccepted = true;
+                updateFields.privacyAccepted = true;
+                updateFields.termsVersion = consentData.termsVersion || CURRENT_TERMS_VERSION;
+                updateFields.privacyVersion = consentData.privacyVersion || CURRENT_PRIVACY_VERSION;
+                updateFields.legalConsentAt = user.legalConsentAt || now;
+              }
+              await usersColl.updateOne({ _id: user._id }, { $set: updateFields });
               return done(null, {
                 id: user._id.toString(),
                 email: user.email,
@@ -342,19 +378,27 @@ function ensureGoogleStrategy(): boolean {
             // 2. Check if user exists by email -> Intelligently Link Google ID!
             user = await usersColl.findOne({ email });
             if (user) {
-              await usersColl.updateOne(
-                { _id: user._id },
-                {
-                  $set: {
-                    googleId: profile.id,
-                    authProvider: 'BOTH',
-                    emailVerified: true,
-                    lastLoginAt: now,
-                    updatedAt: now,
-                    avatarUrl: user.avatarUrl || profile.photos?.[0]?.value,
-                  },
-                }
-              );
+              const consentValid = hasExplicitConsent || (user.termsAccepted && user.privacyAccepted && user.termsVersion === CURRENT_TERMS_VERSION);
+              if (!consentValid) {
+                return done(new Error('CONSENT_REQUIRED'), undefined);
+              }
+
+              const updateFields: any = {
+                googleId: profile.id,
+                authProvider: 'BOTH',
+                emailVerified: true,
+                lastLoginAt: now,
+                updatedAt: now,
+                avatarUrl: user.avatarUrl || profile.photos?.[0]?.value,
+              };
+              if (hasExplicitConsent) {
+                updateFields.termsAccepted = true;
+                updateFields.privacyAccepted = true;
+                updateFields.termsVersion = consentData.termsVersion || CURRENT_TERMS_VERSION;
+                updateFields.privacyVersion = consentData.privacyVersion || CURRENT_PRIVACY_VERSION;
+                updateFields.legalConsentAt = user.legalConsentAt || now;
+              }
+              await usersColl.updateOne({ _id: user._id }, { $set: updateFields });
               return done(null, {
                 id: user._id.toString(),
                 email: user.email,
@@ -366,7 +410,11 @@ function ensureGoogleStrategy(): boolean {
               });
             }
 
-            // 3. New Google User
+            // 3. New Google User -> STRICTLY REQUIRE EXPLICIT CONSENT
+            if (!hasExplicitConsent) {
+              return done(new Error('CONSENT_REQUIRED'), undefined);
+            }
+
             const newUserId = new ObjectId();
             const newUser: UserDoc = {
               _id: newUserId,
@@ -377,6 +425,11 @@ function ensureGoogleStrategy(): boolean {
               googleId: profile.id,
               role: email === adminEmail || email === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER',
               emailVerified: true,
+              termsAccepted: true,
+              privacyAccepted: true,
+              termsVersion: consentData.termsVersion || CURRENT_TERMS_VERSION,
+              privacyVersion: consentData.privacyVersion || CURRENT_PRIVACY_VERSION,
+              legalConsentAt: now,
               createdAt: now,
               updatedAt: now,
               lastLoginAt: now,
@@ -485,6 +538,11 @@ app.get(['/api/auth/me', '/api/me', '/auth/me'], async (req: AuthenticatedReques
           role: req.user.role || (req.user.email === adminEmail || req.user.email === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER'),
           authProvider: req.user.authProvider || 'GOOGLE',
           emailVerified: req.user.emailVerified ?? true,
+          termsAccepted: true,
+          privacyAccepted: true,
+          termsVersion: CURRENT_TERMS_VERSION,
+          privacyVersion: CURRENT_PRIVACY_VERSION,
+          legalConsentAt: now,
           createdAt: now,
           updatedAt: now,
           lastLoginAt: now,
@@ -518,6 +576,11 @@ app.get(['/api/auth/me', '/api/me', '/auth/me'], async (req: AuthenticatedReques
     authProvider: userDoc?.authProvider || req.user.authProvider || 'GOOGLE',
     emailVerified: userDoc?.emailVerified ?? req.user.emailVerified ?? true,
     googleLinked: !!userDoc?.googleId || req.user.authProvider === 'GOOGLE' || req.user.authProvider === 'BOTH',
+    termsAccepted: userDoc?.termsAccepted ?? false,
+    privacyAccepted: userDoc?.privacyAccepted ?? false,
+    termsVersion: userDoc?.termsVersion || undefined,
+    privacyVersion: userDoc?.privacyVersion || undefined,
+    legalConsentAt: userDoc?.legalConsentAt ? (typeof userDoc.legalConsentAt === 'string' ? userDoc.legalConsentAt : userDoc.legalConsentAt.toISOString()) : undefined,
     createdAt: userDoc?.createdAt ? (typeof userDoc.createdAt === 'string' ? userDoc.createdAt : userDoc.createdAt.toISOString()) : undefined,
     lettersCount,
   };
@@ -534,6 +597,17 @@ app.post(['/api/auth/register', '/api/auth/signup', '/auth/register', '/auth/sig
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '').trim();
     const fullName = String(req.body.fullName || '').trim() || 'Correspondent';
+
+    // Legal Consent Verification: Checkbox MUST be explicitly checked
+    const termsAccepted = req.body.termsAccepted === true || req.body.termsAccepted === 'true';
+    const privacyAccepted = req.body.privacyAccepted === true || req.body.privacyAccepted === 'true';
+
+    if (!termsAccepted || !privacyAccepted) {
+      return res.status(400).json({
+        success: false,
+        error: 'You must agree to the Terms of Service and Privacy Policy to create an account.',
+      });
+    }
 
     if (!email || !email.includes('@')) {
       return res.status(400).json({ success: false, error: 'A valid email address is required.' });
@@ -563,6 +637,11 @@ app.post(['/api/auth/register', '/api/auth/signup', '/auth/register', '/auth/sig
               passwordHash,
               authProvider: 'BOTH',
               fullName: existing.fullName || fullName,
+              termsAccepted: true,
+              privacyAccepted: true,
+              termsVersion: req.body.termsVersion || CURRENT_TERMS_VERSION,
+              privacyVersion: req.body.privacyVersion || CURRENT_PRIVACY_VERSION,
+              legalConsentAt: existing.legalConsentAt || now,
               updatedAt: now,
               lastLoginAt: now,
             },
@@ -575,6 +654,10 @@ app.post(['/api/auth/register', '/api/auth/signup', '/auth/register', '/auth/sig
           role: existing.role || 'USER',
           authProvider: 'BOTH' as const,
           emailVerified: true,
+          termsAccepted: true,
+          privacyAccepted: true,
+          termsVersion: req.body.termsVersion || CURRENT_TERMS_VERSION,
+          privacyVersion: req.body.privacyVersion || CURRENT_PRIVACY_VERSION,
         };
         const sessionToken = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '30d' });
         setSessionCookie(res, req, sessionToken);
@@ -593,6 +676,11 @@ app.post(['/api/auth/register', '/api/auth/signup', '/auth/register', '/auth/sig
       authProvider: 'EMAIL',
       role: email === adminEmail || email === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER',
       emailVerified: false,
+      termsAccepted: true,
+      privacyAccepted: true,
+      termsVersion: req.body.termsVersion || CURRENT_TERMS_VERSION,
+      privacyVersion: req.body.privacyVersion || CURRENT_PRIVACY_VERSION,
+      legalConsentAt: now,
       createdAt: now,
       updatedAt: now,
       lastLoginAt: now,
@@ -607,6 +695,10 @@ app.post(['/api/auth/register', '/api/auth/signup', '/auth/register', '/auth/sig
       role: newUser.role,
       authProvider: 'EMAIL' as const,
       emailVerified: false,
+      termsAccepted: true,
+      privacyAccepted: true,
+      termsVersion: newUser.termsVersion,
+      privacyVersion: newUser.privacyVersion,
     };
 
     const sessionToken = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '30d' });
@@ -655,6 +747,10 @@ app.post(['/api/auth/login', '/auth/login'], async (req, res) => {
       role: user.role || 'USER',
       authProvider: user.authProvider || 'EMAIL',
       emailVerified: user.emailVerified ?? false,
+      termsAccepted: user.termsAccepted ?? false,
+      privacyAccepted: user.privacyAccepted ?? false,
+      termsVersion: user.termsVersion,
+      privacyVersion: user.privacyVersion,
     };
 
     const sessionToken = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '30d' });
@@ -677,7 +773,40 @@ app.get(['/api/auth/google', '/auth/google'], (req, res, next) => {
       error: 'Google sign-in is not configured yet. Please use email and password.',
     });
   }
-  passport.authenticate('google', { scope: ['profile', 'email'], session: false })(req, res, next);
+
+  // Legal Consent Check: User MUST accept Terms of Service & Privacy Policy before initiating Google authentication
+  const consentGiven = req.query.consent === 'true' || req.query.consent === '1';
+  if (!consentGiven) {
+    if (req.accepts('html')) {
+      return res.redirect('/?auth=consent_required');
+    }
+    return res.status(400).json({
+      success: false,
+      error: 'Consent to Terms of Service and Privacy Policy is required before continuing with Google.',
+    });
+  }
+
+  const consentPayload = {
+    termsAccepted: true,
+    privacyAccepted: true,
+    termsVersion: (req.query.termsVersion as string) || CURRENT_TERMS_VERSION,
+    privacyVersion: (req.query.privacyVersion as string) || CURRENT_PRIVACY_VERSION,
+    timestamp: Date.now(),
+  };
+
+  res.cookie('oldletters_oauth_consent', JSON.stringify(consentPayload), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 15 * 60 * 1000,
+  });
+
+  const state = Buffer.from(JSON.stringify(consentPayload)).toString('base64');
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    session: false,
+    state,
+  })(req, res, next);
 });
 
 // Google OAuth Callback
@@ -694,7 +823,18 @@ app.get(['/api/auth/google/callback', '/auth/google/callback'], (req, res, next)
   }
 
   passport.authenticate('google', { session: false }, (err: any, user: any) => {
+    res.clearCookie('oldletters_oauth_consent');
+
     if (err || !user) {
+      if (err?.message === 'CONSENT_REQUIRED') {
+        if (req.accepts('html')) {
+          return res.redirect('/?auth=consent_required');
+        }
+        return res.status(400).json({
+          success: false,
+          error: 'You must agree to the Terms of Service and Privacy Policy before continuing with Google.',
+        });
+      }
       console.error('[Google OAuth Error]', err);
       if (req.accepts('html')) {
         return res.redirect('/?auth=error');
@@ -718,6 +858,10 @@ app.get(['/api/auth/google/callback', '/auth/google/callback'], (req, res, next)
       role: user.role || 'USER',
       authProvider: user.authProvider || 'GOOGLE',
       emailVerified: true,
+      termsAccepted: user.termsAccepted ?? true,
+      privacyAccepted: user.privacyAccepted ?? true,
+      termsVersion: user.termsVersion || CURRENT_TERMS_VERSION,
+      privacyVersion: user.privacyVersion || CURRENT_PRIVACY_VERSION,
     };
     const userParam = encodeURIComponent(JSON.stringify(safeUser));
 
@@ -725,10 +869,54 @@ app.get(['/api/auth/google/callback', '/auth/google/callback'], (req, res, next)
   })(req, res, next);
 });
 
+// Update Policy Consent (For logged-in users when policy versions update)
+app.post(['/api/auth/consent', '/auth/consent'], async (req, res) => {
+  try {
+    const userPayload = (req as any).user;
+    if (!userPayload || !userPayload.id) {
+      return res.status(401).json({ success: false, error: 'Authentication required.' });
+    }
+    const { termsAccepted, privacyAccepted, termsVersion, privacyVersion } = req.body;
+    if (termsAccepted !== true || privacyAccepted !== true) {
+      return res.status(400).json({ success: false, error: 'Terms and Privacy must both be accepted.' });
+    }
+
+    const db = await getDb();
+    const usersColl = db.collection('users');
+    const now = new Date();
+    await usersColl.updateOne(
+      { _id: new ObjectId(userPayload.id) },
+      {
+        $set: {
+          termsAccepted: true,
+          privacyAccepted: true,
+          termsVersion: termsVersion || CURRENT_TERMS_VERSION,
+          privacyVersion: privacyVersion || CURRENT_PRIVACY_VERSION,
+          legalConsentAt: now,
+          updatedAt: now,
+        },
+      }
+    );
+    res.json({ success: true, message: 'Legal consent updated successfully.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Google Sign-In Testing / Direct Verification Endpoint
 app.post('/api/auth/google/test-login', async (req, res) => {
   try {
-    const { email, googleId, fullName, avatarUrl } = req.body;
+    const {
+      email,
+      googleId,
+      fullName,
+      avatarUrl,
+      termsAccepted,
+      privacyAccepted,
+      termsVersion,
+      privacyVersion,
+    } = req.body;
+
     if (!email || !googleId) {
       return res.status(400).json({ success: false, error: 'Email and googleId required for verification.' });
     }
@@ -739,42 +927,59 @@ app.post('/api/auth/google/test-login', async (req, res) => {
     const now = new Date();
 
     let user = await usersColl.findOne({ googleId });
-    if (user) {
-      await usersColl.updateOne({ _id: user._id }, { $set: { lastLoginAt: now, updatedAt: now } });
-    } else {
+    if (!user) {
       user = await usersColl.findOne({ email: cleanEmail });
-      if (user) {
-        // Link Google ID to existing account!
-        await usersColl.updateOne(
-          { _id: user._id },
-          {
-            $set: {
-              googleId,
-              authProvider: 'BOTH',
-              emailVerified: true,
-              lastLoginAt: now,
-              updatedAt: now,
-            },
-          }
-        );
-        user = await usersColl.findOne({ _id: user._id });
-      } else {
-        const newUserId = new ObjectId();
-        await usersColl.insertOne({
-          _id: newUserId,
-          email: cleanEmail,
-          fullName: fullName || cleanEmail.split('@')[0],
-          avatarUrl,
-          authProvider: 'GOOGLE',
-          googleId,
-          role: cleanEmail === adminEmail || cleanEmail === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER',
-          emailVerified: true,
-          createdAt: now,
-          updatedAt: now,
-          lastLoginAt: now,
-        });
-        user = await usersColl.findOne({ _id: newUserId });
+    }
+
+    const hasExplicitConsent = termsAccepted === true && privacyAccepted === true;
+
+    // Strict Server-Side Validation: If user does not exist yet, explicit consent is strictly mandatory!
+    if (!user && !hasExplicitConsent) {
+      return res.status(400).json({
+        success: false,
+        error: 'You must agree to the Terms of Service and Privacy Policy before creating an account with Google.',
+      });
+    }
+
+    if (user) {
+      const updateFields: any = {
+        lastLoginAt: now,
+        updatedAt: now,
+        googleId,
+        authProvider: user.passwordHash ? 'BOTH' : 'GOOGLE',
+        avatarUrl: user.avatarUrl || avatarUrl,
+      };
+      if (hasExplicitConsent) {
+        updateFields.termsAccepted = true;
+        updateFields.privacyAccepted = true;
+        updateFields.termsVersion = termsVersion || CURRENT_TERMS_VERSION;
+        updateFields.privacyVersion = privacyVersion || CURRENT_PRIVACY_VERSION;
+        updateFields.legalConsentAt = user.legalConsentAt || now;
       }
+      await usersColl.updateOne({ _id: user._id }, { $set: updateFields });
+      user = await usersColl.findOne({ _id: user._id });
+    } else {
+      const newUserId = new ObjectId();
+      const newUser: UserDoc = {
+        _id: newUserId,
+        email: cleanEmail,
+        fullName: fullName || cleanEmail.split('@')[0],
+        avatarUrl,
+        authProvider: 'GOOGLE',
+        googleId,
+        role: cleanEmail === adminEmail || cleanEmail === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER',
+        emailVerified: true,
+        termsAccepted: true,
+        privacyAccepted: true,
+        termsVersion: termsVersion || CURRENT_TERMS_VERSION,
+        privacyVersion: privacyVersion || CURRENT_PRIVACY_VERSION,
+        legalConsentAt: now,
+        createdAt: now,
+        updatedAt: now,
+        lastLoginAt: now,
+      };
+      await usersColl.insertOne(newUser);
+      user = newUser;
     }
 
     const userPayload = {
@@ -784,6 +989,10 @@ app.post('/api/auth/google/test-login', async (req, res) => {
       role: user!.role || 'USER',
       authProvider: user!.authProvider,
       emailVerified: user!.emailVerified,
+      termsAccepted: user!.termsAccepted ?? true,
+      privacyAccepted: user!.privacyAccepted ?? true,
+      termsVersion: user!.termsVersion || CURRENT_TERMS_VERSION,
+      privacyVersion: user!.privacyVersion || CURRENT_PRIVACY_VERSION,
     };
 
     const sessionToken = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '30d' });
@@ -800,6 +1009,457 @@ app.post(['/api/auth/logout', '/auth/logout'], (req, res) => {
   clearSessionCookie(res, req);
   res.json({ success: true, message: 'Logged out successfully.' });
 });
+
+// ====================================================================
+// USER CORRESPONDENCE BUREAU & PROFILE MANAGEMENT
+// ====================================================================
+
+// Bureau Summary Statistics (Aggregated from real MongoDB data)
+app.get(['/api/user/bureau-summary', '/api/bureau/summary'], requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const db = await getDb();
+    const lettersColl = db.collection('letters');
+    const recipientsColl = db.collection('letterRecipients');
+    const paymentsColl = db.collection('payments');
+    const usersColl = db.collection('users');
+
+    const userId = req.user!.id;
+    const userEmail = (req.user!.email || '').toLowerCase();
+
+    // 1. Sent Letters Count (letters penned by this user)
+    const sentCount = await lettersColl.countDocuments({
+      $or: [
+        { senderId: userId },
+        ...(ObjectId.isValid(userId) ? [{ senderId: new ObjectId(userId) }] : []),
+        { senderEmail: userEmail },
+      ],
+    });
+
+    // 2. Received Letters Count (letters addressed to this user's email)
+    const recipientRecords = await recipientsColl.find({ email: userEmail }).toArray();
+    const recipientLetterIds = recipientRecords.map((r: any) => r.letterId);
+    const receivedCount = await lettersColl.countDocuments({
+      $or: [
+        { recipientEmail: userEmail },
+        ...(recipientLetterIds.length > 0
+          ? [{ _id: { $in: recipientLetterIds.map((id: any) => (typeof id === 'string' && ObjectId.isValid(id) ? new ObjectId(id) : id)) } }]
+          : []),
+      ],
+    });
+
+    // 3. In Transit Count
+    const now = new Date();
+    const sentInTransit = await lettersColl.countDocuments({
+      $or: [
+        { senderId: userId },
+        ...(ObjectId.isValid(userId) ? [{ senderId: new ObjectId(userId) }] : []),
+        { senderEmail: userEmail },
+      ],
+      status: { $in: ['SCHEDULED', 'IN_TRANSIT'] },
+      deliveryDate: { $gt: now },
+    });
+
+    const receivedInTransit = await lettersColl.countDocuments({
+      $or: [
+        { recipientEmail: userEmail },
+        ...(recipientLetterIds.length > 0
+          ? [{ _id: { $in: recipientLetterIds.map((id: any) => (typeof id === 'string' && ObjectId.isValid(id) ? new ObjectId(id) : id)) } }]
+          : []),
+      ],
+      deliveryDate: { $gt: now },
+    });
+    const inTransitCount = sentInTransit + receivedInTransit;
+
+    // 4. Delivered Count
+    const sentDelivered = await lettersColl.countDocuments({
+      $or: [
+        { senderId: userId },
+        ...(ObjectId.isValid(userId) ? [{ senderId: new ObjectId(userId) }] : []),
+        { senderEmail: userEmail },
+      ],
+      status: { $in: ['DELIVERED', 'OPENED'] },
+    });
+
+    const receivedDelivered = await lettersColl.countDocuments({
+      $or: [
+        { recipientEmail: userEmail },
+        ...(recipientLetterIds.length > 0
+          ? [{ _id: { $in: recipientLetterIds.map((id: any) => (typeof id === 'string' && ObjectId.isValid(id) ? new ObjectId(id) : id)) } }]
+          : []),
+      ],
+      status: { $in: ['DELIVERED', 'OPENED'] },
+    });
+    const deliveredCount = sentDelivered + receivedDelivered;
+
+    // 5. Total Amount Spent (sum of approved/paid payments for this user)
+    const payments = await paymentsColl.find({
+      $or: [
+        { userId: userId },
+        ...(ObjectId.isValid(userId) ? [{ userId: new ObjectId(userId) }] : []),
+      ],
+      status: { $in: ['APPROVED', 'PAID'] },
+    }).toArray();
+    const totalSpent = payments.reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0);
+
+    // Fetch user document
+    let userDoc: any = null;
+    if (ObjectId.isValid(userId)) {
+      userDoc = await usersColl.findOne({ _id: new ObjectId(userId) });
+    }
+    if (!userDoc) {
+      userDoc = await usersColl.findOne({ email: userEmail });
+    }
+
+    res.json({
+      success: true,
+      stats: {
+        sentCount,
+        receivedCount,
+        inTransitCount,
+        deliveredCount,
+        totalSpent,
+      },
+      user: {
+        id: userDoc?._id ? userDoc._id.toString() : userId,
+        email: userDoc?.email || req.user!.email,
+        fullName: userDoc?.fullName || req.user!.fullName || req.user!.email?.split('@')[0] || 'Correspondent',
+        avatarUrl: userDoc?.avatarUrl || req.user!.avatarUrl,
+        role: userDoc?.role || req.user!.role || 'USER',
+        authProvider: userDoc?.authProvider || req.user!.authProvider || 'EMAIL',
+        googleLinked: !!userDoc?.googleId || req.user!.authProvider === 'GOOGLE' || req.user!.authProvider === 'BOTH',
+        status: userDoc?.status || 'ACTIVE',
+        termsAccepted: userDoc?.termsAccepted ?? true,
+        privacyAccepted: userDoc?.privacyAccepted ?? true,
+        termsVersion: userDoc?.termsVersion || CURRENT_TERMS_VERSION,
+        privacyVersion: userDoc?.privacyVersion || CURRENT_PRIVACY_VERSION,
+        legalConsentAt: userDoc?.legalConsentAt
+          ? (typeof userDoc.legalConsentAt === 'string' ? userDoc.legalConsentAt : userDoc.legalConsentAt.toISOString())
+          : (userDoc?.createdAt ? (typeof userDoc.createdAt === 'string' ? userDoc.createdAt : userDoc.createdAt.toISOString()) : new Date().toISOString()),
+        createdAt: userDoc?.createdAt
+          ? (typeof userDoc.createdAt === 'string' ? userDoc.createdAt : userDoc.createdAt.toISOString())
+          : new Date().toISOString(),
+        hasPassword: !!userDoc?.passwordHash,
+        notificationPreferences: userDoc?.notificationPreferences || {
+          letterDispatched: true,
+          deliveryUpdates: true,
+          preArrival: true,
+          arrival: true,
+          paymentUpdates: true,
+        },
+      },
+    });
+  } catch (err: any) {
+    console.error('Error fetching bureau summary:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update Profile (Full Name, Avatar URL)
+app.put(['/api/user/profile', '/api/profile'], requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const fullName = String(req.body.fullName || '').trim();
+    const avatarUrl = req.body.avatarUrl !== undefined ? String(req.body.avatarUrl).trim() : undefined;
+
+    if (!fullName) {
+      return res.status(400).json({ success: false, error: 'Full name cannot be blank.' });
+    }
+
+    const db = await getDb();
+    const usersColl = db.collection('users');
+    const userId = req.user!.id;
+
+    const updateFields: any = {
+      fullName,
+      updatedAt: new Date(),
+    };
+    if (avatarUrl !== undefined) {
+      updateFields.avatarUrl = avatarUrl;
+    }
+
+    let filter: any = { _id: userId };
+    if (ObjectId.isValid(userId)) {
+      filter = { _id: new ObjectId(userId) };
+    }
+
+    await usersColl.updateOne(filter, { $set: updateFields });
+
+    req.user!.fullName = fullName;
+    if (avatarUrl !== undefined) req.user!.avatarUrl = avatarUrl;
+    const updatedUserPayload = {
+      id: userId,
+      email: req.user!.email,
+      fullName,
+      avatarUrl: avatarUrl !== undefined ? avatarUrl : req.user!.avatarUrl,
+      role: req.user!.role,
+      authProvider: req.user!.authProvider,
+    };
+    const sessionToken = jwt.sign(updatedUserPayload, JWT_SECRET, { expiresIn: '30d' });
+    setSessionCookie(res, req, sessionToken);
+
+    res.json({
+      success: true,
+      message: 'Correspondent profile updated.',
+      user: {
+        id: userId,
+        email: req.user!.email,
+        fullName,
+        avatarUrl: avatarUrl !== undefined ? avatarUrl : req.user!.avatarUrl,
+        role: req.user!.role,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update Notification Preferences
+app.put(['/api/user/preferences', '/api/preferences'], requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const prefs = req.body.preferences || req.body;
+    if (!prefs || typeof prefs !== 'object') {
+      return res.status(400).json({ success: false, error: 'Invalid preferences format.' });
+    }
+
+    const validPrefs = {
+      letterDispatched: prefs.letterDispatched !== false,
+      deliveryUpdates: prefs.deliveryUpdates !== false,
+      preArrival: prefs.preArrival !== false,
+      arrival: prefs.arrival !== false,
+      paymentUpdates: prefs.paymentUpdates !== false,
+    };
+
+    const db = await getDb();
+    const usersColl = db.collection('users');
+    const userId = req.user!.id;
+
+    let filter: any = { _id: userId };
+    if (ObjectId.isValid(userId)) {
+      filter = { _id: new ObjectId(userId) };
+    }
+
+    await usersColl.updateOne(filter, {
+      $set: {
+        notificationPreferences: validPrefs,
+        updatedAt: new Date(),
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Notification preferences recorded in Bureau registry.',
+      preferences: validPrefs,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Change Password
+app.put(['/api/user/password', '/api/password'], requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+      return res.status(400).json({ success: false, error: 'New password must be at least 8 characters long.' });
+    }
+
+    const db = await getDb();
+    const usersColl = db.collection('users');
+    const userId = req.user!.id;
+
+    let user: any = null;
+    if (ObjectId.isValid(userId)) {
+      user = await usersColl.findOne({ _id: new ObjectId(userId) });
+    }
+    if (!user) {
+      user = await usersColl.findOne({ email: req.user!.email.toLowerCase() });
+    }
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Correspondent account not found.' });
+    }
+
+    // Verify current password if user has one set
+    if (user.passwordHash) {
+      if (!currentPassword) {
+        return res.status(400).json({ success: false, error: 'Current password is required to change password.' });
+      }
+      const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!isMatch) {
+        return res.status(401).json({ success: false, error: 'Current password does not match our records.' });
+      }
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await usersColl.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          passwordHash: newHash,
+          authProvider: user.authProvider === 'GOOGLE' ? 'BOTH' : user.authProvider,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    res.json({ success: true, message: 'Password updated successfully.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Download / Export User Account Data
+app.get(['/api/user/export-data', '/api/export-data'], requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const db = await getDb();
+    const usersColl = db.collection('users');
+    const lettersColl = db.collection('letters');
+    const paymentsColl = db.collection('payments');
+
+    const userId = req.user!.id;
+    const userEmail = (req.user!.email || '').toLowerCase();
+
+    let userDoc: any = null;
+    if (ObjectId.isValid(userId)) {
+      userDoc = await usersColl.findOne({ _id: new ObjectId(userId) });
+    }
+    if (!userDoc) {
+      userDoc = await usersColl.findOne({ email: userEmail });
+    }
+
+    const sentLetters = await lettersColl.find({
+      $or: [
+        { senderId: userId },
+        ...(ObjectId.isValid(userId) ? [{ senderId: new ObjectId(userId) }] : []),
+        { senderEmail: userEmail },
+      ],
+    }).sort({ createdAt: -1 }).toArray();
+
+    const receivedLetters = await lettersColl.find({
+      recipientEmail: userEmail,
+    }).sort({ createdAt: -1 }).toArray();
+
+    const payments = await paymentsColl.find({
+      $or: [
+        { userId: userId },
+        ...(ObjectId.isValid(userId) ? [{ userId: new ObjectId(userId) }] : []),
+      ],
+    }).sort({ createdAt: -1 }).toArray();
+
+    const exportPayload = {
+      exportMetadata: {
+        service: 'OLD-LETTERS Correspondence Bureau',
+        registryReference: `OL-EXP-${userId.slice(-6).toUpperCase()}`,
+        exportedAt: new Date().toISOString(),
+      },
+      profile: {
+        id: userId,
+        fullName: userDoc?.fullName || req.user!.fullName,
+        email: userEmail,
+        authProvider: userDoc?.authProvider || req.user!.authProvider,
+        enrolledAt: userDoc?.createdAt || null,
+        legalConsent: {
+          termsAccepted: userDoc?.termsAccepted ?? true,
+          privacyAccepted: userDoc?.privacyAccepted ?? true,
+          termsVersion: userDoc?.termsVersion || CURRENT_TERMS_VERSION,
+          privacyVersion: userDoc?.privacyVersion || CURRENT_PRIVACY_VERSION,
+          consentedAt: userDoc?.legalConsentAt || userDoc?.createdAt || null,
+        },
+        notificationPreferences: userDoc?.notificationPreferences || {
+          letterDispatched: true,
+          deliveryUpdates: true,
+          preArrival: true,
+          arrival: true,
+          paymentUpdates: true,
+        },
+      },
+      summary: {
+        sentLettersCount: sentLetters.length,
+        receivedLettersCount: receivedLetters.length,
+        paymentsCount: payments.length,
+      },
+      sentLetters: sentLetters.map((l: any) => ({
+        trackingCode: l.trackingCode,
+        type: l.letterType,
+        recipientName: l.recipientName,
+        recipientEmail: l.recipientEmail ? l.recipientEmail.replace(/(?<=.).(?=.*@)/g, '*') : undefined,
+        letterDate: l.letterDate || (l.createdAt ? new Date(l.createdAt).toLocaleDateString('en-US') : undefined),
+        postedAt: l.postedAt,
+        scheduledDeliveryAt: l.deliveryDate,
+        deliveredAt: l.deliveredAt,
+        status: l.status,
+        waitingHours: l.waitingHours,
+        postmarkCity: l.postmarkCity,
+      })),
+      receivedLetters: receivedLetters.map((l: any) => ({
+        trackingCode: l.trackingCode,
+        type: l.letterType,
+        senderName: l.senderName,
+        letterDate: l.letterDate || (l.createdAt ? new Date(l.createdAt).toLocaleDateString('en-US') : undefined),
+        scheduledDeliveryAt: l.deliveryDate,
+        deliveredAt: l.deliveredAt,
+        status: l.status,
+        postmarkCity: l.postmarkCity,
+      })),
+      payments: payments.map((p: any) => ({
+        paymentId: `PAY-${p._id.toString().slice(-8).toUpperCase()}`,
+        featureCode: p.featureCode,
+        amount: p.amount,
+        currency: p.currency || 'INR',
+        upiReference: p.upiReference,
+        status: p.status,
+        date: p.createdAt,
+      })),
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="old-letters-bureau-${userId.slice(-6)}.json"`);
+    res.send(JSON.stringify(exportPayload, null, 2));
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Delete / Close User Account (With safe phrase confirmation)
+app.delete(['/api/user/account', '/api/account'], requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const confirmation = String(req.body.confirmation || '').trim();
+    if (confirmation !== 'DELETE MY BUREAU') {
+      return res.status(400).json({
+        success: false,
+        error: 'Confirmation phrase must be exactly "DELETE MY BUREAU" to close this Bureau account.',
+      });
+    }
+
+    const db = await getDb();
+    const usersColl = db.collection('users');
+    const userId = req.user!.id;
+
+    let filter: any = { _id: userId };
+    if (ObjectId.isValid(userId)) {
+      filter = { _id: new ObjectId(userId) };
+    }
+
+    // Safely mark user as DELETED and scrub sensitive credentials
+    await usersColl.updateOne(filter, {
+      $set: {
+        status: 'DELETED',
+        passwordHash: undefined,
+        fullName: 'Closed Correspondent',
+        email: `deleted_${Date.now()}_${req.user!.email}`,
+        updatedAt: new Date(),
+      },
+    });
+
+    clearSessionCookie(res, req);
+    res.json({
+      success: true,
+      message: 'Your Bureau account and correspondent records have been closed.',
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 // Request Auth OTP (Alternative Email Verification Code)
 app.post('/api/auth/request-otp', async (req, res) => {
@@ -966,6 +1626,81 @@ app.get('/api/templates', async (req, res) => {
 async function mapLetterDocToResponse(ltr: any, db: any, reqUser?: SessionUser) {
   const recipientsColl = db.collection('letterRecipients');
   const recipient = await recipientsColl.findOne({ letterId: ltr._id });
+
+  // Lookup payment records for this letter
+  const paymentsColl = db.collection('payments');
+  let payment: any = null;
+  try {
+    payment = await paymentsColl.findOne({
+      $or: [
+        { letterId: ltr._id.toString() },
+        { letterId: ltr._id },
+        ...(ltr.trackingCode ? [{ letterId: ltr.trackingCode }] : []),
+      ],
+    });
+  } catch {}
+
+  const rawRecipientEmail = ltr.recipientEmail || recipient?.email || 'recipient@correspondence.in';
+  const recipientEmailMasked = rawRecipientEmail ? rawRecipientEmail.replace(/(?<=.).(?=.*@)/g, '*') : '***@***.com';
+
+  const now = Date.now();
+  const createdAtTime = ltr.createdAt ? new Date(ltr.createdAt).getTime() : now;
+  const postedAtTime = ltr.postedAt ? new Date(ltr.postedAt).getTime() : createdAtTime;
+  const deliveryDateTime = ltr.deliveryDate ? new Date(ltr.deliveryDate).getTime() : postedAtTime + 48 * 3600 * 1000;
+  const deliveredAtTime = ltr.deliveredAt ? new Date(ltr.deliveredAt).getTime() : undefined;
+
+  const isWritten = true;
+  const isSealed = ltr.status !== 'DRAFT';
+  const isDispatched = ltr.status !== 'DRAFT';
+  const isInTransit = ['IN_TRANSIT', 'DELIVERED', 'OPENED'].includes(ltr.status) || (ltr.status === 'SCHEDULED' && now >= postedAtTime);
+  const isArriving = ['DELIVERED', 'OPENED'].includes(ltr.status) || (now >= deliveryDateTime - 24 * 3600 * 1000);
+  const isDelivered = ltr.status === 'DELIVERED' || ltr.status === 'OPENED' || (now >= deliveryDateTime && ltr.status !== 'DRAFT' && ltr.status !== 'CANCELLED');
+
+  const timeline = [
+    {
+      step: 'WRITTEN',
+      label: 'Written',
+      timestamp: ltr.createdAt ? new Date(ltr.createdAt).toISOString() : undefined,
+      completed: isWritten,
+      current: !isSealed,
+    },
+    {
+      step: 'SEALED',
+      label: 'Sealed',
+      timestamp: isSealed ? (ltr.postedAt ? new Date(ltr.postedAt).toISOString() : new Date(ltr.createdAt).toISOString()) : undefined,
+      completed: isSealed,
+      current: isSealed && !isInTransit,
+    },
+    {
+      step: 'DISPATCHED',
+      label: 'Dispatched',
+      timestamp: isDispatched ? (ltr.postedAt ? new Date(ltr.postedAt).toISOString() : new Date(ltr.createdAt).toISOString()) : undefined,
+      completed: isDispatched,
+      current: isDispatched && isInTransit && !isArriving,
+    },
+    {
+      step: 'IN_TRANSIT',
+      label: 'In Transit',
+      timestamp: isInTransit ? (ltr.postedAt ? new Date(ltr.postedAt).toISOString() : undefined) : undefined,
+      completed: isInTransit,
+      current: isInTransit && !isArriving && !isDelivered,
+    },
+    {
+      step: 'ARRIVING',
+      label: 'Arriving',
+      timestamp: isArriving ? new Date(deliveryDateTime - 24 * 3600 * 1000).toISOString() : undefined,
+      completed: isArriving,
+      current: isArriving && !isDelivered,
+    },
+    {
+      step: 'DELIVERED',
+      label: 'Delivered',
+      timestamp: isDelivered ? (deliveredAtTime ? new Date(deliveredAtTime).toISOString() : new Date(deliveryDateTime).toISOString()) : undefined,
+      completed: isDelivered,
+      current: isDelivered,
+    },
+  ];
+
   return {
     id: ltr._id.toString(),
     trackingCode: ltr.trackingCode,
@@ -974,7 +1709,8 @@ async function mapLetterDocToResponse(ltr: any, db: any, reqUser?: SessionUser) 
     senderName: ltr.senderName || reqUser?.fullName || 'Correspondent',
     senderEmail: ltr.senderEmail || reqUser?.email || 'correspondent@oldletters.in',
     recipientName: ltr.recipientName || recipient?.displayName || 'Recipient',
-    recipientEmail: ltr.recipientEmail || recipient?.email || 'recipient@correspondence.in',
+    recipientEmail: rawRecipientEmail,
+    recipientEmailMasked,
     letterDate: new Date(ltr.createdAt).toLocaleDateString('en-US', {
       month: 'long',
       day: 'numeric',
@@ -987,24 +1723,33 @@ async function mapLetterDocToResponse(ltr: any, db: any, reqUser?: SessionUser) 
     verificationMethod: ltr.recipientVerificationMethod,
     postedAt: ltr.postedAt ? ltr.postedAt.toISOString() : ltr.createdAt.toISOString(),
     scheduledDeliveryAt: ltr.deliveryDate ? ltr.deliveryDate.toISOString() : undefined,
+    deliveredAt: isDelivered ? (ltr.deliveredAt ? ltr.deliveredAt.toISOString() : (ltr.deliveryDate ? ltr.deliveryDate.toISOString() : undefined)) : undefined,
     waitingHours: ltr.waitingHours || 48,
-    status: ltr.status,
+    status: isDelivered ? 'DELIVERED' : ltr.status,
     postmarkCity: ltr.postmarkCity || 'Hyderabad Bureau',
+    paymentStatus: payment ? (payment.status === 'APPROVED' ? 'PAID' : payment.status) : 'COMPLIMENTARY',
+    amountPaid: payment?.amount || 0,
+    currency: payment?.currency || 'INR',
+    upiReference: payment?.upiReference,
+    timeline,
+    createdAt: ltr.createdAt ? ltr.createdAt.toISOString() : new Date().toISOString(),
   };
 }
 
-// 2. Letters Archive: GET all letters for current authenticated sender
-app.get(['/api/letters', '/api/archive'], requireAuth, async (req: AuthenticatedRequest, res) => {
+// 2. Letters Archive & Sent Letters: GET all letters for current authenticated sender
+app.get(['/api/letters', '/api/archive', '/api/letters/sent'], requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const db = await getDb();
     const lettersColl = db.collection('letters');
     const senderId = req.user!.id;
+    const senderEmail = (req.user!.email || '').toLowerCase();
 
     // Strict ownership: Only retrieve letters penned by this authenticated sender
     const query: any = {
       $or: [
         { senderId },
-        { senderId: new ObjectId(senderId) },
+        ...(ObjectId.isValid(senderId) ? [{ senderId: new ObjectId(senderId) }] : []),
+        { senderEmail },
       ],
     };
 
@@ -1019,6 +1764,87 @@ app.get(['/api/letters', '/api/archive'], requireAuth, async (req: Authenticated
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// Received Letters: GET letters addressed to current authenticated user's email
+app.get(['/api/letters/received', '/api/letters-received'], requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const db = await getDb();
+    const lettersColl = db.collection('letters');
+    const recipientsColl = db.collection('letterRecipients');
+    const tokensColl = db.collection('deliveryTokens');
+    const userEmail = (req.user!.email || '').toLowerCase();
+
+    // Query letters addressed to user email
+    const recipientDocs = await recipientsColl.find({ email: userEmail }).toArray();
+    const recipientLetterIds = recipientDocs.map((r: any) => r.letterId);
+
+    const query: any = {
+      $or: [
+        { recipientEmail: userEmail },
+        ...(recipientLetterIds.length > 0
+          ? [{ _id: { $in: recipientLetterIds.map((id: any) => (typeof id === 'string' && ObjectId.isValid(id) ? new ObjectId(id) : id)) } }]
+          : []),
+      ],
+    };
+
+    const rawLetters = await (await lettersColl.find(query)).sort({ createdAt: -1 }).toArray();
+    const now = new Date();
+
+    const receivedLetters = await Promise.all(
+      rawLetters.map(async (ltr: any) => {
+        const isDelivered = ltr.status === 'DELIVERED' || (ltr.deliveryDate && new Date(ltr.deliveryDate) <= now);
+
+        let deliveryToken: string | undefined = undefined;
+        if (isDelivered) {
+          const tokenDoc = await tokensColl.findOne({
+            $or: [{ letterId: ltr._id }, { letterId: ltr._id.toString() }],
+          });
+          if (tokenDoc?.rawToken) {
+            deliveryToken = tokenDoc.rawToken;
+          }
+        }
+
+        const scheduledAt = ltr.deliveryDate ? new Date(ltr.deliveryDate).toISOString() : undefined;
+        const postedAt = ltr.postedAt
+          ? new Date(ltr.postedAt).toISOString()
+          : ltr.createdAt
+          ? new Date(ltr.createdAt).toISOString()
+          : undefined;
+
+        // Privacy rule: Sealed letters never reveal content/salutation/signoff
+        return {
+          id: ltr._id.toString(),
+          trackingCode: ltr.trackingCode,
+          senderName: ltr.senderName || 'Anonymous Correspondent',
+          letterType: ltr.letterType,
+          templateId: ltr.templateId || 'ivory',
+          letterDate: new Date(ltr.createdAt).toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          }),
+          postedAt,
+          scheduledDeliveryAt: scheduledAt,
+          deliveredAt: isDelivered ? (ltr.deliveredAt ? new Date(ltr.deliveredAt).toISOString() : scheduledAt) : undefined,
+          status: isDelivered ? 'DELIVERED' : 'IN_TRANSIT',
+          isSealed: !isDelivered,
+          canOpen: isDelivered,
+          deliveryToken,
+          sealedMessage: !isDelivered ? 'SEALED IN TRANSIT · Your letter is still making its way to you.' : undefined,
+          postmarkCity: ltr.postmarkCity || 'Hyderabad Bureau',
+          verificationMethod: ltr.recipientVerificationMethod || 'open',
+          createdAt: ltr.createdAt ? new Date(ltr.createdAt).toISOString() : new Date().toISOString(),
+        };
+      })
+    );
+
+    res.json({ success: true, letters: receivedLetters });
+  } catch (err: any) {
+    console.error('Error fetching received letters:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 // 3. Create Letter / Schedule Post (Strictly authenticated & senderId bound)
 app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -1272,11 +2098,48 @@ app.get('/api/letters/:id', requireAuth, async (req: AuthenticatedRequest, res) 
       return res.status(404).json({ success: false, error: 'Letter not found.' });
     }
 
-    // Verify ownership or admin privileges
+    // Verify ownership or recipient or admin privileges
     const isAdmin = await verifyAdminServerSide(req);
-    const isOwner = letter.senderId?.toString() === req.user!.id;
-    if (!isOwner && !isAdmin) {
+    const userId = req.user!.id;
+    const userEmail = (req.user!.email || '').toLowerCase();
+
+    const isSender =
+      letter.senderId?.toString() === userId ||
+      (ObjectId.isValid(userId) && letter.senderId?.toString() === new ObjectId(userId).toString()) ||
+      letter.senderEmail?.toLowerCase() === userEmail;
+
+    const isRecipient = letter.recipientEmail?.toLowerCase() === userEmail;
+
+    if (!isSender && !isRecipient && !isAdmin) {
       return res.status(403).json({ success: false, error: 'Access denied to this correspondence.' });
+    }
+
+    // For recipients: strictly enforce sealed protection if delivery date has not arrived
+    const now = new Date();
+    const isDelivered = letter.status === 'DELIVERED' || (letter.deliveryDate && new Date(letter.deliveryDate) <= now);
+
+    if (isRecipient && !isSender && !isAdmin && !isDelivered) {
+      return res.json({
+        success: true,
+        letter: {
+          id: letter._id.toString(),
+          trackingCode: letter.trackingCode,
+          senderName: letter.senderName || 'Anonymous Correspondent',
+          letterType: letter.letterType,
+          templateId: letter.templateId || 'ivory',
+          letterDate: new Date(letter.createdAt).toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          }),
+          status: 'IN_TRANSIT',
+          isSealed: true,
+          canOpen: false,
+          sealedMessage: 'SEALED IN TRANSIT · Your letter is still making its way to you.',
+          scheduledDeliveryAt: letter.deliveryDate ? new Date(letter.deliveryDate).toISOString() : undefined,
+          postmarkCity: letter.postmarkCity || 'Hyderabad Bureau',
+        },
+      });
     }
 
     const mapped = await mapLetterDocToResponse(letter, db, req.user);
@@ -2106,6 +2969,18 @@ export async function runDeliveryScheduler(db: any) {
       });
 
       if (!alreadySentHalfway) {
+        // Atomic duplicate protection: insert event before dispatching to prevent duplicate emails from concurrent ticks
+        try {
+          await eventsColl.insertOne({
+            _id: new ObjectId(),
+            letterId: letter._id,
+            eventType: 'HALFWAY_EMAIL_SENT',
+            createdAt: now,
+          });
+        } catch {
+          continue;
+        }
+
         const recipient = await recipientsColl.findOne({ letterId: letter._id });
         const senderEmail = (letter.senderEmail || '').toLowerCase();
         const senderName = letter.senderName || 'Correspondent';
@@ -2178,13 +3053,6 @@ export async function runDeliveryScheduler(db: any) {
           } catch {}
         }
 
-        await eventsColl.insertOne({
-          _id: new ObjectId(),
-          letterId: letter._id,
-          eventType: 'HALFWAY_EMAIL_SENT',
-          createdAt: now,
-        });
-
         processed.halfwayCount++;
       }
     }
@@ -2192,13 +3060,25 @@ export async function runDeliveryScheduler(db: any) {
     // ----------------------------------------------------
     // EMAIL 4 — 47.5 HOURS / 30 MINUTES BEFORE ARRIVAL (Pre-arrival OTP)
     // ----------------------------------------------------
-    if (msUntilArrival <= 30 * 60 * 1000 && msUntilArrival > 0) {
+    if (msUntilArrival <= 30 * 60 * 1000 && now < deliveryDate) {
       const alreadySentPreArrival = await eventsColl.findOne({
         letterId: letter._id,
         eventType: 'PRE_ARRIVAL_NOTICE_SENT',
       });
 
       if (!alreadySentPreArrival) {
+        // Atomic duplicate protection: record pre-arrival event before sending email to prevent duplicate dispatches
+        try {
+          await eventsColl.insertOne({
+            _id: new ObjectId(),
+            letterId: letter._id,
+            eventType: 'PRE_ARRIVAL_NOTICE_SENT',
+            createdAt: now,
+          });
+        } catch {
+          continue;
+        }
+
         const recipient = await recipientsColl.findOne({ letterId: letter._id });
         const recipientEmail = (recipient?.email || letter.recipientEmail || '').toLowerCase();
         const recipientName = recipient?.displayName || letter.recipientName || 'Recipient';
@@ -2264,13 +3144,6 @@ export async function runDeliveryScheduler(db: any) {
               });
             }
           }
-
-          await eventsColl.insertOne({
-            _id: new ObjectId(),
-            letterId: letter._id,
-            eventType: 'PRE_ARRIVAL_NOTICE_SENT',
-            createdAt: now,
-          });
 
           processed.preArrivalCount++;
         }
@@ -2416,17 +3289,23 @@ app.all(['/api/scheduler/tick', '/api/cron/delivery', '/api/internal/delivery/ru
     const cronHeader = (req.headers['x-cron-secret'] as string)?.trim();
     const querySecret = (req.query.secret as string)?.trim();
 
-    // In production, require CRON_SECRET if configured (Vercel automatically sends Authorization: Bearer <CRON_SECRET>)
-    if (process.env.CRON_SECRET) {
+    // In production or when CRON_SECRET is set, strictly enforce authorization
+    const expectedSecret = process.env.CRON_SECRET || CRON_SECRET;
+    const isProduction = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+
+    if (process.env.CRON_SECRET || isProduction) {
       const authorized =
-        incomingAuth === CRON_SECRET ||
-        cronHeader === CRON_SECRET ||
-        querySecret === CRON_SECRET;
+        (expectedSecret && incomingAuth === expectedSecret) ||
+        (expectedSecret && cronHeader === expectedSecret) ||
+        (expectedSecret && querySecret === expectedSecret);
 
       if (!authorized) {
         const isAdmin = await verifyAdminServerSide(req);
-        if (!isAdmin && process.env.NODE_ENV === 'production') {
-          return res.status(401).json({ success: false, error: 'Unauthorized cron dispatch.' });
+        if (!isAdmin) {
+          return res.status(401).json({
+            success: false,
+            error: 'Unauthorized cron dispatch. Valid Authorization: Bearer <CRON_SECRET> or admin session required.',
+          });
         }
       }
     }
@@ -2591,24 +3470,153 @@ app.post(['/api/payments', '/api/payments/create'], requireAuth, async (req: Aut
   }
 });
 
-// List User's Payments (Protected)
-app.get('/api/payments', requireAuth, async (req: AuthenticatedRequest, res) => {
+// List User's Payments (Protected with full Bureau transaction metadata)
+app.get(['/api/payments', '/api/user/payments'], requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const db = await getDb();
     const paymentsColl = db.collection('payments');
+    const lettersColl = db.collection('letters');
     const userId = req.user!.id;
 
-    const list = await (await paymentsColl.find({ userId })).sort({ createdAt: -1 }).toArray();
+    const query: any = {
+      $or: [
+        { userId: userId },
+        ...(ObjectId.isValid(userId) ? [{ userId: new ObjectId(userId) }] : []),
+      ],
+    };
+
+    const list = await (await paymentsColl.find(query)).sort({ createdAt: -1 }).toArray();
+
+    const featureDescriptions: Record<string, string> = {
+      VOICE_NOTE: 'Audio Epistolary Wax Seal (Voice Note)',
+      VIDEO_NOTE: 'Video Epistolary Parchment (Video Note)',
+      LIVE_MEETING: 'Bureau Live Dispatch Meeting',
+    };
+
+    const enriched = await Promise.all(
+      list.map(async (p: any) => {
+        let recipientName = 'Postal Recipient';
+        let trackingCode = 'OL-BUREAU';
+        if (p.letterId) {
+          try {
+            const letter = await lettersColl.findOne({
+              $or: [
+                { _id: ObjectId.isValid(p.letterId) ? new ObjectId(p.letterId) : p.letterId },
+                { trackingCode: p.letterId },
+              ],
+            });
+            if (letter) {
+              recipientName = letter.recipientName || 'Recipient';
+              trackingCode = letter.trackingCode;
+            }
+          } catch {}
+        }
+
+        return {
+          id: p._id.toString(),
+          paymentId: `PAY-${p._id.toString().slice(-8).toUpperCase()}`,
+          letterId: p.letterId || null,
+          trackingCode,
+          recipientName,
+          featureCode: p.featureCode,
+          description: featureDescriptions[p.featureCode] || 'Premium Correspondence Dispatch',
+          amount: p.amount,
+          currency: p.currency || 'INR',
+          paymentMethod: 'UPI',
+          upiReference: p.upiReference,
+          status: p.status || 'PENDING',
+          refundStatus: p.status === 'REFUNDED' ? 'REFUNDED' : 'NONE',
+          adminNote: p.adminNote || null,
+          createdAt: p.createdAt ? (typeof p.createdAt === 'string' ? p.createdAt : p.createdAt.toISOString()) : new Date().toISOString(),
+        };
+      })
+    );
+
     res.json({
       success: true,
-      payments: list.map((p: any) => ({
-        id: p._id.toString(),
-        featureCode: p.featureCode,
-        amount: p.amount,
-        status: p.status,
-        upiReference: p.upiReference,
-        createdAt: p.createdAt.toISOString(),
-      })),
+      payments: enriched,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Single Payment Lookup (Protected: user or admin only)
+app.get('/api/payments/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const db = await getDb();
+    const paymentsColl = db.collection('payments');
+    const lettersColl = db.collection('letters');
+    const userId = req.user!.id;
+    const paymentId = req.params.id;
+
+    let payment: any = null;
+    if (ObjectId.isValid(paymentId)) {
+      payment = await paymentsColl.findOne({ _id: new ObjectId(paymentId) });
+    }
+    if (!payment) {
+      payment = await paymentsColl.findOne({
+        $or: [{ upiReference: paymentId }, { _id: paymentId as any }],
+      });
+    }
+
+    if (!payment) {
+      return res.status(404).json({ success: false, error: 'Payment record not found.' });
+    }
+
+    // Verify ownership or admin privileges
+    const isAdmin = await verifyAdminServerSide(req);
+    const isOwner =
+      payment.userId?.toString() === userId ||
+      (ObjectId.isValid(userId) && payment.userId?.toString() === new ObjectId(userId).toString());
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ success: false, error: 'Access denied to this payment record.' });
+    }
+
+    let recipientName = 'Postal Recipient';
+    let trackingCode = 'OL-BUREAU';
+    if (payment.letterId) {
+      try {
+        const letter = await lettersColl.findOne({
+          $or: [
+            { _id: ObjectId.isValid(payment.letterId) ? new ObjectId(payment.letterId) : payment.letterId },
+            { trackingCode: payment.letterId },
+          ],
+        });
+        if (letter) {
+          recipientName = letter.recipientName || 'Recipient';
+          trackingCode = letter.trackingCode;
+        }
+      } catch {}
+    }
+
+    const featureDescriptions: Record<string, string> = {
+      VOICE_NOTE: 'Audio Epistolary Wax Seal (Voice Note)',
+      VIDEO_NOTE: 'Video Epistolary Parchment (Video Note)',
+      LIVE_MEETING: 'Bureau Live Dispatch Meeting',
+    };
+
+    res.json({
+      success: true,
+      payment: {
+        id: payment._id.toString(),
+        paymentId: `PAY-${payment._id.toString().slice(-8).toUpperCase()}`,
+        letterId: payment.letterId || null,
+        trackingCode,
+        recipientName,
+        featureCode: payment.featureCode,
+        description: featureDescriptions[payment.featureCode] || 'Premium Correspondence Dispatch',
+        amount: payment.amount,
+        currency: payment.currency || 'INR',
+        paymentMethod: 'UPI',
+        upiReference: payment.upiReference,
+        status: payment.status,
+        refundStatus: payment.status === 'REFUNDED' ? 'REFUNDED' : 'NONE',
+        adminNote: payment.adminNote || null,
+        verifiedAt: payment.verifiedAt ? payment.verifiedAt.toISOString() : null,
+        createdAt: payment.createdAt ? (typeof payment.createdAt === 'string' ? payment.createdAt : payment.createdAt.toISOString()) : new Date().toISOString(),
+      },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

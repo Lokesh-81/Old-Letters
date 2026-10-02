@@ -1,4 +1,13 @@
-import { CreateLetterInput, SubmitPaymentInput, AdminVerifyPaymentInput, PaymentRecord } from '../types/backend';
+import {
+  CreateLetterInput,
+  SubmitPaymentInput,
+  AdminVerifyPaymentInput,
+  PaymentRecord,
+  BureauStats,
+  ReceivedLetterSummary,
+  BureauPaymentItem,
+  NotificationPreferences,
+} from '../types/backend';
 import { Letter, RecipientMetadata } from '../types/letter';
 
 const API_BASE = '/api';
@@ -600,6 +609,10 @@ export async function signupUser(payload: {
   email: string;
   password: string;
   fullName?: string;
+  termsAccepted?: boolean;
+  privacyAccepted?: boolean;
+  termsVersion?: string;
+  privacyVersion?: string;
 }): Promise<{ user: any; token?: string }> {
   let res: Response;
   try {
@@ -632,7 +645,7 @@ export async function signupUser(payload: {
     const errorString = normalizeApiError(
       data?.error || data?.message || data,
       res.status === 400
-        ? 'A valid email and password (minimum 6 characters) are required.'
+        ? 'A valid email and password (minimum 6 characters) and acceptance of terms are required.'
         : res.status === 429
         ? 'Too many registration attempts. Please wait a few minutes.'
         : 'Something went wrong. Please try again.'
@@ -649,6 +662,20 @@ export async function signupUser(payload: {
   } catch {}
 
   return { user: data.user, token: data.token };
+}
+
+export async function updateLegalConsent(payload: {
+  termsAccepted: boolean;
+  privacyAccepted: boolean;
+  termsVersion?: string;
+  privacyVersion?: string;
+}): Promise<{ success: boolean; user?: any }> {
+  const res = await apiFetch('/auth/consent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return safeParseJson(res, 'Failed to update legal consent record.');
 }
 
 export async function loginUser(payload: {
@@ -703,4 +730,132 @@ export async function loginUser(payload: {
   } catch {}
 
   return { user: data.user, token: data.token };
+}
+
+// ====================================================================
+// CORRESPONDENCE BUREAU & PROFILE API CALLS
+// ====================================================================
+
+export interface BureauSummaryResponse {
+  success: boolean;
+  stats: BureauStats;
+  user: {
+    id: string;
+    email: string;
+    fullName: string;
+    avatarUrl?: string;
+    role: string;
+    authProvider: string;
+    googleLinked: boolean;
+    status: string;
+    termsAccepted: boolean;
+    privacyAccepted: boolean;
+    termsVersion: string;
+    privacyVersion: string;
+    legalConsentAt: string;
+    createdAt: string;
+    hasPassword?: boolean;
+    notificationPreferences: NotificationPreferences;
+  };
+}
+
+export async function fetchBureauSummary(): Promise<BureauSummaryResponse> {
+  const res = await apiFetch('/user/bureau-summary');
+  return safeParseJson<BureauSummaryResponse>(res, 'Failed to load Correspondence Bureau summary.');
+}
+
+export async function fetchSentLetters(): Promise<Letter[]> {
+  const res = await apiFetch('/letters/sent');
+  const data = await safeParseJson<{ success: boolean; letters: Letter[] }>(
+    res,
+    'Failed to load sent correspondence.'
+  );
+  return data.letters || [];
+}
+
+export async function fetchReceivedLetters(): Promise<ReceivedLetterSummary[]> {
+  const res = await apiFetch('/letters/received');
+  const data = await safeParseJson<{ success: boolean; letters: ReceivedLetterSummary[] }>(
+    res,
+    'Failed to load received correspondence.'
+  );
+  return data.letters || [];
+}
+
+export async function fetchUserPayments(): Promise<BureauPaymentItem[]> {
+  const res = await apiFetch('/payments');
+  const data = await safeParseJson<{ success: boolean; payments: BureauPaymentItem[] }>(
+    res,
+    'Failed to load payment history.'
+  );
+  return data.payments || [];
+}
+
+export async function fetchPaymentDetail(paymentId: string): Promise<BureauPaymentItem> {
+  const res = await apiFetch(`/payments/${paymentId}`);
+  const data = await safeParseJson<{ success: boolean; payment: BureauPaymentItem }>(
+    res,
+    'Failed to load payment transaction.'
+  );
+  return data.payment;
+}
+
+export async function updateUserProfile(payload: {
+  fullName: string;
+  avatarUrl?: string;
+}): Promise<{ success: boolean; user: any; message: string }> {
+  const res = await apiFetch('/user/profile', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return safeParseJson(res, 'Failed to update profile.');
+}
+
+export async function updateNotificationPreferences(
+  preferences: NotificationPreferences
+): Promise<{ success: boolean; preferences: NotificationPreferences; message: string }> {
+  const res = await apiFetch('/user/preferences', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ preferences }),
+  });
+  return safeParseJson(res, 'Failed to update notification preferences.');
+}
+
+export async function changeUserPassword(payload: {
+  currentPassword?: string;
+  newPassword: string;
+}): Promise<{ success: boolean; message: string }> {
+  const res = await apiFetch('/user/password', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return safeParseJson(res, 'Failed to update password.');
+}
+
+export async function downloadBureauArchive(): Promise<void> {
+  const res = await apiFetch('/user/export-data');
+  if (!res.ok) {
+    throw new Error('Failed to generate Bureau records archive.');
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `old-letters-bureau-archive-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
+export async function deleteBureauAccount(confirmation: string): Promise<{ success: boolean; message: string }> {
+  const res = await apiFetch('/user/account', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirmation }),
+  });
+  return safeParseJson(res, 'Failed to close Bureau account.');
 }

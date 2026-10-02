@@ -165,7 +165,7 @@ export interface RecipientMetadata {
   recipientName: string;
   recipientEmailMasked: string;
   verificationMethod: 'otp' | 'passphrase' | 'open';
-  status: 'DRAFT' | 'SCHEDULED' | 'IN TRANSIT' | 'DELIVERED' | 'OPENED' | 'COMPLETED';
+  status: 'DRAFT' | 'SCHEDULED' | 'IN TRANSIT' | 'DELIVERED' | 'OPENED' | 'COMPLETED' | 'CANCELLED';
   isDelivered: boolean;
   isArrived: boolean;
   canUnseal: boolean;
@@ -188,6 +188,7 @@ export interface Letter {
   senderEmail: string;
   recipientName: string;
   recipientEmail: string;
+  recipientEmailMasked?: string;
   letterDate: string;
   greeting: string;
   content: string;
@@ -197,8 +198,15 @@ export interface Letter {
   passphrase?: string;
   postedAt: string;
   scheduledDeliveryAt: string;
+  deliveredAt?: string;
+  createdAt?: string;
   waitingHours: number;
-  status: 'DRAFT' | 'SCHEDULED' | 'IN TRANSIT' | 'DELIVERED' | 'OPENED' | 'COMPLETED';
+  status: 'DRAFT' | 'SCHEDULED' | 'IN TRANSIT' | 'DELIVERED' | 'OPENED' | 'COMPLETED' | 'CANCELLED';
   openedAt?: string;
   postmarkCity?: string;
+  paymentStatus?: string;
+  amountPaid?: number;
+  currency?: string;
+  upiReference?: string;
+  timeline?: any[];
 }

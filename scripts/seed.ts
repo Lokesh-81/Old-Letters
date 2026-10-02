@@ -92,6 +92,11 @@ export async function seedDatabase() {
         authProvider: 'EMAIL',
         role: u.email === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER',
         emailVerified: true,
+        termsAccepted: true,
+        privacyAccepted: true,
+        termsVersion: '2026-10-01',
+        privacyVersion: '2026-10-01',
+        legalConsentAt: new Date(),
         createdAt: new Date(),
         updatedAt: new Date(),
       });

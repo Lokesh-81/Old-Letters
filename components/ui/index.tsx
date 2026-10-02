@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { signupUser, loginUser, normalizeApiError } from '../../src/lib/api';
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from '../../src/types/backend';
 
 // Google SVG Icon
 const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -50,12 +51,24 @@ export default function Auth7({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(initialError || null);
+  // Legal consent checkbox must be UNCHECKED by default
+  const [legalConsent, setLegalConsent] = useState(false);
 
   useEffect(() => {
     if (initialError) {
       setErrorMsg(initialError);
     }
   }, [initialError]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const authParam = searchParams.get('auth');
+      if (authParam === 'consent_required') {
+        setErrorMsg('You must accept the Terms of Service and Privacy Policy before continuing with Google.');
+      }
+    }
+  }, []);
 
   // Form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -78,6 +91,12 @@ export default function Auth7({
       return;
     }
 
+    // Explicit Legal Consent check for Account Creation
+    if (!isLogin && !legalConsent) {
+      setErrorMsg('You must agree to the Terms of Service and Privacy Policy to create an account.');
+      return;
+    }
+
     setLoading(true);
     try {
       if (isLogin) {
@@ -93,6 +112,10 @@ export default function Auth7({
           email: cleanEmail,
           password: password.trim(),
           fullName: fullName.trim() || 'Correspondent',
+          termsAccepted: true,
+          privacyAccepted: true,
+          termsVersion: CURRENT_TERMS_VERSION,
+          privacyVersion: CURRENT_PRIVACY_VERSION,
         });
         if (onSuccess && result.user) {
           onSuccess(result.user);
@@ -106,9 +129,19 @@ export default function Auth7({
     }
   };
 
-  // Google OAuth redirect
+  // Google OAuth redirect with mandatory pre-acceptance
   const handleGoogleSignIn = () => {
-    window.location.href = '/api/auth/google';
+    setErrorMsg(null);
+    if (!legalConsent) {
+      setErrorMsg('Please agree to the Terms of Service and Privacy Policy before continuing with Google.');
+      return;
+    }
+    const params = new URLSearchParams({
+      consent: 'true',
+      termsVersion: CURRENT_TERMS_VERSION,
+      privacyVersion: CURRENT_PRIVACY_VERSION,
+    });
+    window.location.href = `/api/auth/google?${params.toString()}`;
   };
 
   return (
@@ -232,6 +265,47 @@ export default function Auth7({
                   </div>
                 )}
 
+                {!isLogin && (
+                  <div className="flex items-start gap-2.5 pt-1 text-left">
+                    <input
+                      id="auth-signup-legal-consent"
+                      type="checkbox"
+                      checked={legalConsent}
+                      onChange={(e) => {
+                        setLegalConsent(e.target.checked);
+                        if (errorMsg) setErrorMsg(null);
+                      }}
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded-xs border-[#d6cfc5] text-teal-900 focus:ring-teal-900 focus:ring-offset-0 cursor-pointer accent-teal-900"
+                    />
+                    <label
+                      htmlFor="auth-signup-legal-consent"
+                      className="text-xs font-sans text-stone-700 leading-normal select-none cursor-pointer"
+                    >
+                      I agree to the{' '}
+                      <a
+                        href="/terms"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-teal-900 font-medium underline underline-offset-2 hover:text-teal-950 transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Terms of Service
+                      </a>{' '}
+                      and{' '}
+                      <a
+                        href="/privacy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-teal-900 font-medium underline underline-offset-2 hover:text-teal-950 transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Privacy Policy
+                      </a>
+                      .
+                    </label>
+                  </div>
+                )}
+
                 {/* Submit Button */}
                 <div className="pt-2">
                   <button
@@ -259,6 +333,47 @@ export default function Auth7({
 
               {/* Continue with Google */}
               <div>
+                {isLogin && (
+                  <div className="flex items-start gap-2.5 mb-3 text-left">
+                    <input
+                      id="auth-google-legal-consent"
+                      type="checkbox"
+                      checked={legalConsent}
+                      onChange={(e) => {
+                        setLegalConsent(e.target.checked);
+                        if (errorMsg) setErrorMsg(null);
+                      }}
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded-xs border-[#d6cfc5] text-teal-900 focus:ring-teal-900 focus:ring-offset-0 cursor-pointer accent-teal-900"
+                    />
+                    <label
+                      htmlFor="auth-google-legal-consent"
+                      className="text-xs font-sans text-stone-700 leading-normal select-none cursor-pointer"
+                    >
+                      I agree to the{' '}
+                      <a
+                        href="/terms"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-teal-900 font-medium underline underline-offset-2 hover:text-teal-950 transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Terms of Service
+                      </a>{' '}
+                      and{' '}
+                      <a
+                        href="/privacy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-teal-900 font-medium underline underline-offset-2 hover:text-teal-950 transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Privacy Policy
+                      </a>
+                      .
+                    </label>
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={handleGoogleSignIn}

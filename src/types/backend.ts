@@ -4,6 +4,20 @@ import { LetterType } from './letter';
 // Minimum waiting hours: strictly 48 hours
 export const MIN_DELIVERY_HOURS = 48;
 
+// Canonical Policy Versions
+export const CURRENT_TERMS_VERSION = '2026-10-01';
+export const CURRENT_PRIVACY_VERSION = '2026-10-01';
+
+// Legal Consent Schema
+export const LegalConsentSchema = z.object({
+  termsAccepted: z.literal(true),
+  privacyAccepted: z.literal(true),
+  termsVersion: z.string().default(CURRENT_TERMS_VERSION),
+  privacyVersion: z.string().default(CURRENT_PRIVACY_VERSION),
+});
+
+export type LegalConsentInput = z.infer<typeof LegalConsentSchema>;
+
 // Letter creation Zod schema
 export const CreateLetterSchema = z.object({
   type: z.string().min(1) as z.ZodType<LetterType>,
@@ -87,5 +101,61 @@ export interface PaidFeatureRecord {
   featureCode: 'VOICE_NOTE' | 'VIDEO_NOTE' | 'LIVE_MEETING';
   paymentId: string;
   status: 'PENDING' | 'UNLOCKED' | 'EXPIRED' | 'CANCELLED';
+  createdAt: string;
+}
+
+// User Notification Preferences
+export interface NotificationPreferences {
+  letterDispatched: boolean;
+  deliveryUpdates: boolean;
+  preArrival: boolean;
+  arrival: boolean;
+  paymentUpdates: boolean;
+}
+
+// Bureau Summary Statistics
+export interface BureauStats {
+  sentCount: number;
+  receivedCount: number;
+  inTransitCount: number;
+  deliveredCount: number;
+  totalSpent: number;
+}
+
+// Received Letter Summary for Recipient Archive
+export interface ReceivedLetterSummary {
+  id: string;
+  trackingCode: string;
+  senderName: string;
+  letterType: string;
+  templateId: string;
+  letterDate: string;
+  postedAt?: string;
+  scheduledDeliveryAt?: string;
+  deliveredAt?: string;
+  status: string;
+  isSealed: boolean;
+  canOpen: boolean;
+  deliveryToken?: string;
+  sealedMessage?: string;
+  postmarkCity?: string;
+  verificationMethod?: string;
+}
+
+// Bureau Payment Item for User History
+export interface BureauPaymentItem {
+  id: string;
+  paymentId: string;
+  letterId?: string | null;
+  trackingCode?: string | null;
+  recipientName?: string | null;
+  featureCode: string;
+  description: string;
+  amount: number;
+  currency: string;
+  upiReference: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'REFUNDED';
+  refundStatus?: 'NONE' | 'REQUESTED' | 'REFUNDED';
+  adminNote?: string | null;
   createdAt: string;
 }

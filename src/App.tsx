@@ -23,12 +23,14 @@ import { fetchLetters, getDeliveryMeta, getCurrentUser, logoutUser } from './lib
 import { AdminPaymentModal } from './components/admin/AdminPaymentModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { ProfileModal } from './components/auth/ProfileModal';
+import { BureauDashboard, BureauTab } from './components/bureau/BureauDashboard';
 
 export default function App() {
   const [showLoading, setShowLoading] = useState(true);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [bureauTab, setBureauTab] = useState<BureauTab>('overview');
   const [showCookiePreferencesModal, setShowCookiePreferencesModal] = useState(false);
   const [authInitialMode, setAuthInitialMode] = useState<'login' | 'signup'>('login');
   const [intendedDestination, setIntendedDestination] = useState<string | null>(null);
@@ -110,6 +112,8 @@ export default function App() {
       window.history.pushState(null, '', '/');
     } else if (view === 'cookies' || view === 'privacy' || view === 'terms') {
       window.history.pushState(null, '', `/${view}`);
+    } else if (view === 'profile') {
+      window.history.pushState(null, '', '/profile');
     }
     setCurrentView(view);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -122,18 +126,25 @@ export default function App() {
       const searchParams = new URLSearchParams(window.location.search);
       const authParam = searchParams.get('auth');
 
-      // Legal Pages
+      // Legal & Profile Pages
       if (path === '/cookies') {
         setCurrentView('cookies');
       } else if (path === '/privacy') {
         setCurrentView('privacy');
       } else if (path === '/terms') {
         setCurrentView('terms');
+      } else if (path === '/profile' || path === '/account' || path === '/bureau') {
+        setCurrentView('profile');
       }
 
       // Google OAuth redirection feedback
       if (authParam === 'google_not_configured') {
         setAuthNotice('Google sign-in is not configured yet. Please use email and password.');
+        setAuthInitialMode('login');
+        setShowAuthModal(true);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (authParam === 'consent_required') {
+        setAuthNotice('You must agree to the Terms of Service and Privacy Policy before continuing with Google.');
         setAuthInitialMode('login');
         setShowAuthModal(true);
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -450,7 +461,11 @@ export default function App() {
             setAuthInitialMode('login');
             setShowAuthModal(true);
           }}
-          onOpenProfile={() => setShowProfileModal(true)}
+          onOpenProfile={() => {
+            setBureauTab('overview');
+            handleNavigate('profile');
+          }}
+          onNavigateBureauTab={(tab) => setBureauTab(tab)}
           onOpenAdmin={() => setShowAdminModal(true)}
           onLogout={() => {
             logoutUser();
@@ -465,6 +480,27 @@ export default function App() {
 
       {/* Main View Router */}
       <main className="flex-1 flex flex-col">
+        {currentView === 'profile' && (
+          <BureauDashboard
+            initialTab={bureauTab}
+            currentUser={currentUser}
+            onNavigateHome={() => handleNavigate('landing')}
+            onNavigateWrite={() => handleStartWriting('LOVE')}
+            onNavigateTerms={() => handleNavigate('terms')}
+            onNavigatePrivacy={() => handleNavigate('privacy')}
+            onOpenRecipientMode={(letter, token) => {
+              if (token) setRecipientDeliveryToken(token);
+              handleOpenRecipientView(letter);
+            }}
+            onLogout={() => {
+              logoutUser();
+              setAndPersistUser(null);
+              setLetters(INITIAL_ARCHIVE_LETTERS);
+              handleNavigate('landing');
+            }}
+          />
+        )}
+
         {currentView === 'landing' && (
           <div className="space-y-0">
             <LandingHero
