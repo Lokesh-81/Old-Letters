@@ -25,7 +25,7 @@ interface ComposerFlowProps {
   onRequestAuth?: (action: 'post' | 'write') => void;
 }
 
-type ComposerStep = 'stationery' | 'compose' | 'dispatch' | 'delivery' | 'review';
+type ComposerStep = 'compose' | 'stationery' | 'dispatch' | 'delivery' | 'review';
 
 const POSTAL_TEMPOS = [
   {
@@ -182,7 +182,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
 
   // Navigate between steps with directional animation
   const goToStep = (step: ComposerStep) => {
-    const order: ComposerStep[] = ['stationery', 'compose', 'dispatch', 'delivery', 'review'];
+    const order: ComposerStep[] = ['compose', 'stationery', 'dispatch', 'delivery', 'review'];
     const curIdx = order.indexOf(activeStep);
     const targetIdx = order.indexOf(step);
     setDirection(targetIdx >= curIdx ? 1 : -1);
@@ -765,7 +765,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                   onSelectTemplate={(tpl) => updateDraft({ templateId: tpl.id })}
                   onConfirmStationery={(tpl) => {
                     updateDraft({ templateId: tpl.id });
-                    goToStep('compose');
+                    goToStep('dispatch');
                   }}
                   onBackToCompose={() => goToStep('compose')}
                 />

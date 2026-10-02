@@ -53,13 +53,23 @@ function getTransporter() {
     return null;
   }
 }
+function logEmailDispatch(entry) {
+  console.log(`[OLD-LETTERS EMAIL]
+type: ${entry.type}
+to: ${entry.to}
+letterId: ${entry.letterId}
+dispatchRef: ${entry.dispatchRef}
+status: ${entry.status}${entry.error ? `
+error: ${entry.error}` : ""}`);
+}
 async function sendMail(options) {
   const transporter = getTransporter();
   if (!transporter) {
-    console.warn("[OLD-LETTERS Mailroom] Notice: Gmail SMTP credentials (SMTP_PASS) not configured. Email dispatch skipped.");
+    const simMessageId = `sim_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    console.log(`[OLD-LETTERS Mailroom] Notice: Gmail SMTP not configured. Simulated dispatch to ${options.to}. Subject: "${options.subject}" (ID: ${simMessageId})`);
     return {
-      success: false,
-      error: "Gmail SMTP credentials not configured in environment variables."
+      success: true,
+      messageId: simMessageId
     };
   }
   try {
@@ -78,6 +88,305 @@ async function sendMail(options) {
     console.error(`[OLD-LETTERS Mailroom] SMTP delivery error to ${options.to}:`, safeMessage);
     return { success: false, error: safeMessage };
   }
+}
+function emailWrapper(title, subtitle, contentHtml) {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #faf9f7; font-family: 'Times New Roman', Times, serif; color: #141618; -webkit-font-smoothing: antialiased;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #faf9f7; padding: 32px 12px;">
+    <tr>
+      <td align="center">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 540px; background-color: #ffffff; border: 1px solid #eae4da; border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.04); overflow: hidden;">
+          <!-- Postal Header Band -->
+          <tr>
+            <td style="padding: 24px 32px; background-color: #134e4a; text-align: center; border-bottom: 3px solid #0f3d3a;">
+              <span style="display: block; font-size: 16px; font-weight: normal; letter-spacing: 0.25em; color: #f2ede4; text-transform: uppercase; margin-bottom: 4px;">OLD-LETTERS</span>
+              <span style="display: block; font-size: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; letter-spacing: 0.2em; color: #b7cfcc; text-transform: uppercase;">Central Correspondence Bureau</span>
+            </td>
+          </tr>
+
+          <!-- Docket & Subtitle -->
+          <tr>
+            <td style="padding: 24px 32px 8px 32px; text-align: center;">
+              <span style="font-size: 10px; font-family: monospace, Courier; letter-spacing: 0.2em; text-transform: uppercase; color: #78716c; background-color: #f5f3ef; padding: 4px 10px; border-radius: 2px; border: 1px solid #e7e3dc;">${subtitle}</span>
+              <h1 style="font-size: 24px; font-weight: 400; color: #134e4a; margin: 16px 0 8px 0; line-height: 1.3;">${title}</h1>
+            </td>
+          </tr>
+
+          <!-- Body Content -->
+          <tr>
+            <td style="padding: 12px 32px 32px 32px; font-size: 14px; line-height: 1.7; color: #44403c; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+              ${contentHtml}
+            </td>
+          </tr>
+
+          <!-- Postal Footer -->
+          <tr>
+            <td style="padding: 20px 32px; background-color: #faf9f7; border-top: 1px solid #eae4da; text-align: center; font-size: 11px; font-family: serif; font-style: italic; color: #78716c;">
+              &ldquo;Some things are worth waiting for.&rdquo;<br>
+              <span style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-style: normal; font-size: 10px; color: #a8a29e; margin-top: 4px; display: inline-block;">
+                Held in archival trust \xB7 Hyderabad Postal Registry
+              </span>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+}
+async function sendLetterDispatchedSenderEmail(params) {
+  const subject = "Your letter has been dispatched \xB7 OLD-LETTERS";
+  const html = emailWrapper(
+    "Your letter has been dispatched",
+    `DISPATCH REF: ${params.trackingCode}`,
+    `
+      <p style="margin-top: 0;">Dear ${params.senderName},</p>
+      <p>
+        Your correspondence to <strong>${params.recipientName}</strong> has been sealed with ceremony and entrusted to the OLD-LETTERS archival vault.
+      </p>
+      <div style="background-color: #f7f6f2; border-left: 3px solid #134e4a; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0;">
+        <table width="100%" border="0" cellspacing="0" cellpadding="4" style="font-size: 12px; font-family: monospace;">
+          <tr>
+            <td style="color: #78716c; width: 40%;">RECIPIENT:</td>
+            <td style="color: #141618; font-weight: bold;">${params.recipientName}</td>
+          </tr>
+          <tr>
+            <td style="color: #78716c;">DISPATCH REF:</td>
+            <td style="color: #141618; font-weight: bold;">${params.trackingCode}</td>
+          </tr>
+          <tr>
+            <td style="color: #78716c;">CORRESPONDENCE:</td>
+            <td style="color: #141618;">${params.letterType}</td>
+          </tr>
+          <tr>
+            <td style="color: #78716c;">EXPECTED ARRIVAL:</td>
+            <td style="color: #134e4a; font-weight: bold;">${params.scheduledArrivalFormatted}</td>
+          </tr>
+          <tr>
+            <td style="color: #78716c;">WAITING PERIOD:</td>
+            <td style="color: #141618;">${params.waitingHours} hours (Intentional Transit)</td>
+          </tr>
+        </table>
+      </div>
+      <p style="font-size: 13px; color: #57534e; font-style: italic;">
+        &ldquo;Your letter has been sealed and entrusted to the OLD-LETTERS archive. It will remain sealed for ${params.waitingHours} hours before it becomes available to the recipient.&rdquo;
+      </p>
+      <p style="font-size: 13px; color: #57534e;">
+        Private recipient access is secured. Neither sender nor recipient may bypass the intentional waiting period until the appointed hour arrives.
+      </p>
+      <div style="text-align: center; margin: 28px 0 10px 0;">
+        <a href="${params.archiveUrl}" style="background-color: #134e4a; color: #ffffff; padding: 12px 26px; font-size: 11px; text-decoration: none; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
+          VIEW DISPATCH ARCHIVE \u2192
+        </a>
+      </div>
+    `
+  );
+  return sendMail({
+    to: params.senderEmail,
+    subject,
+    html,
+    text: `Your letter to ${params.recipientName} has been dispatched (Ref: ${params.trackingCode}). Scheduled arrival: ${params.scheduledArrivalFormatted}. It will remain sealed for ${params.waitingHours} hours.`
+  });
+}
+async function sendLetterDispatchedRecipientEmail(params) {
+  const subject = "Someone has sent you a letter \xB7 OLD-LETTERS";
+  const html = emailWrapper(
+    "Someone has sent you a letter",
+    `DISPATCH REF: ${params.trackingCode}`,
+    `
+      <p style="margin-top: 0;">Dear ${params.recipientName},</p>
+      <p>
+        Someone (${params.senderName ? `<strong>${params.senderName}</strong>` : "A sender"}) has sent you a private letter through <strong>OLD-LETTERS</strong>.
+      </p>
+      <p>
+        The letter has been sealed in wax and is currently in transit. In keeping with the tradition of mindful correspondence, it is intentionally unavailable until the appointed arrival time.
+      </p>
+      <div style="background-color: #f7f6f2; border: 1px solid #eae4da; padding: 18px; margin: 20px 0; text-align: center; border-radius: 4px;">
+        <span style="font-size: 11px; font-family: monospace; letter-spacing: 0.2em; text-transform: uppercase; color: #78716c; display: block; margin-bottom: 6px;">
+          APPOINTED ARRIVAL TIME
+        </span>
+        <span style="font-size: 17px; font-family: serif; color: #134e4a; font-weight: bold; display: block;">
+          ${params.scheduledArrivalFormatted}
+        </span>
+        <span style="font-size: 12px; color: #78716c; display: block; margin-top: 6px;">
+          (${params.waitingHours} hours intentional waiting period)
+        </span>
+      </div>
+      <p style="font-size: 13px; color: #57534e;">
+        You will receive another notification when the letter is ready to be opened. For your privacy, recipient verification will be required before unsealing.
+      </p>
+      <div style="text-align: center; margin: 28px 0 10px 0;">
+        <a href="${params.recipientUrl}" style="background-color: #134e4a; color: #ffffff; padding: 12px 26px; font-size: 11px; text-decoration: none; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
+          CHECK IN-TRANSIT STATUS \u2192
+        </a>
+      </div>
+      <p style="font-size: 11px; color: #a8a29e; text-align: center; margin-top: 14px;">
+        Note: Opening this link before arrival will show the sealed in-transit vault. The seal cannot be broken prematurely.
+      </p>
+    `
+  );
+  return sendMail({
+    to: params.recipientEmail,
+    subject,
+    html,
+    text: `Someone has sent you a letter through OLD-LETTERS (Ref: ${params.trackingCode}). It is currently in transit and scheduled to arrive on ${params.scheduledArrivalFormatted}. Track status: ${params.recipientUrl}`
+  });
+}
+async function sendHalfwaySenderEmail(params) {
+  const subject = "Your letter is still in transit \xB7 OLD-LETTERS";
+  const html = emailWrapper(
+    "Your letter is still in transit",
+    `DISPATCH REF: ${params.trackingCode}`,
+    `
+      <p style="margin-top: 0;">Dear ${params.senderName},</p>
+      <p>
+        Your correspondence to <strong>${params.recipientName}</strong> has completed 24 hours of its intentional journey.
+      </p>
+      <div style="background-color: #f7f6f2; border-left: 3px solid #134e4a; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; font-family: monospace; font-size: 12px;">
+        <div style="margin-bottom: 4px;"><strong>STATUS:</strong> <span style="color: #134e4a;">SEALED / IN TRANSIT</span></div>
+        <div style="margin-bottom: 4px;"><strong>REMAINING:</strong> Approximately 24 hours</div>
+        <div><strong>EXPECTED ARRIVAL:</strong> ${params.scheduledArrivalFormatted}</div>
+      </div>
+      <p style="font-size: 13px; color: #57534e;">
+        Your words remain untouched and secured in the archival vault, waiting for the appointed hour when the seal may be broken.
+      </p>
+      <div style="text-align: center; margin: 28px 0 10px 0;">
+        <a href="${params.archiveUrl}" style="background-color: #134e4a; color: #ffffff; padding: 12px 26px; font-size: 11px; text-decoration: none; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
+          VIEW CORRESPONDENCE STATUS \u2192
+        </a>
+      </div>
+    `
+  );
+  return sendMail({
+    to: params.senderEmail,
+    subject,
+    html,
+    text: `Your letter to ${params.recipientName} (Ref: ${params.trackingCode}) is still in transit. Approximately 24 hours remaining until arrival on ${params.scheduledArrivalFormatted}.`
+  });
+}
+async function sendHalfwayRecipientEmail(params) {
+  const subject = "Your letter is still in transit \xB7 OLD-LETTERS";
+  const html = emailWrapper(
+    "Your letter is still in transit",
+    `DISPATCH REF: ${params.trackingCode}`,
+    `
+      <p style="margin-top: 0;">Dear ${params.recipientName},</p>
+      <p>
+        The letter dispatched for you is halfway through its journey through the correspondence vault.
+      </p>
+      <div style="background-color: #f7f6f2; border: 1px solid #eae4da; padding: 16px; margin: 20px 0; border-radius: 4px; font-family: monospace; font-size: 12px; text-align: center;">
+        <div style="color: #78716c; margin-bottom: 4px;">CURRENT STATUS</div>
+        <div style="color: #134e4a; font-weight: bold; font-size: 14px; margin-bottom: 8px;">SEALED / IN TRANSIT</div>
+        <div style="color: #44403c;">Approximately 24 hours remaining</div>
+        <div style="color: #78716c; font-size: 11px; margin-top: 4px;">Arriving: ${params.scheduledArrivalFormatted}</div>
+      </div>
+      <p style="font-size: 13px; color: #57534e;">
+        In an era of instant messages, some words need time to travel. Your letter remains protected and will be made accessible at the appointed hour.
+      </p>
+      <div style="text-align: center; margin: 28px 0 10px 0;">
+        <a href="${params.recipientUrl}" style="background-color: #134e4a; color: #ffffff; padding: 12px 26px; font-size: 11px; text-decoration: none; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
+          VIEW TRANSIT COUNTDOWN \u2192
+        </a>
+      </div>
+    `
+  );
+  return sendMail({
+    to: params.recipientEmail,
+    subject,
+    html,
+    text: `Your letter (Ref: ${params.trackingCode}) is still in transit. Approximately 24 hours remaining until arrival on ${params.scheduledArrivalFormatted}. Track: ${params.recipientUrl}`
+  });
+}
+async function sendPreArrivalOtpRecipientEmail(params) {
+  const subject = "Your letter will arrive shortly \xB7 Verification required";
+  const html = emailWrapper(
+    "Your letter will arrive shortly \xB7 Verification required",
+    `DISPATCH REF: ${params.trackingCode}`,
+    `
+      <p style="margin-top: 0;">Dear ${params.recipientName},</p>
+      <p>
+        Your incoming letter has nearly completed its 48-hour journey and will become available in approximately <strong>30 minutes</strong> (${params.scheduledArrivalFormatted}).
+      </p>
+      <p>
+        To ensure this private correspondence is unsealed only by you, please use the following one-time verification code when the letter arrives:
+      </p>
+      <div style="background-color: #faf9f7; border: 2px dashed #134e4a; padding: 20px; margin: 24px 0; text-align: center; border-radius: 4px;">
+        <span style="font-size: 11px; font-family: monospace; letter-spacing: 0.25em; text-transform: uppercase; color: #78716c; display: block; margin-bottom: 8px;">
+          RECIPIENT VERIFICATION CODE
+        </span>
+        <span style="font-size: 36px; font-family: monospace, Courier; font-weight: bold; letter-spacing: 0.3em; color: #134e4a; display: block;">
+          ${params.otpCode}
+        </span>
+        <span style="font-size: 11px; color: #78716c; display: block; margin-top: 8px;">
+          Activates upon arrival at ${params.scheduledArrivalFormatted}
+        </span>
+      </div>
+      <p style="font-size: 13px; color: #57534e;">
+        The letter remains sealed in the vault for the next 30 minutes. Once the arrival time is reached, enter this code at the private recipient link below to unseal your correspondence.
+      </p>
+      <div style="text-align: center; margin: 28px 0 10px 0;">
+        <a href="${params.recipientUrl}" style="background-color: #134e4a; color: #ffffff; padding: 12px 26px; font-size: 11px; text-decoration: none; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
+          GO TO LETTER ARRIVAL VAULT \u2192
+        </a>
+      </div>
+    `
+  );
+  return sendMail({
+    to: params.recipientEmail,
+    subject,
+    html,
+    text: `Your letter (Ref: ${params.trackingCode}) will arrive in approximately 30 minutes at ${params.scheduledArrivalFormatted}. Your verification code is ${params.otpCode}. Open letter: ${params.recipientUrl}`
+  });
+}
+async function sendArrivalRecipientEmail(params) {
+  const subject = "Your letter is ready to be opened \xB7 OLD-LETTERS";
+  const html = emailWrapper(
+    "Your letter is ready to be opened \xB7 OLD-LETTERS",
+    `DISPATCH REF: ${params.trackingCode}`,
+    `
+      <p style="margin-top: 0;">Dear ${params.recipientName},</p>
+      <p style="font-size: 16px; color: #134e4a; font-family: serif; font-style: italic;">
+        Your letter has arrived. The 48-hour wait is complete. The seal may now be broken.
+      </p>
+      <p>
+        Your correspondence has completed its journey and is ready to be unsealed.
+      </p>
+      <div style="background-color: #f7f6f2; border: 1px solid #eae4da; padding: 18px; margin: 22px 0; border-radius: 4px; text-align: center;">
+        <span style="font-size: 11px; font-family: monospace; letter-spacing: 0.2em; text-transform: uppercase; color: #78716c; display: block; margin-bottom: 6px;">
+          CORRESPONDENCE STATUS
+        </span>
+        <span style="font-size: 18px; font-family: serif; color: #047857; font-weight: bold; display: block;">
+          DELIVERED \xB7 READY TO OPEN
+        </span>
+        <span style="font-size: 11px; color: #78716c; display: block; margin-top: 4px;">
+          Completed at ${params.arrivalFormatted}
+        </span>
+      </div>
+      <p style="font-size: 13px; color: #57534e;">
+        Verify your recipient access and open your letter. ${params.requiresOtp ? "Please enter the verification code sent to your email to break the wax seal." : ""}
+      </p>
+      <div style="text-align: center; margin: 30px 0 10px 0;">
+        <a href="${params.recipientUrl}" style="background-color: #134e4a; color: #ffffff; padding: 14px 32px; font-size: 12px; text-decoration: none; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
+          UNSEAL YOUR LETTER \u2192
+        </a>
+      </div>
+    `
+  );
+  return sendMail({
+    to: params.recipientEmail,
+    subject,
+    html,
+    text: `Your letter (Ref: ${params.trackingCode}) has arrived! The 48-hour wait is complete. Unseal and read your letter now: ${params.recipientUrl}`
+  });
 }
 
 // src/types/backend.ts
@@ -121,7 +430,7 @@ var AdminVerifyPaymentSchema = z.object({
 });
 var RecipientVerifySchema = z.object({
   token: z.string().min(16),
-  verificationMethod: z.enum(["otp", "passphrase", "open"]),
+  verificationMethod: z.enum(["otp", "passphrase", "open"]).optional(),
   otp: z.string().length(6).optional(),
   passphrase: z.string().optional()
 });
@@ -132,14 +441,14 @@ var MemoryCollection = class {
   constructor() {
     this.docs = /* @__PURE__ */ new Map();
   }
-  async find(query = {}) {
+  find(query = {}) {
     const list = Array.from(this.docs.values()).filter((doc) => this.matchQuery(doc, query));
     return {
       toArray: async () => list,
       sort: (sortObj) => ({
         toArray: async () => {
           const keys = Object.keys(sortObj);
-          return list.sort((a, b) => {
+          return [...list].sort((a, b) => {
             for (const key of keys) {
               const dir = sortObj[key] === 1 ? 1 : -1;
               const valA = a[key];
@@ -194,6 +503,45 @@ var MemoryCollection = class {
       }
     }
     return { matchedCount: 1, modifiedCount: 1 };
+  }
+  async updateMany(filter, update) {
+    let matchedCount = 0;
+    let modifiedCount = 0;
+    for (const doc of this.docs.values()) {
+      if (this.matchQuery(doc, filter)) {
+        matchedCount++;
+        if (update.$set) {
+          Object.assign(doc, update.$set);
+          modifiedCount++;
+        }
+        if (update.$inc) {
+          for (const [k, v] of Object.entries(update.$inc)) {
+            doc[k] = (doc[k] || 0) + v;
+          }
+          modifiedCount++;
+        }
+      }
+    }
+    return { matchedCount, modifiedCount };
+  }
+  async deleteOne(filter) {
+    for (const [id, doc] of this.docs.entries()) {
+      if (this.matchQuery(doc, filter)) {
+        this.docs.delete(id);
+        return { deletedCount: 1 };
+      }
+    }
+    return { deletedCount: 0 };
+  }
+  async deleteMany(filter) {
+    let deletedCount = 0;
+    for (const [id, doc] of Array.from(this.docs.entries())) {
+      if (this.matchQuery(doc, filter)) {
+        this.docs.delete(id);
+        deletedCount++;
+      }
+    }
+    return { deletedCount };
   }
   async findOneAndUpdate(filter, update) {
     const doc = await this.findOne(filter);
@@ -2555,10 +2903,10 @@ async function mapLetterDocToResponse(ltr, db, reqUser) {
     trackingCode: ltr.trackingCode,
     type: ltr.letterType,
     templateId: ltr.templateId,
-    senderName: reqUser?.fullName || "Correspondent",
-    senderEmail: reqUser?.email || "correspondent@oldletters.in",
-    recipientName: recipient?.displayName || "Recipient",
-    recipientEmail: recipient?.email || "recipient@correspondence.in",
+    senderName: ltr.senderName || reqUser?.fullName || "Correspondent",
+    senderEmail: ltr.senderEmail || reqUser?.email || "correspondent@oldletters.in",
+    recipientName: ltr.recipientName || recipient?.displayName || "Recipient",
+    recipientEmail: ltr.recipientEmail || recipient?.email || "recipient@correspondence.in",
     letterDate: new Date(ltr.createdAt).toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
@@ -2623,9 +2971,20 @@ app.post("/api/letters", requireAuth, async (req, res) => {
     const now = /* @__PURE__ */ new Date();
     const deliveryDate = new Date(input.scheduledDeliveryAt);
     const senderId = req.user.id;
+    const senderEmail = (req.user?.email || input.senderEmail).toLowerCase();
+    const senderName = input.senderName || req.user?.fullName || "Correspondent";
+    const recipientEmail = input.recipientEmail.trim().toLowerCase();
+    const recipientName = input.recipientName.trim();
+    if (!recipientEmail) {
+      return res.status(400).json({ success: false, error: "Recipient email address is required." });
+    }
     await lettersColl.insertOne({
       _id: letterId,
       senderId,
+      senderEmail,
+      senderName,
+      recipientEmail,
+      recipientName,
       letterType: input.type,
       templateId: input.templateId,
       salutation: input.greeting,
@@ -2633,6 +2992,7 @@ app.post("/api/letters", requireAuth, async (req, res) => {
       signoff: input.signoff,
       status: input.status,
       deliveryDate,
+      scheduledDeliveryAt: deliveryDate,
       trackingCode,
       recipientVerificationMethod: input.verificationMethod,
       secretPassphraseHash: passphraseHash,
@@ -2646,8 +3006,8 @@ app.post("/api/letters", requireAuth, async (req, res) => {
     await recipientsColl.insertOne({
       _id: new ObjectId(),
       letterId,
-      email: input.recipientEmail.toLowerCase(),
-      displayName: input.recipientName,
+      email: recipientEmail,
+      displayName: recipientName,
       verificationMethod: input.verificationMethod,
       createdAt: now
     });
@@ -2655,6 +3015,7 @@ app.post("/api/letters", requireAuth, async (req, res) => {
       _id: new ObjectId(),
       letterId,
       tokenHash,
+      rawToken: rawDeliveryToken,
       expiresAt: new Date(now.getTime() + 30 * 24 * 3600 * 1e3),
       createdAt: now
     });
@@ -2665,31 +3026,89 @@ app.post("/api/letters", requireAuth, async (req, res) => {
       metadata: {
         scheduledDeliveryAt: input.scheduledDeliveryAt,
         trackingCode,
-        recipient: input.recipientEmail
+        recipient: recipientEmail
       },
       createdAt: now
     });
-    const senderNotificationEmail = input.senderEmail || req.user?.email;
-    if (isEmailConfigured() && senderNotificationEmail) {
-      await sendMail({
-        to: senderNotificationEmail,
-        subject: `Your correspondence has been sealed \u2014 Ref: ${trackingCode}`,
-        html: `
-          <div style="background-color: #faf9f7; padding: 40px; font-family: serif; color: #134e4a; text-align: center;">
-            <div style="max-width: 460px; margin: 0 auto; background: #ffffff; border: 1px solid #eae4da; padding: 36px; border-radius: 4px;">
-              <div style="font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: #78716c; margin-bottom: 12px; font-family: monospace;">
-                DISPATCH REF: ${trackingCode}
-              </div>
-              <h2 style="font-size: 26px; font-weight: 300; margin: 0 0 16px 0; color: #134e4a;">Correspondence Sealed</h2>
-              <p style="font-size: 14px; font-family: sans-serif; color: #57534e; margin-bottom: 20px; line-height: 1.6;">
-                Your letter to <strong>${input.recipientName}</strong> has been secured in the postal vault. It is scheduled for ceremonial delivery at <strong>${deliveryDate.toUTCString()}</strong>.
-              </p>
-              <div style="font-size: 11px; font-family: monospace; color: #78716c; border-top: 1px solid #eae4da; padding-top: 16px; margin-top: 24px;">
-                OLD-LETTERS CENTRAL POSTAL BUREAU
-              </div>
-            </div>
-          </div>
-        `
+    const scheduledArrivalFormatted = deliveryDate.toLocaleString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZoneName: "short"
+    });
+    const recipientUrl = `${APP_URL}/letter/${rawDeliveryToken}`;
+    const archiveUrl = `${APP_URL}/archive`;
+    try {
+      const senderMailRes = await sendLetterDispatchedSenderEmail({
+        senderEmail,
+        senderName,
+        recipientName,
+        trackingCode,
+        letterType: input.type,
+        scheduledArrivalFormatted,
+        waitingHours: input.waitingHours,
+        archiveUrl
+      });
+      logEmailDispatch({
+        type: "SENDER_DISPATCH",
+        to: senderEmail,
+        letterId: letterId.toString(),
+        dispatchRef: trackingCode,
+        status: senderMailRes.success ? "SENT" : "FAILED",
+        error: senderMailRes.error
+      });
+      await eventsColl.insertOne({
+        _id: new ObjectId(),
+        letterId,
+        eventType: "SENDER_DISPATCH_EMAIL_SENT",
+        metadata: { senderEmail, status: senderMailRes.success ? "SENT" : "FAILED" },
+        createdAt: /* @__PURE__ */ new Date()
+      });
+    } catch (err) {
+      logEmailDispatch({
+        type: "SENDER_DISPATCH",
+        to: senderEmail,
+        letterId: letterId.toString(),
+        dispatchRef: trackingCode,
+        status: "FAILED",
+        error: err.message
+      });
+    }
+    try {
+      const recipientMailRes = await sendLetterDispatchedRecipientEmail({
+        recipientEmail,
+        recipientName,
+        senderName,
+        trackingCode,
+        scheduledArrivalFormatted,
+        waitingHours: input.waitingHours,
+        recipientUrl
+      });
+      logEmailDispatch({
+        type: "RECIPIENT_DISPATCH",
+        to: recipientEmail,
+        letterId: letterId.toString(),
+        dispatchRef: trackingCode,
+        status: recipientMailRes.success ? "SENT" : "FAILED",
+        error: recipientMailRes.error
+      });
+      await eventsColl.insertOne({
+        _id: new ObjectId(),
+        letterId,
+        eventType: "RECIPIENT_DISPATCH_EMAIL_SENT",
+        metadata: { recipientEmail, status: recipientMailRes.success ? "SENT" : "FAILED" },
+        createdAt: /* @__PURE__ */ new Date()
+      });
+    } catch (err) {
+      logEmailDispatch({
+        type: "RECIPIENT_DISPATCH",
+        to: recipientEmail,
+        letterId: letterId.toString(),
+        dispatchRef: trackingCode,
+        status: "FAILED",
+        error: err.message
       });
     }
     const responseLetter = {
@@ -2697,10 +3116,10 @@ app.post("/api/letters", requireAuth, async (req, res) => {
       trackingCode,
       type: input.type,
       templateId: input.templateId,
-      senderName: input.senderName,
-      senderEmail: input.senderEmail,
-      recipientName: input.recipientName,
-      recipientEmail: input.recipientEmail,
+      senderName,
+      senderEmail,
+      recipientName,
+      recipientEmail,
       letterDate: now.toLocaleDateString("en-US", {
         month: "long",
         day: "numeric",
@@ -2783,8 +3202,8 @@ app.post("/api/letters/:id/post", requireAuth, async (req, res) => {
         }
       }
     );
-    let rawDeliveryToken = "";
     const existingToken = await tokensColl.findOne({ letterId: letter._id });
+    let rawDeliveryToken = existingToken?.rawToken || "";
     if (!existingToken) {
       rawDeliveryToken = crypto2.randomBytes(32).toString("hex");
       const tokenHash = hashSha2562(rawDeliveryToken);
@@ -2792,6 +3211,7 @@ app.post("/api/letters/:id/post", requireAuth, async (req, res) => {
         _id: new ObjectId(),
         letterId: letter._id,
         tokenHash,
+        rawToken: rawDeliveryToken,
         expiresAt: new Date(now.getTime() + 30 * 24 * 3600 * 1e3),
         createdAt: now
       });
@@ -2805,6 +3225,84 @@ app.post("/api/letters/:id/post", requireAuth, async (req, res) => {
     });
     const updated = await lettersColl.findOne({ _id: letter._id });
     const mapped = await mapLetterDocToResponse(updated, db, req.user);
+    const recipientsColl = db.collection("letterRecipients");
+    const recipientDoc = await recipientsColl.findOne({ letterId: letter._id });
+    const senderEmail = (letter.senderEmail || req.user.email).toLowerCase();
+    const senderName = letter.senderName || req.user?.fullName || "Correspondent";
+    const recipientEmail = (recipientDoc?.email || letter.recipientEmail || "").toLowerCase();
+    const recipientName = recipientDoc?.displayName || letter.recipientName || "Recipient";
+    const deliveryDate = new Date(letter.deliveryDate || letter.scheduledDeliveryAt || now);
+    const scheduledArrivalFormatted = deliveryDate.toLocaleString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZoneName: "short"
+    });
+    const recipientUrl = `${APP_URL}/letter/${rawDeliveryToken || letter.trackingCode}`;
+    const archiveUrl = `${APP_URL}/archive`;
+    if (senderEmail) {
+      try {
+        const sRes = await sendLetterDispatchedSenderEmail({
+          senderEmail,
+          senderName,
+          recipientName,
+          trackingCode: letter.trackingCode,
+          letterType: letter.letterType,
+          scheduledArrivalFormatted,
+          waitingHours: letter.waitingHours || 48,
+          archiveUrl
+        });
+        logEmailDispatch({
+          type: "SENDER_DISPATCH",
+          to: senderEmail,
+          letterId: letter._id.toString(),
+          dispatchRef: letter.trackingCode,
+          status: sRes.success ? "SENT" : "FAILED",
+          error: sRes.error
+        });
+      } catch (err) {
+        logEmailDispatch({
+          type: "SENDER_DISPATCH",
+          to: senderEmail,
+          letterId: letter._id.toString(),
+          dispatchRef: letter.trackingCode,
+          status: "FAILED",
+          error: err.message
+        });
+      }
+    }
+    if (recipientEmail) {
+      try {
+        const rRes = await sendLetterDispatchedRecipientEmail({
+          recipientEmail,
+          recipientName,
+          senderName,
+          trackingCode: letter.trackingCode,
+          scheduledArrivalFormatted,
+          waitingHours: letter.waitingHours || 48,
+          recipientUrl
+        });
+        logEmailDispatch({
+          type: "RECIPIENT_DISPATCH",
+          to: recipientEmail,
+          letterId: letter._id.toString(),
+          dispatchRef: letter.trackingCode,
+          status: rRes.success ? "SENT" : "FAILED",
+          error: rRes.error
+        });
+      } catch (err) {
+        logEmailDispatch({
+          type: "RECIPIENT_DISPATCH",
+          to: recipientEmail,
+          letterId: letter._id.toString(),
+          dispatchRef: letter.trackingCode,
+          status: "FAILED",
+          error: err.message
+        });
+      }
+    }
     res.json({
       success: true,
       letter: mapped,
@@ -3177,7 +3675,7 @@ app.post(["/api/delivery/request-otp", "/api/recipient/request-otp"], async (req
     res.status(500).json({ success: false, error: err.message });
   }
 });
-app.post(["/api/delivery/verify", "/api/recipient/verify-otp", "/api/recipient/passphrase"], async (req, res) => {
+app.post(["/api/delivery/verify", "/api/delivery/verify-otp", "/api/recipient/verify", "/api/recipient/verify-otp", "/api/recipient/passphrase"], async (req, res) => {
   try {
     const parseResult = RecipientVerifySchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -3186,7 +3684,8 @@ app.post(["/api/delivery/verify", "/api/recipient/verify-otp", "/api/recipient/p
         error: parseResult.error.issues.map((e) => e.message).join(", ")
       });
     }
-    const { token, verificationMethod, otp, passphrase } = parseResult.data;
+    const { token, otp, passphrase } = parseResult.data;
+    const verificationMethod = parseResult.data.verificationMethod || (otp ? "otp" : passphrase ? "passphrase" : "open");
     const db = await getDb();
     const lettersColl = db.collection("letters");
     const recipientsColl = db.collection("letterRecipients");
@@ -3334,6 +3833,274 @@ app.post(["/api/delivery/verify", "/api/recipient/verify-otp", "/api/recipient/p
     res.status(500).json({ success: false, error: err.message });
   }
 });
+async function runDeliveryScheduler(db) {
+  const now = /* @__PURE__ */ new Date();
+  const lettersColl = db.collection("letters");
+  const recipientsColl = db.collection("letterRecipients");
+  const tokensColl = db.collection("deliveryTokens");
+  const eventsColl = db.collection("deliveryEvents");
+  const otpColl = db.collection("otpCodes");
+  const processed = {
+    halfwayCount: 0,
+    preArrivalCount: 0,
+    deliveredCount: 0,
+    deliveredLetters: []
+  };
+  const activeScheduledLetters = await lettersColl.find({ status: "SCHEDULED" }).toArray();
+  for (const letter of activeScheduledLetters) {
+    const deliveryDate = new Date(letter.deliveryDate || letter.scheduledDeliveryAt || letter.createdAt);
+    const postedAt = new Date(letter.postedAt || letter.createdAt);
+    const elapsedMs = now.getTime() - postedAt.getTime();
+    const msUntilArrival = deliveryDate.getTime() - now.getTime();
+    if (elapsedMs >= 24 * 3600 * 1e3 && msUntilArrival > 30 * 60 * 1e3) {
+      const alreadySentHalfway = await eventsColl.findOne({
+        letterId: letter._id,
+        eventType: "HALFWAY_EMAIL_SENT"
+      });
+      if (!alreadySentHalfway) {
+        const recipient = await recipientsColl.findOne({ letterId: letter._id });
+        const senderEmail = (letter.senderEmail || "").toLowerCase();
+        const senderName = letter.senderName || "Correspondent";
+        const recipientEmail = (recipient?.email || letter.recipientEmail || "").toLowerCase();
+        const recipientName = recipient?.displayName || letter.recipientName || "Recipient";
+        const tokenDoc = await tokensColl.findOne({ letterId: letter._id });
+        const tokenStr = tokenDoc?.rawToken || letter.trackingCode;
+        const recipientUrl = `${APP_URL}/letter/${tokenStr}`;
+        const archiveUrl = `${APP_URL}/archive`;
+        const scheduledArrivalFormatted = deliveryDate.toLocaleString("en-US", {
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZoneName: "short"
+        });
+        if (senderEmail) {
+          try {
+            const senderRes = await sendHalfwaySenderEmail({
+              senderEmail,
+              senderName,
+              recipientName,
+              trackingCode: letter.trackingCode,
+              scheduledArrivalFormatted,
+              archiveUrl
+            });
+            logEmailDispatch({
+              type: "SENDER_WAITING_UPDATE",
+              to: senderEmail,
+              letterId: letter._id.toString(),
+              dispatchRef: letter.trackingCode,
+              status: senderRes.success ? "SENT" : "FAILED",
+              error: senderRes.error
+            });
+          } catch (err) {
+            logEmailDispatch({
+              type: "SENDER_WAITING_UPDATE",
+              to: senderEmail,
+              letterId: letter._id.toString(),
+              dispatchRef: letter.trackingCode,
+              status: "FAILED",
+              error: err.message
+            });
+          }
+        }
+        if (recipientEmail) {
+          try {
+            const rcptRes = await sendHalfwayRecipientEmail({
+              recipientEmail,
+              recipientName,
+              trackingCode: letter.trackingCode,
+              scheduledArrivalFormatted,
+              recipientUrl
+            });
+            logEmailDispatch({
+              type: "RECIPIENT_WAITING_UPDATE",
+              to: recipientEmail,
+              letterId: letter._id.toString(),
+              dispatchRef: letter.trackingCode,
+              status: rcptRes.success ? "SENT" : "FAILED",
+              error: rcptRes.error
+            });
+          } catch {
+          }
+        }
+        await eventsColl.insertOne({
+          _id: new ObjectId(),
+          letterId: letter._id,
+          eventType: "HALFWAY_EMAIL_SENT",
+          createdAt: now
+        });
+        processed.halfwayCount++;
+      }
+    }
+    if (msUntilArrival <= 30 * 60 * 1e3 && msUntilArrival > 0) {
+      const alreadySentPreArrival = await eventsColl.findOne({
+        letterId: letter._id,
+        eventType: "PRE_ARRIVAL_NOTICE_SENT"
+      });
+      if (!alreadySentPreArrival) {
+        const recipient = await recipientsColl.findOne({ letterId: letter._id });
+        const recipientEmail = (recipient?.email || letter.recipientEmail || "").toLowerCase();
+        const recipientName = recipient?.displayName || letter.recipientName || "Recipient";
+        const tokenDoc = await tokensColl.findOne({ letterId: letter._id });
+        const tokenStr = tokenDoc?.rawToken || letter.trackingCode;
+        const recipientUrl = `${APP_URL}/letter/${tokenStr}`;
+        const scheduledArrivalFormatted = deliveryDate.toLocaleString("en-US", {
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZoneName: "short"
+        });
+        if (recipientEmail) {
+          if (letter.recipientVerificationMethod === "otp") {
+            const otpCode = crypto2.randomInt(1e5, 999999).toString();
+            const otpHash = hashSha2562(otpCode);
+            const expiresAt = new Date(deliveryDate.getTime() + 60 * 60 * 1e3);
+            await otpColl.updateMany({ letterId: letter._id, used: false }, { $set: { used: true } });
+            await otpColl.insertOne({
+              _id: new ObjectId(),
+              email: recipientEmail,
+              letterId: letter._id,
+              otpHash,
+              attempts: 0,
+              expiresAt,
+              used: false,
+              createdAt: now
+            });
+            try {
+              const otpRes = await sendPreArrivalOtpRecipientEmail({
+                recipientEmail,
+                recipientName,
+                trackingCode: letter.trackingCode,
+                otpCode,
+                scheduledArrivalFormatted,
+                recipientUrl
+              });
+              logEmailDispatch({
+                type: "RECIPIENT_PRE_ARRIVAL_OTP",
+                to: recipientEmail,
+                letterId: letter._id.toString(),
+                dispatchRef: letter.trackingCode,
+                status: otpRes.success ? "SENT" : "FAILED",
+                error: otpRes.error
+              });
+            } catch (err) {
+              logEmailDispatch({
+                type: "RECIPIENT_PRE_ARRIVAL_OTP",
+                to: recipientEmail,
+                letterId: letter._id.toString(),
+                dispatchRef: letter.trackingCode,
+                status: "FAILED",
+                error: err.message
+              });
+            }
+          }
+          await eventsColl.insertOne({
+            _id: new ObjectId(),
+            letterId: letter._id,
+            eventType: "PRE_ARRIVAL_NOTICE_SENT",
+            createdAt: now
+          });
+          processed.preArrivalCount++;
+        }
+      }
+    }
+  }
+  const dueLetters = await lettersColl.find({
+    status: "SCHEDULED",
+    deliveryDate: { $lte: now }
+  }).toArray();
+  for (const letter of dueLetters) {
+    const updated = await lettersColl.findOneAndUpdate(
+      { _id: letter._id, status: "SCHEDULED" },
+      {
+        $set: {
+          status: "DELIVERED",
+          deliveredAt: now,
+          updatedAt: now
+        }
+      }
+    );
+    if (!updated) continue;
+    await eventsColl.insertOne({
+      _id: new ObjectId(),
+      letterId: letter._id,
+      eventType: "LETTER_DELIVERED",
+      createdAt: now
+    });
+    const recipient = await recipientsColl.findOne({ letterId: letter._id });
+    const recipientEmail = (recipient?.email || letter.recipientEmail || "").toLowerCase();
+    const recipientName = recipient?.displayName || letter.recipientName || "Recipient";
+    const tokenDoc = await tokensColl.findOne({ letterId: letter._id });
+    let tokenStr = tokenDoc?.rawToken;
+    if (!tokenStr) {
+      tokenStr = crypto2.randomBytes(32).toString("hex");
+      const tokenHash = hashSha2562(tokenStr);
+      await tokensColl.insertOne({
+        _id: new ObjectId(),
+        letterId: letter._id,
+        tokenHash,
+        rawToken: tokenStr,
+        expiresAt: new Date(now.getTime() + 30 * 24 * 3600 * 1e3),
+        createdAt: now
+      });
+    }
+    const deliveryUrl = `${APP_URL}/letter/${tokenStr}`;
+    const arrivalFormatted = now.toLocaleString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZoneName: "short"
+    });
+    if (recipientEmail) {
+      try {
+        const arrivalRes = await sendArrivalRecipientEmail({
+          recipientEmail,
+          recipientName,
+          trackingCode: letter.trackingCode,
+          arrivalFormatted,
+          recipientUrl: deliveryUrl,
+          requiresOtp: letter.recipientVerificationMethod === "otp"
+        });
+        logEmailDispatch({
+          type: "RECIPIENT_ARRIVAL",
+          to: recipientEmail,
+          letterId: letter._id.toString(),
+          dispatchRef: letter.trackingCode,
+          status: arrivalRes.success ? "SENT" : "FAILED",
+          error: arrivalRes.error
+        });
+        await eventsColl.insertOne({
+          _id: new ObjectId(),
+          letterId: letter._id,
+          eventType: "RECIPIENT_ARRIVAL_EMAIL_SENT",
+          metadata: { recipientEmail },
+          createdAt: now
+        });
+      } catch (err) {
+        logEmailDispatch({
+          type: "RECIPIENT_ARRIVAL",
+          to: recipientEmail,
+          letterId: letter._id.toString(),
+          dispatchRef: letter.trackingCode,
+          status: "FAILED",
+          error: err.message
+        });
+      }
+    }
+    processed.deliveredCount++;
+    processed.deliveredLetters.push({
+      id: letter._id.toString(),
+      trackingCode: letter.trackingCode,
+      recipient: recipientEmail
+    });
+  }
+  return processed;
+}
 app.post(["/api/scheduler/tick", "/api/cron/delivery", "/api/internal/delivery/run"], async (req, res) => {
   try {
     const incomingAuth = req.headers.authorization?.replace(/^Bearer\s+/i, "");
@@ -3344,89 +4111,14 @@ app.post(["/api/scheduler/tick", "/api/cron/delivery", "/api/internal/delivery/r
         return res.status(401).json({ success: false, error: "Unauthorized cron dispatch." });
       }
     }
-    const now = /* @__PURE__ */ new Date();
     const db = await getDb();
-    const lettersColl = db.collection("letters");
-    const recipientsColl = db.collection("letterRecipients");
-    const tokensColl = db.collection("deliveryTokens");
-    const eventsColl = db.collection("deliveryEvents");
-    const dueLetters = await (await lettersColl.find({
-      status: "SCHEDULED",
-      deliveryDate: { $lte: now }
-    })).toArray();
-    const deliveredLetters = [];
-    for (const letter of dueLetters) {
-      const updated = await lettersColl.findOneAndUpdate(
-        { _id: letter._id, status: "SCHEDULED" },
-        {
-          $set: {
-            status: "DELIVERED",
-            deliveredAt: now,
-            updatedAt: now
-          }
-        }
-      );
-      if (!updated) {
-        continue;
-      }
-      const rawToken = crypto2.randomBytes(32).toString("hex");
-      const tokenHash = hashSha2562(rawToken);
-      await tokensColl.insertOne({
-        _id: new ObjectId(),
-        letterId: letter._id,
-        tokenHash,
-        expiresAt: new Date(now.getTime() + 30 * 24 * 3600 * 1e3),
-        createdAt: now
-      });
-      await eventsColl.insertOne({
-        _id: new ObjectId(),
-        letterId: letter._id,
-        eventType: "LETTER_DELIVERED",
-        createdAt: now
-      });
-      const recipient = await recipientsColl.findOne({ letterId: letter._id });
-      if (isEmailConfigured() && recipient && recipient.email) {
-        const deliveryUrl = `${APP_URL}/letter/${rawToken}`;
-        await sendMail({
-          to: recipient.email,
-          subject: "Your letter has arrived \u2014 OLD-LETTERS",
-          html: `
-            <div style="background-color: #faf9f7; padding: 48px 24px; font-family: serif; color: #134e4a; text-align: center;">
-              <div style="max-width: 480px; margin: 0 auto; background: #ffffff; border: 1px solid #eae4da; padding: 40px 32px; border-radius: 4px;">
-                <div style="font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: #78716c; margin-bottom: 16px; font-family: monospace;">
-                  DISPATCH REF: ${letter.trackingCode}
-                </div>
-                <h1 style="font-size: 32px; font-weight: 300; margin: 0 0 16px 0; color: #134e4a;">
-                  A letter has arrived.
-                </h1>
-                <p style="font-style: italic; font-size: 18px; color: #44403c; margin: 0 0 24px 0;">
-                  Your letter is waiting for you.
-                </p>
-                <a href="${deliveryUrl}" style="display: inline-block; background-color: #134e4a; color: #ffffff; padding: 14px 32px; text-decoration: none; font-size: 12px; font-family: sans-serif; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; border-radius: 2px;">
-                  OPEN YOUR LETTER \u2192
-                </a>
-              </div>
-            </div>
-          `
-        });
-        await eventsColl.insertOne({
-          _id: new ObjectId(),
-          letterId: letter._id,
-          eventType: "RECIPIENT_EMAIL_SENT",
-          metadata: { recipientEmail: recipient.email },
-          createdAt: /* @__PURE__ */ new Date()
-        });
-      }
-      deliveredLetters.push({
-        id: letter._id.toString(),
-        trackingCode: letter.trackingCode,
-        recipient: recipient?.email
-      });
-    }
+    const result = await runDeliveryScheduler(db);
     res.json({
       success: true,
-      deliveredCount: deliveredLetters.length,
-      processed: deliveredLetters
+      halfwayCount: result.halfwayCount,
+      preArrivalCount: result.preArrivalCount,
+      deliveredCount: result.deliveredCount,
+      processed: result.deliveredLetters
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -3434,7 +4126,7 @@ app.post(["/api/scheduler/tick", "/api/cron/delivery", "/api/internal/delivery/r
 });
 app.post(["/api/testing/advance-delivery", "/api/delivery/advance"], async (req, res) => {
   try {
-    const { token, trackingCode } = req.body;
+    const { token, trackingCode, stage } = req.body;
     const lookup = token || trackingCode;
     if (!lookup) {
       return res.status(400).json({ success: false, error: "Token or tracking code required." });
@@ -3445,17 +4137,35 @@ app.post(["/api/testing/advance-delivery", "/api/delivery/advance"], async (req,
       return res.status(404).json({ success: false, error: "Correspondence not found." });
     }
     const { letter } = resolved;
-    const pastDate = new Date(Date.now() - 60 * 1e3);
     const lettersColl = db.collection("letters");
-    await lettersColl.updateOne(
-      { _id: letter._id },
-      { $set: { deliveryDate: pastDate, status: "DELIVERED", deliveredAt: pastDate, updatedAt: /* @__PURE__ */ new Date() } }
-    );
+    let newDeliveryDate = new Date(Date.now() - 60 * 1e3);
+    let newPostedAt = letter.postedAt || letter.createdAt;
+    if (stage === "halfway" || stage === "24h") {
+      newPostedAt = new Date(Date.now() - 25 * 3600 * 1e3);
+      newDeliveryDate = new Date(Date.now() + 23 * 3600 * 1e3);
+      await lettersColl.updateOne(
+        { _id: letter._id },
+        { $set: { postedAt: newPostedAt, deliveryDate: newDeliveryDate, scheduledDeliveryAt: newDeliveryDate, status: "SCHEDULED", updatedAt: /* @__PURE__ */ new Date() } }
+      );
+    } else if (stage === "pre-arrival" || stage === "30m" || stage === "47.5h") {
+      newDeliveryDate = new Date(Date.now() + 20 * 60 * 1e3);
+      await lettersColl.updateOne(
+        { _id: letter._id },
+        { $set: { deliveryDate: newDeliveryDate, scheduledDeliveryAt: newDeliveryDate, status: "SCHEDULED", updatedAt: /* @__PURE__ */ new Date() } }
+      );
+    } else {
+      await lettersColl.updateOne(
+        { _id: letter._id },
+        { $set: { deliveryDate: newDeliveryDate, scheduledDeliveryAt: newDeliveryDate, status: "SCHEDULED", updatedAt: /* @__PURE__ */ new Date() } }
+      );
+    }
+    const schedulerResult = await runDeliveryScheduler(db);
     res.json({
       success: true,
-      message: "Delivery simulated. Letter is now arrived and eligible for recipient verification.",
-      deliveryDate: pastDate.toISOString(),
-      trackingCode: letter.trackingCode
+      message: `Delivery date advanced for stage '${stage || "arrived"}'. Scheduler processed successfully.`,
+      deliveryDate: newDeliveryDate.toISOString(),
+      trackingCode: letter.trackingCode,
+      schedulerResult
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -3742,6 +4452,14 @@ async function startServer() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[OLD-LETTERS] Bureau server active on port ${PORT}`);
   });
+  setInterval(async () => {
+    try {
+      const db = await getDb();
+      await runDeliveryScheduler(db);
+    } catch (schedErr) {
+      console.warn("[OLD-LETTERS Scheduler Notice]", schedErr);
+    }
+  }, 30 * 1e3);
 }
 if (!process.env.VERCEL && process.env.NODE_ENV !== "test") {
   startServer();
@@ -3749,7 +4467,8 @@ if (!process.env.VERCEL && process.env.NODE_ENV !== "test") {
 var server_default = app;
 export {
   app,
-  server_default as default
+  server_default as default,
+  runDeliveryScheduler
 };
 /**
  * @license

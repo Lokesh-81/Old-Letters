@@ -15,10 +15,10 @@ export const TermsOfServiceView: React.FC<LegalPageProps> = ({ onBack }) => {
               CENTRAL POSTAL DESK · LEGAL REGISTRY
             </div>
             <h1 className="text-3xl sm:text-4xl text-teal-950 font-normal tracking-tight">
-              Terms of Service
+              Terms & Conditions
             </h1>
             <div className="text-xs font-mono text-stone-400 mt-1">
-              Last updated: October 1, 2026
+              Effective Date: October 1, 2026 · Bureau Reference: TOC-1892
             </div>
           </div>
 
@@ -31,101 +31,144 @@ export const TermsOfServiceView: React.FC<LegalPageProps> = ({ onBack }) => {
           </button>
         </div>
 
-        {/* Informational Policy Notice */}
-        <div className="p-4 bg-amber-50/70 border border-amber-200/80 rounded-xs text-xs font-sans text-amber-900 leading-relaxed">
-          <span className="font-semibold uppercase tracking-wider text-[10px] block mb-0.5">
-            Informational Legal Notice
+        {/* Legal Preamble Notice */}
+        <div className="p-4 bg-[#f4efe6] border border-[#e3dacf] rounded-xs text-xs font-sans text-stone-800 leading-relaxed">
+          <span className="font-semibold uppercase tracking-wider text-[10px] font-mono text-teal-900 block mb-1">
+            General Correspondence Terms & Operating Agreement
           </span>
-          These Terms of Service govern the use of the OLD-LETTERS platform.
-          They are an informational terms template for user transparency and should be reviewed for jurisdictional legal requirements.
+          Please read these Terms & Conditions carefully prior to composing, dispatching, or receiving correspondence via OLD-LETTERS.
+          By creating an account, dispatching a letter, or accessing a correspondence link, you agree to be bound by these Terms.
         </div>
 
         {/* Content Body */}
         <div className="space-y-8 font-sans text-stone-700 text-sm leading-relaxed">
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              1. The Digital Postal Agreement
+              1. Digital Correspondence Service
             </h2>
             <p className="font-light">
-              By accessing OLD-LETTERS, creating a correspondence account, or composing a letter, you agree to abide by these Terms of Service.
-              OLD-LETTERS is an intentional correspondence service designed around deliberate pacing:
-              <span className="font-mono text-xs block my-1 font-normal text-teal-950">
-                WRITE → SEAL → WAIT → ARRIVE
-              </span>
-              Our platform deliberately rejects instant delivery in favor of a mandatory minimum waiting interval to cultivate patience,
-              mindfulness, and emotional weight.
+              OLD-LETTERS operates a specialized digital correspondence service built on intentional pacing and mindful communication.
+              Unlike instant messaging or conventional email, our platform introduces a deliberate temporal passage—with a mandatory
+              minimum waiting interval of 48 hours—allowing words to carry the emotional gravitas, anticipation, and permanence of
+              traditional paper post.
             </p>
           </section>
 
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              2. User Accounts & Security
+              2. User Responsibilities & Recipient Accuracy
             </h2>
             <p className="font-light">
-              You are responsible for maintaining the confidentiality of your account credentials and for all correspondence dispatched
-              under your account. You agree to provide a valid email address and to notify us immediately of any unauthorized access to your account.
+              Users are solely responsible for the information, salutations, body content, attachments, and recipient information they provide.
+              You must supply a valid, working, and accessible email address for your intended recipient.
+            </p>
+            <p className="font-light">
+              <strong>Pre-Dispatch Verification:</strong> You must carefully verify recipient contact details before sealing and dispatching a letter.
+              Because letters enter our automated correspondence vault immediately upon sealing, OLD-LETTERS cannot verify the accuracy of recipient
+              addresses and assumes no responsibility for letters sent to invalid, outdated, or mistyped email addresses.
             </p>
           </section>
 
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              3. Acceptable Use Policy
+              3. Acceptable Use & Prohibited Content
             </h2>
             <p className="font-light">
-              You agree never to use OLD-LETTERS to compose, seal, or transmit:
+              OLD-LETTERS is dedicated to thoughtful, personal, and artistic correspondence. You agree not to use the service for:
             </p>
             <ul className="list-disc pl-5 space-y-1.5 font-light text-xs sm:text-sm">
-              <li>Harassing, defamatory, threatening, abusive, or hateful content.</li>
-              <li>Unsolicited commercial advertising, bulk spam, or fraudulent schemes.</li>
-              <li>Material that infringes upon third-party copyrights, trademarks, or privacy rights.</li>
-              <li>Malicious payloads, viruses, or code designed to disrupt postal service operations.</li>
+              <li>Illegal, harmful, abusive, fraudulent, harassing, defamatory, or threatening communications.</li>
+              <li>Hate speech, extortion, blackmail, or intimidation of any kind.</li>
+              <li>Unsolicited commercial advertisements, bulk marketing, scams, or chain correspondence.</li>
+              <li>Infringing on intellectual property rights, privacy rights, or trade secrets of third parties.</li>
+              <li>Transmitting malware, computer viruses, phishing links, or destructive code.</li>
             </ul>
             <p className="font-light text-xs text-stone-500">
-              The Bureau reserves the right to suspend or terminate accounts that violate our acceptable use standards.
+              OLD-LETTERS reserves the right, upon notice of violation or legal inquiry, to terminate accounts and suspend transmissions that breach this section.
             </p>
           </section>
 
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              4. Intellectual Property & Letter Ownership
+              4. Delivery Timing, System Schedules & Technical Disclaimers
             </h2>
             <p className="font-light">
-              You retain complete and exclusive ownership of all prose, personal sentiments, titles, and media you submit.
-              OLD-LETTERS does not claim any copyright or ownership over your letters. You grant OLD-LETTERS only the limited technical
-              license required to securely store, format, and deliver your letter to your designated recipient.
+              Delivery timing is based on the selected delivery schedule (minimum 48 hours). All delivery, arrival, and unsealing timestamps
+              are system-generated by our automated scheduling infrastructure.
+            </p>
+            <p className="font-light">
+              While our system processes scheduled dispatches around the clock, electronic transmissions and notifications may be affected by
+              technical issues beyond our control, including internet routing delays, recipient email service spam filters, local network disruptions,
+              server maintenance, or third-party email provider outages. OLD-LETTERS makes best-effort commitments to dispatch notifications at the
+              appointed hour, but cannot make unrealistic guarantees of instantaneous inbox delivery.
             </p>
           </section>
 
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              5. Delivery Pacing & Best-Effort Transit
+              5. Finality of Dispatch & Non-Refundable Payment Policy
             </h2>
             <p className="font-light">
-              Letters dispatched through OLD-LETTERS enter our temporal vault and cannot be unsealed prior to their scheduled arrival time.
-              While our automated delivery system operates around the clock, electronic message delivery may occasionally experience brief
-              transient delays caused by internet routing, recipient mail service filtering, or scheduled maintenance.
+              <strong>Irrevocability of Dispatched Letters:</strong> Once a letter has been sealed and submitted, it enters our secure archival
+              vault and delivery pipeline. Changing, altering, editing, or cancelling a dispatched letter may not be possible once it has entered
+              the delivery process.
+            </p>
+            <p className="font-light">
+              <strong>Non-Refundable Policy:</strong> Once a letter, custom stationery upgrade, multimedia enclosure, or paid correspondence feature
+              has been successfully submitted, all payments and fees are <strong>NON-REFUNDABLE</strong>, except where explicitly required by applicable
+              statutory law or where OLD-LETTERS explicitly approves a refund in writing under exceptional administrative discretion.
             </p>
           </section>
 
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              6. Manual Payments & Bureau Upgrades
+              6. Sealed Correspondence & Security Verification
             </h2>
             <p className="font-light">
-              Certain premium stationery editions, extended vault durations, or live ceremony sessions may be offered via manual UPI payments.
-              Payments are verified by administrative review against bank reference numbers. Approved features are unlocked permanently or
-              for the designated correspondence item.
+              <strong>Sealed Transit Guarantee:</strong> OLD-LETTERS treats sealed correspondence with strict confidentiality and does not reveal sealed
+              letter contents to recipients, third parties, or public previews before the scheduled opening time has arrived.
+            </p>
+            <p className="font-light">
+              <strong>Recipient Verification:</strong> Security verification (such as an email one-time passcode [OTP] or a secret passphrase chosen
+              by the sender) may be required before the recipient is permitted to unseal and read the letter upon arrival.
+            </p>
+            <p className="font-light">
+              <strong>Account & Verification Protection:</strong> Users and recipients are responsible for protecting access to their email accounts,
+              devices, and verification codes. OLD-LETTERS is not responsible for unauthorized letter openings resulting from compromised recipient email
+              inboxes or shared verification credentials.
             </p>
           </section>
 
           <section className="space-y-3">
             <h2 className="font-serif text-xl text-teal-950 font-medium">
-              7. Limitation of Liability
+              7. Intellectual Property & Authorship
             </h2>
             <p className="font-light">
-              OLD-LETTERS is provided on an &ldquo;as is&rdquo; and &ldquo;as available&rdquo; basis. To the maximum extent permitted by law,
-              OLD-LETTERS shall not be liable for any indirect, incidental, or consequential damages resulting from lost letters, delayed deliveries,
-              or unauthorized account access beyond our reasonable security controls.
+              You retain all ownership, moral rights, and copyright in the text, thoughts, titles, and multimedia enclosures you compose.
+              OLD-LETTERS claims no ownership over your private correspondence. You grant OLD-LETTERS only the limited, non-exclusive technical
+              license to store, transmit, format, and display the letter to your intended recipient in accordance with these Terms.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="font-serif text-xl text-teal-950 font-medium">
+              8. Limitation of Liability
+            </h2>
+            <p className="font-light">
+              To the maximum extent permitted by applicable law, OLD-LETTERS is provided on an &ldquo;as is&rdquo; and &ldquo;as available&rdquo;
+              basis without warranties of any kind, whether express or implied. Under no circumstances shall OLD-LETTERS, its operators, or affiliates
+              be liable for any direct, indirect, incidental, special, consequential, or punitive damages arising out of your use of the service,
+              delayed notifications, recipient email rejection, or unauthorized unsealing due to third-party actions.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="font-serif text-xl text-teal-950 font-medium">
+              9. Contact & Inquiries
+            </h2>
+            <p className="font-light">
+              Questions regarding these Terms & Conditions may be directed to our postal desk administration at
+              <code className="font-mono text-xs ml-1 text-teal-950">admin@oldletters.in</code>.
             </p>
           </section>
         </div>
@@ -140,7 +183,7 @@ export const TermsOfServiceView: React.FC<LegalPageProps> = ({ onBack }) => {
             ← Back to Correspondence Desk
           </button>
           <span className="text-[10px] font-mono text-stone-400">
-            OLD-LETTERS REGISTRY NO. T-1892
+            OLD-LETTERS LEGAL REGISTRY · T-1892
           </span>
         </div>
       </div>

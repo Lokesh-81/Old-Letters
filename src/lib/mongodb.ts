@@ -184,14 +184,14 @@ export interface AuditLogDoc extends Document {
 class MemoryCollection<T extends { _id?: any }> {
   private docs: Map<string, T> = new Map();
 
-  async find(query: any = {}) {
+  find(query: any = {}) {
     const list = Array.from(this.docs.values()).filter((doc: any) => this.matchQuery(doc, query));
     return {
       toArray: async () => list,
       sort: (sortObj: any) => ({
         toArray: async () => {
           const keys = Object.keys(sortObj);
-          return list.sort((a: any, b: any) => {
+          return [...list].sort((a: any, b: any) => {
             for (const key of keys) {
               const dir = sortObj[key] === 1 ? 1 : -1;
               const valA = a[key];
@@ -250,6 +250,48 @@ class MemoryCollection<T extends { _id?: any }> {
       }
     }
     return { matchedCount: 1, modifiedCount: 1 };
+  }
+
+  async updateMany(filter: any, update: any) {
+    let matchedCount = 0;
+    let modifiedCount = 0;
+    for (const doc of this.docs.values()) {
+      if (this.matchQuery(doc, filter)) {
+        matchedCount++;
+        if (update.$set) {
+          Object.assign(doc, update.$set);
+          modifiedCount++;
+        }
+        if (update.$inc) {
+          for (const [k, v] of Object.entries(update.$inc)) {
+            (doc as any)[k] = ((doc as any)[k] || 0) + (v as number);
+          }
+          modifiedCount++;
+        }
+      }
+    }
+    return { matchedCount, modifiedCount };
+  }
+
+  async deleteOne(filter: any) {
+    for (const [id, doc] of this.docs.entries()) {
+      if (this.matchQuery(doc, filter)) {
+        this.docs.delete(id);
+        return { deletedCount: 1 };
+      }
+    }
+    return { deletedCount: 0 };
+  }
+
+  async deleteMany(filter: any) {
+    let deletedCount = 0;
+    for (const [id, doc] of Array.from(this.docs.entries())) {
+      if (this.matchQuery(doc, filter)) {
+        this.docs.delete(id);
+        deletedCount++;
+      }
+    }
+    return { deletedCount };
   }
 
   async findOneAndUpdate(filter: any, update: any) {

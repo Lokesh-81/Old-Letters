@@ -157,7 +157,18 @@ export const StationeryGallery: React.FC<StationeryGalleryProps> = ({
   return (
     <div className="w-full max-w-5xl mx-auto space-y-6 select-none font-serif">
       {/* Editorial Header */}
-      <div className="text-center space-y-1.5">
+      <div className="text-center space-y-1.5 relative">
+        {onBackToCompose && (
+          <div className="sm:absolute sm:left-0 sm:top-0 text-left mb-2 sm:mb-0">
+            <button
+              type="button"
+              onClick={onBackToCompose}
+              className="text-xs font-mono text-stone-500 hover:text-stone-900 flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              ← Back to Writing
+            </button>
+          </div>
+        )}
         <div className="text-[11px] font-mono tracking-[0.25em] uppercase text-stone-500">
           CENTRAL POSTAL DESK · PHYSICAL PAPERS
         </div>
@@ -483,6 +494,18 @@ export const StationeryGallery: React.FC<StationeryGalleryProps> = ({
               <span>→</span>
             </button>
           </div>
+
+          {onBackToCompose && (
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={onBackToCompose}
+                className="text-xs font-mono text-stone-500 hover:text-stone-800 cursor-pointer"
+              >
+                ← Cancel and return to Writing
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -518,9 +541,11 @@ export const StationeryGallery: React.FC<StationeryGalleryProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsFullscreenPreview(false)}
-                    className="w-8 h-8 rounded-full bg-stone-800 hover:bg-stone-700 text-white flex items-center justify-center text-sm font-mono cursor-pointer"
+                    aria-label="Close"
+                    className="px-3 py-1.5 rounded-xs border border-stone-700 bg-stone-800 hover:bg-stone-700 text-stone-200 hover:text-white flex items-center gap-1.5 text-xs font-mono cursor-pointer transition-colors"
                   >
-                    ✕
+                    <span>×</span>
+                    <span>Close</span>
                   </button>
                 </div>
               </div>
@@ -540,7 +565,15 @@ export const StationeryGallery: React.FC<StationeryGalleryProps> = ({
                 />
               </div>
 
-              <div className="flex justify-end pt-2">
+              <div className="flex items-center justify-between pt-3 border-t border-stone-800">
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreenPreview(false)}
+                  className="px-5 py-2.5 rounded-xs border border-stone-600 bg-stone-800/90 hover:bg-stone-700 text-stone-200 hover:text-white font-sans text-xs tracking-wider uppercase transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <span>×</span>
+                  <span>Close</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -549,9 +582,9 @@ export const StationeryGallery: React.FC<StationeryGalleryProps> = ({
                     if (onConfirmStationery) onConfirmStationery(activeTemplate);
                     else if (onBackToCompose) onBackToCompose();
                   }}
-                  className="py-2.5 px-6 rounded-xs bg-[#c5a059] hover:bg-[#dec183] text-stone-950 font-sans text-xs tracking-wider uppercase font-semibold transition-colors cursor-pointer"
+                  className="py-2.5 px-6 rounded-xs bg-[#c5a059] hover:bg-[#dec183] text-stone-950 font-sans text-xs tracking-[0.15em] uppercase font-semibold transition-colors cursor-pointer shadow-sm"
                 >
-                  Choose {activeTemplate.name} & Begin Writing →
+                  USE THIS STATIONERY →
                 </button>
               </div>
             </div>
@@ -579,9 +612,11 @@ export const StationeryGallery: React.FC<StationeryGalleryProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsTextureInspectorOpen(false)}
-                  className="w-7 h-7 rounded-full bg-stone-200 hover:bg-stone-300 flex items-center justify-center text-xs font-mono cursor-pointer"
+                  aria-label="Close"
+                  className="px-2.5 py-1 rounded-xs bg-stone-200 hover:bg-stone-300 text-stone-700 flex items-center gap-1 text-xs font-mono cursor-pointer transition-colors"
                 >
-                  ✕
+                  <span>×</span>
+                  <span>Close</span>
                 </button>
               </div>
 
@@ -662,13 +697,21 @@ export const StationeryGallery: React.FC<StationeryGalleryProps> = ({
                 </p>
               </div>
 
-              <div className="pt-2 flex justify-end">
+              <div className="pt-3 border-t border-stone-200 flex justify-between items-center">
                 <button
                   type="button"
                   onClick={() => setIsTextureInspectorOpen(false)}
-                  className="px-5 py-2 rounded-xs bg-teal-900 hover:bg-teal-800 text-white text-xs font-sans uppercase tracking-wider cursor-pointer"
+                  className="px-4 py-2 rounded-xs border border-stone-300 text-stone-700 hover:bg-stone-100 text-xs font-sans uppercase tracking-wider cursor-pointer"
                 >
-                  Close Inspection
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsTextureInspectorOpen(false)}
+                  className="px-5 py-2 rounded-xs bg-teal-900 hover:bg-teal-800 text-white text-xs font-sans uppercase tracking-wider cursor-pointer flex items-center gap-1.5"
+                >
+                  <span>×</span>
+                  <span>Close Inspection</span>
                 </button>
               </div>
             </div>
