@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test:backend": "tsx -e \"import { getDb } from './src/lib/mongodb'; console.log('Backend MongoDB module loaded successfully');\""
+    "test": "tsx scripts/test-backend.ts",
+    "test:backend": "tsx scripts/test-backend.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

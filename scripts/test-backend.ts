@@ -415,6 +415,85 @@ async function runTests() {
     throw new Error('PUT /api/user/password failed');
   }
 
+  // [TEST 15] SPA URL Route Resolution for /profile, /account, /bureau
+  console.log('\n[TEST 15] Testing Navigation URL Route Resolution (/profile, /account, /bureau)...');
+  for (const route of ['/profile', '/account', '/bureau']) {
+    const routeRes = await fetch(`${baseUrl}${route}`, {
+      headers: { Accept: 'text/html' },
+    });
+    console.log(`Route ${route} resolution status:`, routeRes.status);
+    if (routeRes.status !== 200) {
+      throw new Error(`Route ${route} failed to resolve with status 200`);
+    }
+  }
+  console.log('All navigation route paths (/profile, /account, /bureau) resolved successfully.');
+
+  // [TEST 16] Session restoration after page refresh (Cookie-based auth against /api/auth/me)
+  console.log('\n[TEST 16] Testing Session Restoration after Refresh via /api/auth/me...');
+  const meCookieRes = await request('/api/auth/me', {
+    headers: { Cookie: `oldletters_session=${validToken}; oldletters_logged_in=1` },
+  });
+  console.log('/api/auth/me Cookie Auth Status (expect 200):', meCookieRes.status, 'Authenticated:', meCookieRes.data.authenticated);
+  if (!meCookieRes.ok || !meCookieRes.data.authenticated || !meCookieRes.data.user) {
+    throw new Error('/api/auth/me failed to restore session from cookie');
+  }
+  if (meCookieRes.data.user.email !== testEmail.toLowerCase()) {
+    throw new Error(`Expected email ${testEmail.toLowerCase()} but got ${meCookieRes.data.user.email}`);
+  }
+
+  // [TEST 17] Google Login -> Refresh -> Dashboard Flow
+  console.log('\n[TEST 17] Testing Google Login -> Refresh -> Dashboard Flow...');
+  const googleEmail = `google.correspondent.${Date.now()}@gmail.com`;
+  const googleLoginRes = await request('/api/auth/google/test-login', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: googleEmail,
+      googleId: `goog_${Date.now()}`,
+      fullName: 'Siddhartha Mukherjee',
+      termsAccepted: true,
+      privacyAccepted: true,
+      termsVersion: '1.0.0',
+      privacyVersion: '1.0.0',
+    }),
+  });
+  console.log('Google login status (expect 200):', googleLoginRes.status, 'Token exists:', !!googleLoginRes.data.token);
+  if (!googleLoginRes.ok || !googleLoginRes.data.token || !googleLoginRes.data.user) {
+    throw new Error('Google test login failed');
+  }
+  const googleToken = googleLoginRes.data.token;
+  // Verify Google session restored via /api/auth/me
+  const googleMeRes = await request('/api/auth/me', {
+    headers: { Authorization: `Bearer ${googleToken}` },
+  });
+  console.log('Google session restore status:', googleMeRes.status, 'Provider:', googleMeRes.data.user?.authProvider);
+  if (!googleMeRes.ok || !googleMeRes.data.authenticated || googleMeRes.data.user.authProvider !== 'GOOGLE') {
+    throw new Error('Google session failed to restore with GOOGLE provider');
+  }
+  // Verify bureau summary accessible for Google user
+  const googleBureauRes = await request('/api/user/bureau-summary', {
+    headers: { Authorization: `Bearer ${googleToken}` },
+  });
+  console.log('Google user bureau summary status (expect 200):', googleBureauRes.status);
+  if (!googleBureauRes.ok || !googleBureauRes.data.stats) {
+    throw new Error('Google user bureau summary failed');
+  }
+
+  // [TEST 18] Logout Flow -> Public Navigation State Restoration
+  console.log('\n[TEST 18] Testing Logout -> Public Navigation State Restoration...');
+  const finalLogoutRes = await request('/api/auth/logout', {
+    method: 'POST',
+  });
+  console.log('Logout status (expect 200):', finalLogoutRes.status);
+  if (!finalLogoutRes.ok || !finalLogoutRes.data.success) {
+    throw new Error('Logout failed');
+  }
+  // Verify unauthenticated /api/auth/me returns authenticated: false
+  const unauthMe = await request('/api/auth/me');
+  console.log('Unauthenticated /api/auth/me response:', unauthMe.data);
+  if (unauthMe.data.authenticated !== false || unauthMe.data.user !== null) {
+    throw new Error('Expected /api/auth/me to return authenticated: false after logout');
+  }
+
   console.log('\n=============================================================');
   console.log('ALL AUTHENTICATION, CONSENT, SCHEDULER & BUREAU TESTS PASSED WITH 100% SUCCESS');
   console.log('=============================================================');

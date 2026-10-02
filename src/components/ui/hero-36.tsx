@@ -11,17 +11,6 @@ export default function Hero36({
   onExploreHowItWorks,
   onNavigate,
 }: Hero36Props) {
-  // Nav bar: drops from top with blur
-  const navVariants: Variants = {
-    hidden: { opacity: 0, y: -22, filter: 'blur(7px)' },
-    show: {
-      opacity: 1,
-      y: 0,
-      filter: 'blur(0px)',
-      transition: { type: 'spring', damping: 22, stiffness: 180, delay: 0.05 },
-    },
-  };
-
   // Title: container staggers children line-by-line
   const titleContainerVariants: Variants = {
     hidden: { opacity: 0 },
@@ -96,57 +85,6 @@ export default function Hero36({
         />
       </motion.div>
       <div className="relative z-10 flex min-h-screen flex-col">
-        {/* ── Navigation ────────────────────────────────────────────────────── */}
-        <motion.nav
-          variants={navVariants}
-          initial="hidden"
-          animate="show"
-          className="flex w-full items-center justify-between px-8 py-5 md:px-12 lg:px-16"
-        >
-          <span
-            onClick={() => onNavigate?.('landing')}
-            className="text-lg font-normal tracking-[0.14em] text-teal-900 cursor-pointer"
-            style={{ fontFamily: 'sans-serif', letterSpacing: '0.06em' }}
-          >
-            OLD-LETTERS
-          </span>
-
-          <div
-            className="hidden items-center gap-8 md:flex"
-            style={{ fontFamily: 'sans-serif' }}
-          >
-            {[
-              { label: 'Write', view: 'composer' as const },
-              { label: 'Archive', view: 'archive' as const },
-              { label: 'How It Works', view: 'how-it-works' as const },
-              { label: 'Delivery', view: 'recipient' as const },
-            ].map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => {
-                  if (item.view === 'how-it-works' && onExploreHowItWorks) {
-                    onExploreHowItWorks();
-                  } else {
-                    onNavigate?.(item.view);
-                  }
-                }}
-                className="flex min-h-10 items-center text-sm font-normal text-stone-700 transition-colors duration-200 hover:text-stone-900 cursor-pointer"
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={onStartWriting}
-            className="flex min-h-10 items-center rounded-sm bg-teal-900 px-6 py-2.5 text-sm font-medium text-white shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] transition-[transform,background-color,box-shadow] duration-150 ease-out hover:bg-teal-800 hover:shadow-[0_2px_4px_rgba(20,83,45,0.25),0_6px_18px_rgba(20,83,45,0.22)] active:scale-[0.96] cursor-pointer"
-            style={{ fontFamily: 'sans-serif' }}
-          >
-            Write a Letter
-          </button>
-        </motion.nav>
-
         <main className="flex flex-1 flex-col items-center justify-start px-6 pt-12 pb-8 text-center md:pt-16">
           <motion.h1
             variants={titleContainerVariants}

@@ -425,6 +425,10 @@ export default function App() {
     } else if (intendedDestination === 'archive') {
       setCurrentView('archive');
       setIntendedDestination(null);
+    } else if (intendedDestination === 'profile') {
+      setCurrentView('profile');
+      window.history.pushState(null, '', '/profile');
+      setIntendedDestination(null);
     }
   };
 
@@ -451,32 +455,30 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Navigation Bar */}
-      {currentView !== 'landing' && (
-        <Navigation
-          currentView={currentView}
-          onNavigate={handleNavigate}
-          currentUser={currentUser}
-          onOpenAuth={() => {
-            setAuthInitialMode('login');
-            setShowAuthModal(true);
-          }}
-          onOpenProfile={() => {
-            setBureauTab('overview');
-            handleNavigate('profile');
-          }}
-          onNavigateBureauTab={(tab) => setBureauTab(tab)}
-          onOpenAdmin={() => setShowAdminModal(true)}
-          onLogout={() => {
-            logoutUser();
-            setAndPersistUser(null);
-            setLetters(INITIAL_ARCHIVE_LETTERS);
-            handleNavigate('landing');
-          }}
-          onWriteClick={() => handleStartWriting()}
-          isRecipientMode={isRecipientMode}
-        />
-      )}
+      {/* Top Navigation Bar (Always rendered across all views, replacing public write button with account menu when authenticated) */}
+      <Navigation
+        currentView={currentView}
+        onNavigate={handleNavigate}
+        currentUser={currentUser}
+        onOpenAuth={() => {
+          setAuthInitialMode('login');
+          setShowAuthModal(true);
+        }}
+        onOpenProfile={() => {
+          setBureauTab('overview');
+          handleNavigate('profile');
+        }}
+        onNavigateBureauTab={(tab) => setBureauTab(tab)}
+        onOpenAdmin={() => setShowAdminModal(true)}
+        onLogout={() => {
+          logoutUser();
+          setAndPersistUser(null);
+          setLetters(INITIAL_ARCHIVE_LETTERS);
+          handleNavigate('landing');
+        }}
+        onWriteClick={() => handleStartWriting()}
+        isRecipientMode={isRecipientMode}
+      />
 
       {/* Main View Router */}
       <main className="flex-1 flex flex-col">
@@ -484,6 +486,10 @@ export default function App() {
           <BureauDashboard
             initialTab={bureauTab}
             currentUser={currentUser}
+            onOpenAuth={() => {
+              setAuthInitialMode('login');
+              setShowAuthModal(true);
+            }}
             onNavigateHome={() => handleNavigate('landing')}
             onNavigateWrite={() => handleStartWriting('LOVE')}
             onNavigateTerms={() => handleNavigate('terms')}

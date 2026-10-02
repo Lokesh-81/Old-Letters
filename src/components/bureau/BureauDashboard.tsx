@@ -40,6 +40,7 @@ interface BureauDashboardProps {
   onNavigateTerms: () => void;
   onNavigatePrivacy: () => void;
   onOpenRecipientMode: (letter: Letter, deliveryToken?: string) => void;
+  onOpenAuth?: () => void;
   onLogout: () => void;
 }
 
@@ -51,6 +52,7 @@ export const BureauDashboard: React.FC<BureauDashboardProps> = ({
   onNavigateTerms,
   onNavigatePrivacy,
   onOpenRecipientMode,
+  onOpenAuth,
   onLogout,
 }) => {
   const [activeTab, setActiveTab] = useState<BureauTab>(initialTab);
@@ -296,6 +298,45 @@ export const BureauDashboard: React.FC<BureauDashboardProps> = ({
 
   const isGoogle = userProfile?.googleLinked || userProfile?.authProvider === 'GOOGLE' || userProfile?.authProvider === 'BOTH';
   const initialLetter = userProfile?.fullName?.charAt(0) || userProfile?.email?.charAt(0).toUpperCase() || 'C';
+
+  if (!currentUser && !userProfile && !loading) {
+    return (
+      <div className="min-h-screen bg-[#faf9f7] text-teal-900 font-sans flex flex-col items-center justify-center px-6 py-20">
+        <div className="max-w-md w-full bg-white border border-[#eae4da] rounded-2xl p-8 text-center space-y-6 shadow-sm">
+          <div className="w-16 h-16 mx-auto rounded-full bg-[#f5efe6] flex items-center justify-center text-teal-900 border border-[#eae4da]">
+            <span className="font-serif text-2xl">✉</span>
+          </div>
+          <div className="space-y-2">
+            <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-stone-500">
+              CORRESPONDENCE BUREAU ARCHIVE
+            </span>
+            <h2 className="font-serif text-2xl text-stone-900">Bureau Access Required</h2>
+            <p className="text-xs text-stone-600 leading-relaxed font-serif italic">
+              Your Correspondence Bureau is a private registry of dispatched letters, arriving deliveries, and sealed records. Please sign in to open your desk.
+            </p>
+          </div>
+          <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
+            {onOpenAuth && (
+              <button
+                type="button"
+                onClick={onOpenAuth}
+                className="flex-1 min-h-10 bg-teal-900 hover:bg-teal-800 text-white rounded-md text-xs font-medium py-2.5 px-4 transition-colors cursor-pointer"
+              >
+                Sign In to My Bureau
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onNavigateHome}
+              className="flex-1 min-h-10 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-md text-xs font-medium py-2.5 px-4 transition-colors cursor-pointer"
+            >
+              Return Home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#faf9f7] text-teal-900 font-sans pb-24 selection:bg-stone-300/50">
