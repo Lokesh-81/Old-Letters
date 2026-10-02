@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { getDb, setupDatabaseIndexes, ObjectId } from '../src/lib/mongodb';
 import { TEMPLATES } from '../src/data/mockData';
+import { isAdminEmail } from '../src/lib/admin';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 
@@ -51,8 +52,9 @@ export async function seedDatabase() {
   // 2. Seed Admin Users
   const adminUsersColl = db.collection('adminUsers');
   const admins = [
-    { email: process.env.ADMIN_EMAIL || 'admin@old-letters.in', role: 'SUPER_ADMIN' },
-    { email: 'lokesh@oldletters.in', role: 'POSTMASTER' },
+    { email: 'poosala15@gmail.com', role: 'ADMIN' },
+    { email: 'oldletters.mailroom@gmail.com', role: 'ADMIN' },
+    ...(process.env.ADMIN_EMAIL ? [{ email: process.env.ADMIN_EMAIL, role: 'ADMIN' }] : []),
   ];
   for (const admin of admins) {
     const existing = await adminUsersColl.findOne({ email: admin.email });
@@ -90,7 +92,7 @@ export async function seedDatabase() {
         passwordHash: defaultPasswordHash,
         avatarUrl: u.avatarUrl,
         authProvider: 'EMAIL',
-        role: u.email === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER',
+        role: isAdminEmail(u.email) ? 'ADMIN' : 'USER',
         emailVerified: true,
         termsAccepted: true,
         privacyAccepted: true,

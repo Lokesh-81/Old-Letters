@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { isAdminEmail, isUserAdminRole } from '../lib/admin';
 
-export type AppView = 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient' | 'cookies' | 'privacy' | 'terms' | 'profile';
+export type AppView = 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient' | 'cookies' | 'privacy' | 'terms' | 'profile' | 'admin';
 
 interface NavigationProps {
   currentView: AppView;
@@ -46,6 +47,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   }
 
   const firstName = currentUser?.fullName?.split(' ')[0] || currentUser?.email.split('@')[0] || 'Correspondent';
+  const isUserAdmin = Boolean(currentUser && (isAdminEmail(currentUser.email) || isUserAdminRole(currentUser.role)));
 
   const handleSelectMenu = (action: () => void) => {
     setDropdownOpen(false);
@@ -210,17 +212,22 @@ export const Navigation: React.FC<NavigationProps> = ({
                     <span>Terms & Privacy</span>
                   </button>
 
-                  {currentUser.role === 'ADMIN' && onOpenAdmin && (
+                  {/* ADMIN BUREAU Desk for authenticated administrators only */}
+                  {isUserAdmin && (
                     <button
                       type="button"
                       onClick={() =>
                         handleSelectMenu(() => {
-                          onOpenAdmin();
+                          if (onOpenAdmin) onOpenAdmin();
+                          onNavigate('admin');
                         })
                       }
-                      className="w-full text-left px-3.5 py-2 text-amber-800 hover:bg-amber-50/80 transition-colors cursor-pointer font-medium"
+                      className="w-full text-left px-3.5 py-2 text-teal-950 hover:bg-teal-50 transition-colors cursor-pointer font-medium flex items-center justify-between border-t border-teal-100/60"
                     >
-                      Bureau Desk
+                      <span className="font-semibold text-teal-900">ADMIN BUREAU</span>
+                      <span className="text-[10px] font-mono text-teal-800 bg-teal-100/80 px-1.5 py-0.5 rounded-xs">
+                        Admin Desk
+                      </span>
                     </button>
                   )}
 
@@ -396,6 +403,20 @@ export const Navigation: React.FC<NavigationProps> = ({
               >
                 Terms & Privacy
               </button>
+              {isUserAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    if (onOpenAdmin) onOpenAdmin();
+                    onNavigate('admin');
+                  }}
+                  className="flex min-h-10 items-center justify-between text-left text-sm py-2 px-3 rounded-md text-teal-950 bg-teal-50 border border-teal-200/70 font-semibold hover:bg-teal-100/60 cursor-pointer"
+                >
+                  <span>ADMIN BUREAU</span>
+                  <span className="text-[10px] font-mono text-teal-800">Admin Dashboard →</span>
+                </button>
+              )}
               {onLogout && (
                 <button
                   type="button"

@@ -47,6 +47,7 @@ import {
   AdminUserDoc,
 } from './src/lib/mongodb';
 import { seedDatabase } from './scripts/seed';
+import { ADMIN_EMAILS, isAdminEmail, isUserAdminRole } from './src/lib/admin';
 
 dotenv.config();
 
@@ -227,30 +228,48 @@ const requireAuth: express.RequestHandler = (req, res, next) => {
   next();
 };
 
-// Admin Verification Helper
+// Admin Verification Helper (Strict Server-Side Only)
 async function verifyAdminServerSide(req: express.Request): Promise<boolean> {
-  const adminSecretHeader = req.headers['x-admin-secret'];
-  if (adminSecretHeader && adminSecretHeader === process.env.ADMIN_SECRET) {
+  // Must have an authenticated user with verified identity
+  if (!req.user || !req.user.id || !req.user.email) {
+    return false;
+  }
+
+  const cleanEmail = req.user.email.trim().toLowerCase();
+
+  // 1. Check if email is in the admin allowlist (e.g. poosala15@gmail.com, oldletters.mailroom@gmail.com)
+  if (isAdminEmail(cleanEmail)) {
     return true;
   }
 
-  if (req.user && req.user.email) {
-    if (req.user.role === 'ADMIN' || req.user.email === adminEmail || req.user.email === 'lokesh@oldletters.in') {
+  // 2. Check if user's JWT session role is ADMIN
+  if (isUserAdminRole(req.user.role)) {
+    return true;
+  }
+
+  // 3. Check MongoDB user record for persistent admin role
+  try {
+    const db = await getDb();
+    const usersColl = db.collection('users');
+    let userDoc = null;
+    if (ObjectId.isValid(req.user.id)) {
+      userDoc = await usersColl.findOne({ _id: new ObjectId(req.user.id) });
+    }
+    if (!userDoc) {
+      userDoc = await usersColl.findOne({ email: cleanEmail });
+    }
+    if (userDoc && isUserAdminRole(userDoc.role)) {
       return true;
     }
-    const db = await getDb();
+
+    // 4. Check adminUsers collection
     const adminColl = db.collection('adminUsers');
-    const adminRec = await adminColl.findOne({ email: req.user.email });
+    const adminRec = await adminColl.findOne({ email: cleanEmail });
     if (adminRec) {
       return true;
     }
-  }
-
-  // Local development bureau inspection flag
-  const isDev = !isProd;
-  const adminParam = req.query.admin === 'true' || req.headers['x-bureau-admin'] === 'true';
-  if (isDev && adminParam) {
-    return true;
+  } catch (err) {
+    console.warn('[OLD-LETTERS Admin verification warning]', err);
   }
 
   return false;
@@ -258,13 +277,26 @@ async function verifyAdminServerSide(req: express.Request): Promise<boolean> {
 
 // Require Admin Middleware
 const requireAdmin: express.RequestHandler = async (req, res, next) => {
+  // 1. Verify normal authenticated session. Return 401 for unauthenticated users.
+  if (!req.user || !req.user.id || !req.user.email) {
+    return res.status(401).json({
+      success: false,
+      authenticated: false,
+      error: 'Authentication required. Please sign in to access bureau administrative controls.',
+    });
+  }
+
+  // 2. Resolve the authenticated user and verify admin role / authorized admin email.
   const isAdmin = await verifyAdminServerSide(req);
+
+  // 3. Return HTTP 403 for authenticated non-admin users.
   if (!isAdmin) {
     return res.status(403).json({
       success: false,
-      error: 'Unauthorized: Bureau administrative privileges required.',
+      error: 'Forbidden: Bureau administrative privileges required.',
     });
   }
+
   next();
 };
 
@@ -355,7 +387,8 @@ function ensureGoogleStrategy(): boolean {
                 return done(new Error('CONSENT_REQUIRED'), undefined);
               }
 
-              const updateFields: any = { lastLoginAt: now, updatedAt: now };
+              const role = isAdminEmail(user.email) ? 'ADMIN' : (user.role || 'USER');
+              const updateFields: any = { lastLoginAt: now, updatedAt: now, role };
               if (hasExplicitConsent) {
                 updateFields.termsAccepted = true;
                 updateFields.privacyAccepted = true;
@@ -369,7 +402,7 @@ function ensureGoogleStrategy(): boolean {
                 email: user.email,
                 fullName: user.fullName,
                 avatarUrl: user.avatarUrl || profile.photos?.[0]?.value,
-                role: user.role || 'USER',
+                role,
                 authProvider: user.authProvider || 'GOOGLE',
                 emailVerified: true,
               });
@@ -383,12 +416,14 @@ function ensureGoogleStrategy(): boolean {
                 return done(new Error('CONSENT_REQUIRED'), undefined);
               }
 
+              const role = isAdminEmail(email) ? 'ADMIN' : (user.role || 'USER');
               const updateFields: any = {
                 googleId: profile.id,
                 authProvider: 'BOTH',
                 emailVerified: true,
                 lastLoginAt: now,
                 updatedAt: now,
+                role,
                 avatarUrl: user.avatarUrl || profile.photos?.[0]?.value,
               };
               if (hasExplicitConsent) {
@@ -404,7 +439,7 @@ function ensureGoogleStrategy(): boolean {
                 email: user.email,
                 fullName: user.fullName,
                 avatarUrl: user.avatarUrl || profile.photos?.[0]?.value,
-                role: user.role || 'USER',
+                role,
                 authProvider: 'BOTH',
                 emailVerified: true,
               });
@@ -416,6 +451,7 @@ function ensureGoogleStrategy(): boolean {
             }
 
             const newUserId = new ObjectId();
+            const newUserRole = isAdminEmail(email) ? 'ADMIN' : 'USER';
             const newUser: UserDoc = {
               _id: newUserId,
               email,
@@ -423,7 +459,7 @@ function ensureGoogleStrategy(): boolean {
               avatarUrl: profile.photos?.[0]?.value,
               authProvider: 'GOOGLE',
               googleId: profile.id,
-              role: email === adminEmail || email === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER',
+              role: newUserRole,
               emailVerified: true,
               termsAccepted: true,
               privacyAccepted: true,
@@ -552,6 +588,13 @@ app.get(['/api/auth/me', '/api/me', '/auth/me'], async (req: AuthenticatedReques
       } catch {}
     }
 
+    if (userDoc && isAdminEmail(userDoc.email) && userDoc.role !== 'ADMIN') {
+      try {
+        await usersColl.updateOne({ _id: userDoc._id }, { $set: { role: 'ADMIN' } });
+        userDoc.role = 'ADMIN';
+      } catch {}
+    }
+
     if (lettersColl) {
       try {
         lettersCount = await lettersColl.countDocuments({
@@ -567,12 +610,16 @@ app.get(['/api/auth/me', '/api/me', '/auth/me'], async (req: AuthenticatedReques
     console.warn('[OLD-LETTERS auth/me notice]:', err);
   }
 
+  const effectiveRole = (userDoc?.role === 'ADMIN' || isAdminEmail(userDoc?.email || req.user.email))
+    ? 'ADMIN'
+    : (userDoc?.role || req.user.role || 'USER');
+
   const resolvedUser = {
     id: userDoc?._id ? userDoc._id.toString() : req.user.id,
     email: userDoc?.email || req.user.email,
     fullName: userDoc?.fullName || req.user.fullName || req.user.email?.split('@')[0] || 'Correspondent',
     avatarUrl: userDoc?.avatarUrl || req.user.avatarUrl,
-    role: userDoc?.role || req.user.role || (req.user.email === adminEmail || req.user.email === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER'),
+    role: effectiveRole,
     authProvider: userDoc?.authProvider || req.user.authProvider || 'GOOGLE',
     emailVerified: userDoc?.emailVerified ?? req.user.emailVerified ?? true,
     googleLinked: !!userDoc?.googleId || req.user.authProvider === 'GOOGLE' || req.user.authProvider === 'BOTH',
@@ -651,7 +698,7 @@ app.post(['/api/auth/register', '/api/auth/signup', '/auth/register', '/auth/sig
           id: existing._id.toString(),
           email: existing.email,
           fullName: existing.fullName || fullName,
-          role: existing.role || 'USER',
+          role: isAdminEmail(existing.email) ? 'ADMIN' : (existing.role || 'USER'),
           authProvider: 'BOTH' as const,
           emailVerified: true,
           termsAccepted: true,
@@ -668,13 +715,14 @@ app.post(['/api/auth/register', '/api/auth/signup', '/auth/register', '/auth/sig
     }
 
     const newUserId = new ObjectId();
+    const newUserRole = isAdminEmail(email) ? 'ADMIN' : 'USER';
     const newUser: UserDoc = {
       _id: newUserId,
       fullName,
       email,
       passwordHash,
       authProvider: 'EMAIL',
-      role: email === adminEmail || email === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER',
+      role: newUserRole,
       emailVerified: false,
       termsAccepted: true,
       privacyAccepted: true,
@@ -738,13 +786,22 @@ app.post(['/api/auth/login', '/auth/login'], async (req, res) => {
     }
 
     const now = new Date();
-    await usersColl.updateOne({ _id: user._id }, { $set: { lastLoginAt: now, updatedAt: now } });
+    let userRole = user.role || 'USER';
+    if (isAdminEmail(email)) {
+      userRole = 'ADMIN';
+      await usersColl.updateOne(
+        { _id: user._id },
+        { $set: { role: 'ADMIN', lastLoginAt: now, updatedAt: now } }
+      );
+    } else {
+      await usersColl.updateOne({ _id: user._id }, { $set: { lastLoginAt: now, updatedAt: now } });
+    }
 
     const userPayload = {
       id: user._id.toString(),
       email: user.email,
       fullName: user.fullName,
-      role: user.role || 'USER',
+      role: userRole,
       authProvider: user.authProvider || 'EMAIL',
       emailVerified: user.emailVerified ?? false,
       termsAccepted: user.termsAccepted ?? false,
@@ -942,10 +999,12 @@ app.post('/api/auth/google/test-login', async (req, res) => {
     }
 
     if (user) {
+      const role = isAdminEmail(cleanEmail) ? 'ADMIN' : (user.role || 'USER');
       const updateFields: any = {
         lastLoginAt: now,
         updatedAt: now,
         googleId,
+        role,
         authProvider: user.passwordHash ? 'BOTH' : 'GOOGLE',
         avatarUrl: user.avatarUrl || avatarUrl,
       };
@@ -960,6 +1019,7 @@ app.post('/api/auth/google/test-login', async (req, res) => {
       user = await usersColl.findOne({ _id: user._id });
     } else {
       const newUserId = new ObjectId();
+      const newUserRole = isAdminEmail(cleanEmail) ? 'ADMIN' : 'USER';
       const newUser: UserDoc = {
         _id: newUserId,
         email: cleanEmail,
@@ -967,7 +1027,7 @@ app.post('/api/auth/google/test-login', async (req, res) => {
         avatarUrl,
         authProvider: 'GOOGLE',
         googleId,
-        role: cleanEmail === adminEmail || cleanEmail === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER',
+        role: newUserRole,
         emailVerified: true,
         termsAccepted: true,
         privacyAccepted: true,
@@ -986,7 +1046,7 @@ app.post('/api/auth/google/test-login', async (req, res) => {
       id: user!._id.toString(),
       email: user!.email,
       fullName: user!.fullName,
-      role: user!.role || 'USER',
+      role: isAdminEmail(cleanEmail) ? 'ADMIN' : (user!.role || 'USER'),
       authProvider: user!.authProvider,
       emailVerified: user!.emailVerified,
       termsAccepted: user!.termsAccepted ?? true,
@@ -1568,25 +1628,29 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     if (!user) {
       const defaultName = fullName || email.split('@')[0].replace(/[._-]/g, ' ');
       const newUserId = new ObjectId();
+      const newUserRole = isAdminEmail(email) ? 'ADMIN' : 'USER';
       await usersColl.insertOne({
         _id: newUserId,
         fullName: defaultName,
         email,
         authProvider: 'EMAIL',
-        role: email === adminEmail || email === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER',
+        role: newUserRole,
         emailVerified: true,
         createdAt: now,
         updatedAt: now,
         lastLoginAt: now,
       });
       user = await usersColl.findOne({ _id: newUserId });
+    } else if (isAdminEmail(email) && user.role !== 'ADMIN') {
+      await usersColl.updateOne({ _id: user._id }, { $set: { role: 'ADMIN' } });
+      user.role = 'ADMIN';
     }
 
     const userPayload = {
       id: user!._id.toString(),
       email: user!.email,
       fullName: user!.fullName,
-      role: user!.role || 'USER',
+      role: isAdminEmail(email) ? 'ADMIN' : (user!.role || 'USER'),
       authProvider: user!.authProvider,
       emailVerified: true,
     };
@@ -3698,7 +3762,7 @@ app.post(['/api/admin/payments/:id/verify', '/api/admin/payments/:id/approve', '
     }
 
     const now = new Date();
-    const adminIdentifier = req.user?.email || adminEmail;
+    const adminIdentifier = req.user!.email;
 
     await paymentsColl.updateOne(
       { _id: payment._id },
@@ -3774,9 +3838,18 @@ app.post(['/api/admin/payments/:id/verify', '/api/admin/payments/:id/approve', '
       });
     }
 
+    const updatedPayment = await paymentsColl.findOne({ _id: payment._id });
+
     res.json({
       success: true,
       message: `Payment marked as ${status}.`,
+      payment: updatedPayment ? {
+        id: updatedPayment._id.toString(),
+        status: updatedPayment.status,
+        verifiedBy: updatedPayment.verifiedBy,
+        verifiedAt: updatedPayment.verifiedAt ? updatedPayment.verifiedAt.toISOString() : null,
+        adminNote: updatedPayment.adminNote,
+      } : undefined,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

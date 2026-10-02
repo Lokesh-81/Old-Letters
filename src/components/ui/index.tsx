@@ -72,10 +72,11 @@ const defaultColumns: NavColumn[] = [
     title: 'REGISTRY',
     links: [
       { label: 'Correspondence Archive', href: '#archive' },
-      { label: 'Cookie Preferences', href: '#preferences' },
-      { label: 'Cookie Policy', href: '/cookies' },
-      { label: 'Privacy Policy', href: '/privacy' },
       { label: 'Terms of Service', href: '/terms' },
+      { label: 'Privacy Policy', href: '/privacy' },
+      { label: 'Cookie Policy', href: '/cookies' },
+      { label: 'Cookie Preferences', href: '#preferences' },
+      { label: 'Contact Mailroom', href: 'mailto:oldletters.mailroom@gmail.com' },
     ],
   },
 ];
@@ -280,6 +281,22 @@ export default function Footer23({
               {subscribeLabel}
             </motion.button>
           </form>
+
+          {/* Correspondence Office Mailroom Contact */}
+          <div className="pt-2 border-t border-zinc-200/80 flex flex-col gap-1 text-xs">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-stone-500">
+              Correspondence Office
+            </span>
+            <a
+              href="mailto:oldletters.mailroom@gmail.com"
+              className="font-serif text-sm text-teal-950 hover:text-teal-700 underline underline-offset-4 transition-colors select-all"
+            >
+              oldletters.mailroom@gmail.com
+            </a>
+            <p className="text-[11px] text-stone-400 font-sans">
+              Contact the Mailroom for inquiries, postal dispatches, and verification support.
+            </p>
+          </div>
         </motion.div>
 
         <motion.nav
@@ -329,8 +346,18 @@ export default function Footer23({
 
       {/* Bottom Legal Notice Bar */}
       <div className="border-t border-[#eae4da]/80 py-6 px-6 sm:px-12 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-stone-500 font-sans">
-        <div>
-          © {new Date().getFullYear()} OLD-LETTERS Postal Conservancy. All correspondence reserved.
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-center sm:text-left">
+          <span>© {new Date().getFullYear()} OLD-LETTERS Postal Conservancy. All correspondence reserved.</span>
+          <span className="hidden sm:inline text-stone-300">·</span>
+          <span>
+            Correspondence Office:{' '}
+            <a
+              href="mailto:oldletters.mailroom@gmail.com"
+              className="text-teal-900 hover:underline font-mono text-[11px]"
+            >
+              oldletters.mailroom@gmail.com
+            </a>
+          </span>
         </div>
         <div className="flex items-center gap-4 flex-wrap justify-center">
           <button

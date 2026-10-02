@@ -19,6 +19,8 @@ export const AdminPaymentModal: React.FC<AdminPaymentModalProps> = ({
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [schedulerStatus, setSchedulerStatus] = useState<string | null>(null);
 
+  const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
+
   const loadPayments = async () => {
     try {
       setIsLoading(true);
@@ -42,7 +44,13 @@ export const AdminPaymentModal: React.FC<AdminPaymentModalProps> = ({
   const handleVerify = async (paymentId: string, status: 'APPROVED' | 'REJECTED') => {
     try {
       setActionInProgress(paymentId);
-      await verifyAdminPayment({ paymentId, status });
+      const note = adminNotes[paymentId] || undefined;
+      await verifyAdminPayment({ paymentId, status, adminNote: note });
+      setAdminNotes((prev) => {
+        const next = { ...prev };
+        delete next[paymentId];
+        return next;
+      });
       await loadPayments();
       onPaymentUpdated?.();
     } catch (err: any) {
@@ -167,11 +175,41 @@ export const AdminPaymentModal: React.FC<AdminPaymentModalProps> = ({
                     </span>
                   </div>
 
-                  <div className="text-xs font-mono text-stone-600 flex items-center gap-3">
+                  <div className="text-xs font-mono text-stone-600 flex flex-wrap items-center gap-3">
                     <span>UTR / Ref: <strong>{item.upiReference}</strong></span>
                     <span>·</span>
                     <span>{new Date(item.createdAt).toLocaleString()}</span>
+                    {item.userId && (
+                      <>
+                        <span>·</span>
+                        <span className="text-stone-400">User: {item.userId}</span>
+                      </>
+                    )}
+                    {item.letterId && (
+                      <>
+                        <span>·</span>
+                        <span className="text-stone-400">Letter: {item.letterId}</span>
+                      </>
+                    )}
                   </div>
+
+                  {item.adminNote && (
+                    <div className="text-[11px] font-mono text-stone-500 bg-stone-50 p-1.5 border border-stone-200 rounded-xs">
+                      Note: {item.adminNote}
+                    </div>
+                  )}
+
+                  {item.status === 'PENDING' && (
+                    <input
+                      type="text"
+                      placeholder="Verification note (optional)..."
+                      value={adminNotes[item.id] || ''}
+                      onChange={(e) =>
+                        setAdminNotes((prev) => ({ ...prev, [item.id]: e.target.value }))
+                      }
+                      className="w-full text-xs font-mono px-2.5 py-1.5 border border-stone-200 rounded-xs bg-[#faf9f7] focus:outline-none focus:border-teal-900 mt-1"
+                    />
+                  )}
                 </div>
 
                 {/* Actions */}
@@ -183,7 +221,7 @@ export const AdminPaymentModal: React.FC<AdminPaymentModalProps> = ({
                       onClick={() => handleVerify(item.id, 'APPROVED')}
                       className="px-4 py-2 bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-mono uppercase tracking-wider rounded-xs transition-colors cursor-pointer shadow-xs"
                     >
-                      Approve & Unlock
+                      Approve & Confirm
                     </button>
                     <button
                       type="button"

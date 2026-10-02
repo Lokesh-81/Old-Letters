@@ -251,24 +251,264 @@ async function runTests() {
   }
   console.log('SUCCESS: Account linked intelligently! authProvider is BOTH.');
 
-  // TEST 12: Admin Route Protection (403 for regular user, 200 for admin)
-  console.log('\n[TEST 12] Admin Route Protection...');
-  const userAdminCheck = await request('/api/admin/payments', {
-    headers: { Authorization: `Bearer ${validToken}` },
-  });
-  console.log('Regular user accessing admin payments (expect 403):', userAdminCheck.status);
-  if (userAdminCheck.status !== 403) {
-    throw new Error('Admin payments route was not protected with 403');
+  // =========================================================================
+  // MANDATORY ADMIN ACCESS, AUTHORIZATION & SECURITY TEST SUITE (12 CRITICAL CHECKS)
+  // =========================================================================
+
+  // [TEST 12.1] Unauthenticated user accessing admin endpoint → 401
+  console.log('\n[TEST 12.1] Unauthenticated user accessing admin payments (expect 401)...');
+  const unauthAdminCheck = await request('/api/admin/payments');
+  console.log('Unauthenticated admin check status:', unauthAdminCheck.status, unauthAdminCheck.data);
+  if (unauthAdminCheck.status !== 401) {
+    throw new Error(`Expected HTTP 401 for unauthenticated admin access, got ${unauthAdminCheck.status}`);
   }
 
-  // Admin access via bureau header
-  const adminCheck = await request('/api/admin/payments', {
-    headers: { 'x-bureau-admin': 'true' },
+  // [TEST 12.2] Normal authenticated user accessing admin endpoint → 403
+  console.log('\n[TEST 12.2] Normal authenticated user accessing admin payments (expect 403)...');
+  const normalUserAdminCheck = await request('/api/admin/payments', {
+    headers: { Authorization: `Bearer ${validToken}` },
   });
-  console.log('Authorized admin accessing payments status:', adminCheck.status);
-  if (!adminCheck.ok) {
-    throw new Error('Authorized admin access failed');
+  console.log('Normal user admin check status:', normalUserAdminCheck.status, normalUserAdminCheck.data);
+  if (normalUserAdminCheck.status !== 403) {
+    throw new Error(`Expected HTTP 403 for normal authenticated user accessing admin endpoint, got ${normalUserAdminCheck.status}`);
   }
+
+  // [TEST 12.3] poosala15@gmail.com → admin access
+  console.log('\n[TEST 12.3] Authenticating poosala15@gmail.com via normal Google OAuth flow...');
+  const poosalaAuthRes = await request('/api/auth/google/test-login', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: 'poosala15@gmail.com',
+      googleId: 'google-poosala-id-15',
+      fullName: 'Poosala Admin',
+      termsAccepted: true,
+      privacyAccepted: true,
+      termsVersion: '2026-10-01',
+      privacyVersion: '2026-10-01',
+    }),
+  });
+  if (!poosalaAuthRes.ok || !poosalaAuthRes.data.token) {
+    throw new Error('Google sign-in for poosala15@gmail.com failed');
+  }
+  const poosalaToken = poosalaAuthRes.data.token;
+  console.log('poosala15@gmail.com user role:', poosalaAuthRes.data.user?.role);
+  if (poosalaAuthRes.data.user?.role !== 'ADMIN') {
+    throw new Error(`Expected poosala15@gmail.com to have role 'ADMIN', got '${poosalaAuthRes.data.user?.role}'`);
+  }
+
+  const poosalaAdminAccess = await request('/api/admin/payments', {
+    headers: { Authorization: `Bearer ${poosalaToken}` },
+  });
+  console.log('poosala15@gmail.com accessing /api/admin/payments (expect 200):', poosalaAdminAccess.status);
+  if (poosalaAdminAccess.status !== 200 || !poosalaAdminAccess.data.success) {
+    throw new Error('poosala15@gmail.com failed to access /api/admin/payments');
+  }
+
+  // [TEST 12.4] oldletters.mailroom@gmail.com → admin access
+  console.log('\n[TEST 12.4] Authenticating oldletters.mailroom@gmail.com via normal Google OAuth flow...');
+  const mailroomAuthRes = await request('/api/auth/google/test-login', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: 'oldletters.mailroom@gmail.com',
+      googleId: 'google-mailroom-id-1892',
+      fullName: 'Correspondence Mailroom Master',
+      termsAccepted: true,
+      privacyAccepted: true,
+      termsVersion: '2026-10-01',
+      privacyVersion: '2026-10-01',
+    }),
+  });
+  if (!mailroomAuthRes.ok || !mailroomAuthRes.data.token) {
+    throw new Error('Google sign-in for oldletters.mailroom@gmail.com failed');
+  }
+  const mailroomToken = mailroomAuthRes.data.token;
+  console.log('oldletters.mailroom@gmail.com user role:', mailroomAuthRes.data.user?.role);
+  if (mailroomAuthRes.data.user?.role !== 'ADMIN') {
+    throw new Error(`Expected oldletters.mailroom@gmail.com to have role 'ADMIN', got '${mailroomAuthRes.data.user?.role}'`);
+  }
+
+  const mailroomAdminAccess = await request('/api/admin/payments', {
+    headers: { Authorization: `Bearer ${mailroomToken}` },
+  });
+  console.log('oldletters.mailroom@gmail.com accessing /api/admin/payments (expect 200):', mailroomAdminAccess.status);
+  if (mailroomAdminAccess.status !== 200 || !mailroomAdminAccess.data.success) {
+    throw new Error('oldletters.mailroom@gmail.com failed to access /api/admin/payments');
+  }
+
+  // [TEST 12.5] Admin can access payment verification
+  console.log('\n[TEST 12.5] Verifying payments ledger structure for Admin...');
+  if (!Array.isArray(poosalaAdminAccess.data.payments)) {
+    throw new Error('Admin payments response missing payments array');
+  }
+
+  // [TEST 12.6] Admin can approve payment & [TEST 12.8] stores admin identity
+  console.log('\n[TEST 12.6 & 12.8] Submitting and Approving payment with admin identity audit...');
+  const samplePaymentRes1 = await request('/api/payments', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${validToken}` },
+    body: JSON.stringify({
+      featureCode: 'VOICE_NOTE',
+      amount: 149,
+      currency: 'INR',
+      upiReference: 'UPI-APP-TEST-1001',
+      screenshotUrl: 'https://images.unsplash.com/sample-proof.jpg',
+    }),
+  });
+  if (!samplePaymentRes1.ok || !samplePaymentRes1.data.payment) {
+    throw new Error('Failed to create sample payment for approval test');
+  }
+  const paymentId1 = samplePaymentRes1.data.payment.id;
+
+  const approveRes = await request(`/api/admin/payments/${paymentId1}/approve`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${poosalaToken}` },
+    body: JSON.stringify({
+      status: 'APPROVED',
+      adminNote: 'UTR verified in SBI postal bureau account.',
+    }),
+  });
+  console.log('Admin approve status (expect 200):', approveRes.status, approveRes.data);
+  if (!approveRes.ok || !approveRes.data.success) {
+    throw new Error('Admin payment approval failed');
+  }
+  if (approveRes.data.payment?.verifiedBy !== 'poosala15@gmail.com') {
+    throw new Error(`Expected verifiedBy to be 'poosala15@gmail.com', got '${approveRes.data.payment?.verifiedBy}'`);
+  }
+
+  // Verify Audit Log records admin identity
+  const auditRes = await request('/api/admin/audit-logs', {
+    headers: { Authorization: `Bearer ${poosalaToken}` },
+  });
+  if (!auditRes.ok || !Array.isArray(auditRes.data.auditLogs)) {
+    throw new Error('Failed to fetch admin audit logs');
+  }
+  const approvalAuditLog = auditRes.data.auditLogs.find(
+    (l: any) => l.action === 'PAYMENT_APPROVED' && l.paymentId === paymentId1
+  );
+  if (!approvalAuditLog || approvalAuditLog.adminId !== 'poosala15@gmail.com') {
+    throw new Error(`Audit log did not record admin identity: ${JSON.stringify(approvalAuditLog)}`);
+  }
+  console.log('SUCCESS: Admin approval verified and admin identity stored in payment & audit log.');
+
+  // [TEST 12.7] Admin can reject payment
+  console.log('\n[TEST 12.7] Submitting and Rejecting payment...');
+  const samplePaymentRes2 = await request('/api/payments', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${validToken}` },
+    body: JSON.stringify({
+      featureCode: 'VIDEO_NOTE',
+      amount: 299,
+      currency: 'INR',
+      upiReference: 'UPI-REJ-TEST-1002',
+    }),
+  });
+  const paymentId2 = samplePaymentRes2.data.payment.id;
+
+  const rejectRes = await request(`/api/admin/payments/${paymentId2}/reject`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${mailroomToken}` },
+    body: JSON.stringify({
+      status: 'REJECTED',
+      adminNote: 'Duplicate UTR reference provided.',
+    }),
+  });
+  console.log('Admin reject status (expect 200):', rejectRes.status, rejectRes.data);
+  if (!rejectRes.ok || !rejectRes.data.success) {
+    throw new Error('Admin payment rejection failed');
+  }
+  if (rejectRes.data.payment?.status !== 'REJECTED') {
+    throw new Error(`Expected status 'REJECTED', got '${rejectRes.data.payment?.status}'`);
+  }
+  if (rejectRes.data.payment?.verifiedBy !== 'oldletters.mailroom@gmail.com') {
+    throw new Error(`Expected verifiedBy to be 'oldletters.mailroom@gmail.com', got '${rejectRes.data.payment?.verifiedBy}'`);
+  }
+
+  // [TEST 12.9] Normal user cannot approve/reject payment
+  console.log('\n[TEST 12.9] Verifying normal user cannot approve or reject payment (expect 403)...');
+  const normalUserApprove = await request(`/api/admin/payments/${paymentId2}/approve`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${validToken}` },
+    body: JSON.stringify({ status: 'APPROVED' }),
+  });
+  console.log('Normal user approve status (expect 403):', normalUserApprove.status);
+  if (normalUserApprove.status !== 403) {
+    throw new Error(`Normal user was not blocked with 403 from approving payments (got ${normalUserApprove.status})`);
+  }
+
+  const normalUserReject = await request(`/api/admin/payments/${paymentId1}/reject`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${validToken}` },
+    body: JSON.stringify({ status: 'REJECTED' }),
+  });
+  console.log('Normal user reject status (expect 403):', normalUserReject.status);
+  if (normalUserReject.status !== 403) {
+    throw new Error(`Normal user was not blocked with 403 from rejecting payments (got ${normalUserReject.status})`);
+  }
+
+  // [TEST 12.10] Admin status cannot be forged through frontend request data or headers/query params
+  console.log('\n[TEST 12.10] Testing anti-forgery: Frontend sending role: "ADMIN" or query parameters...');
+  const forgedEmail = `attacker.${Date.now()}@fraud.org`;
+  const forgedSignup = await request('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({
+      fullName: 'Fake Admin',
+      email: forgedEmail,
+      password: 'attackPassword999',
+      role: 'ADMIN',
+      isAdmin: true,
+      termsAccepted: true,
+      privacyAccepted: true,
+    }),
+  });
+  if (forgedSignup.data?.user?.role === 'ADMIN') {
+    throw new Error('Security Breach: Server trusted client-provided role: "ADMIN" during registration!');
+  }
+
+  const forgedToken = forgedSignup.data?.token;
+  const forgedAdminCheck = await request('/api/admin/payments?admin=true', {
+    headers: {
+      Authorization: `Bearer ${forgedToken}`,
+      'x-bureau-admin': 'true',
+      'x-admin-secret': 'invalid-secret',
+    },
+  });
+  console.log('Forged admin attempt status (expect 403):', forgedAdminCheck.status);
+  if (forgedAdminCheck.status !== 403) {
+    throw new Error('Security Breach: Forged request bypassed server authorization checks!');
+  }
+
+  // [TEST 12.11] Footer contains oldletters.mailroom@gmail.com and no Google AddSession URLs
+  console.log('\n[TEST 12.11] Inspecting Footer configuration for mailroom contact email...');
+  const fs = await import('fs');
+  const path = await import('path');
+  const footerContent = fs.readFileSync(path.resolve(process.cwd(), 'src/components/ui/index.tsx'), 'utf8');
+  if (!footerContent.includes('oldletters.mailroom@gmail.com')) {
+    throw new Error('Footer component does not contain contact email: oldletters.mailroom@gmail.com');
+  }
+  if (!footerContent.includes('mailto:oldletters.mailroom@gmail.com')) {
+    throw new Error('Footer component does not use mailto: link for oldletters.mailroom@gmail.com');
+  }
+  if (footerContent.toLowerCase().includes('addsession')) {
+    throw new Error('Footer component unexpectedly contains Google AddSession URL!');
+  }
+  console.log('SUCCESS: Footer contains oldletters.mailroom@gmail.com as mailto: link with no session URLs.');
+
+  // [TEST 12.12] Google OAuth admin session preserves admin role on /api/auth/me
+  console.log('\n[TEST 12.12] Verifying Google OAuth admin session preservation across /api/auth/me...');
+  const mePoosalaRes = await request('/api/auth/me', {
+    headers: { Authorization: `Bearer ${poosalaToken}` },
+  });
+  if (!mePoosalaRes.ok || mePoosalaRes.data.user?.role !== 'ADMIN') {
+    throw new Error(`Expected role 'ADMIN' on /api/auth/me for poosala15@gmail.com, got '${mePoosalaRes.data.user?.role}'`);
+  }
+
+  const meMailroomRes = await request('/api/auth/me', {
+    headers: { Authorization: `Bearer ${mailroomToken}` },
+  });
+  if (!meMailroomRes.ok || meMailroomRes.data.user?.role !== 'ADMIN') {
+    throw new Error(`Expected role 'ADMIN' on /api/auth/me for oldletters.mailroom@gmail.com, got '${meMailroomRes.data.user?.role}'`);
+  }
+  console.log('SUCCESS: Google OAuth admin sessions preserved admin role on /api/auth/me.');
 
   // TEST 13: Production Delivery Scheduler & Vercel Cron Endpoint Verification
   console.log('\n[TEST 13] Production Delivery Scheduler & Vercel Cron Verification...');

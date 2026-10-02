@@ -21,6 +21,7 @@ import { CookieConsentBanner } from './components/legal/CookieConsentBanner';
 import { CookiePreferencesModal } from './components/legal/CookiePreferencesModal';
 import { fetchLetters, getDeliveryMeta, getCurrentUser, logoutUser } from './lib/api';
 import { AdminPaymentModal } from './components/admin/AdminPaymentModal';
+import { AdminDashboardView } from './components/admin/AdminDashboardView';
 import { AuthModal } from './components/auth/AuthModal';
 import { ProfileModal } from './components/auth/ProfileModal';
 import { BureauDashboard, BureauTab } from './components/bureau/BureauDashboard';
@@ -114,6 +115,8 @@ export default function App() {
       window.history.pushState(null, '', `/${view}`);
     } else if (view === 'profile') {
       window.history.pushState(null, '', '/profile');
+    } else if (view === 'admin') {
+      window.history.pushState(null, '', '/admin');
     }
     setCurrentView(view);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -135,6 +138,8 @@ export default function App() {
         setCurrentView('terms');
       } else if (path === '/profile' || path === '/account' || path === '/bureau') {
         setCurrentView('profile');
+      } else if (path === '/admin' || path === '/admin/dashboard') {
+        setCurrentView('admin');
       }
 
       // Google OAuth redirection feedback
@@ -469,7 +474,7 @@ export default function App() {
           handleNavigate('profile');
         }}
         onNavigateBureauTab={(tab) => setBureauTab(tab)}
-        onOpenAdmin={() => setShowAdminModal(true)}
+        onOpenAdmin={() => handleNavigate('admin')}
         onLogout={() => {
           logoutUser();
           setAndPersistUser(null);
@@ -615,6 +620,17 @@ export default function App() {
               setCurrentView('landing');
             }}
             onReply={handleReplyToLetter}
+          />
+        )}
+
+        {currentView === 'admin' && (
+          <AdminDashboardView
+            currentUser={currentUser}
+            onNavigateHome={() => handleNavigate('landing')}
+            onOpenAuth={() => {
+              setAuthInitialMode('login');
+              setShowAuthModal(true);
+            }}
           />
         )}
       </main>
