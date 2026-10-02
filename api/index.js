@@ -3852,7 +3852,7 @@ async function runDeliveryScheduler(db) {
     const postedAt = new Date(letter.postedAt || letter.createdAt);
     const elapsedMs = now.getTime() - postedAt.getTime();
     const msUntilArrival = deliveryDate.getTime() - now.getTime();
-    if (elapsedMs >= 24 * 3600 * 1e3 && msUntilArrival > 30 * 60 * 1e3) {
+    if (elapsedMs >= 24 * 3600 * 1e3 && now < deliveryDate) {
       const alreadySentHalfway = await eventsColl.findOne({
         letterId: letter._id,
         eventType: "HALFWAY_EMAIL_SENT"
@@ -4057,6 +4057,27 @@ async function runDeliveryScheduler(db) {
       timeZoneName: "short"
     });
     if (recipientEmail) {
+      if (letter.recipientVerificationMethod === "otp") {
+        const existingOtp = await otpColl.findOne({
+          letterId: letter._id,
+          used: false,
+          expiresAt: { $gte: now }
+        });
+        if (!existingOtp) {
+          const otpCode = crypto2.randomInt(1e5, 999999).toString();
+          const otpHash = hashSha2562(otpCode);
+          await otpColl.insertOne({
+            _id: new ObjectId(),
+            email: recipientEmail,
+            letterId: letter._id,
+            otpHash,
+            attempts: 0,
+            expiresAt: new Date(now.getTime() + 60 * 60 * 1e3),
+            used: false,
+            createdAt: now
+          });
+        }
+      }
       try {
         const arrivalRes = await sendArrivalRecipientEmail({
           recipientEmail,
@@ -4101,20 +4122,29 @@ async function runDeliveryScheduler(db) {
   }
   return processed;
 }
-app.post(["/api/scheduler/tick", "/api/cron/delivery", "/api/internal/delivery/run"], async (req, res) => {
+app.all(["/api/scheduler/tick", "/api/cron/delivery", "/api/internal/delivery/run"], async (req, res) => {
   try {
-    const incomingAuth = req.headers.authorization?.replace(/^Bearer\s+/i, "");
-    const cronHeader = req.headers["x-cron-secret"];
-    if (process.env.CRON_SECRET && incomingAuth !== CRON_SECRET && cronHeader !== CRON_SECRET) {
-      const isAdmin = await verifyAdminServerSide(req);
-      if (!isAdmin && process.env.NODE_ENV === "production") {
-        return res.status(401).json({ success: false, error: "Unauthorized cron dispatch." });
+    const authHeader = req.headers.authorization;
+    const incomingAuth = authHeader?.replace(/^Bearer\s+/i, "")?.trim();
+    const cronHeader = req.headers["x-cron-secret"]?.trim();
+    const querySecret = req.query.secret?.trim();
+    if (process.env.CRON_SECRET) {
+      const authorized = incomingAuth === CRON_SECRET || cronHeader === CRON_SECRET || querySecret === CRON_SECRET;
+      if (!authorized) {
+        const isAdmin = await verifyAdminServerSide(req);
+        if (!isAdmin && process.env.NODE_ENV === "production") {
+          return res.status(401).json({ success: false, error: "Unauthorized cron dispatch." });
+        }
       }
     }
     const db = await getDb();
     const result = await runDeliveryScheduler(db);
     res.json({
       success: true,
+      endpoint: "/api/scheduler/tick",
+      canonical: true,
+      method: req.method,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
       halfwayCount: result.halfwayCount,
       preArrivalCount: result.preArrivalCount,
       deliveredCount: result.deliveredCount,
