@@ -1,0 +1,29 @@
+name: Automated Delivery Scheduler
+
+on:
+  schedule:
+    # Runs every 15 minutes to guarantee timely dispatch of T+24h, T+47h 30m, and T+48h emails
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  trigger-delivery-tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Canonical Scheduler Endpoint
+        run: |
+          echo "Pinging OLD-LETTERS delivery scheduler..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X GET \
+            "https://oldletters.vercel.app/api/scheduler/tick" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          
+          BODY=$(echo "$RESPONSE" | sed -e '$d')
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1 | cut -d':' -f2)
+          
+          echo "Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          
+          if [ "$HTTP_STATUS" -ne 200 ] && [ "$HTTP_STATUS" -ne 401 ]; then
+            echo "Unexpected status code $HTTP_STATUS"
+            exit 1
+          fi
