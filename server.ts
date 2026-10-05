@@ -35,6 +35,7 @@ import {
   getDb,
   setupDatabaseIndexes,
   isUsingAtlas,
+  getSanitizedMongoUri,
   ObjectId,
   LetterDoc,
   UserDoc,
@@ -3959,7 +3960,12 @@ app.post(['/api/payments', '/api/payments/create', '/payments', '/payments/creat
     const isDbUnavailable =
       err?.message?.includes('Database connection unavailable') ||
       err?.message?.includes('MongoDB Atlas connection unavailable') ||
-      err?.message?.includes('querySrv');
+      err?.message?.includes('MONGODB_URI is missing or invalid') ||
+      err?.message?.includes('querySrv') ||
+      err?.message?.includes('ENOTFOUND') ||
+      err?.message?.includes('ETIMEDOUT') ||
+      err?.name === 'MongoServerSelectionError' ||
+      err?.name === 'MongoNetworkError';
     const statusCode = isDbUnavailable ? 503 : 500;
     const clientMsg = isDbUnavailable
       ? 'Payment could not be registered because the payment service is temporarily unavailable. Please try again.'
@@ -4148,7 +4154,12 @@ app.post(['/api/payments/:id/media', '/api/letters/:id/media', '/payments/:id/me
       err?.message?.includes('Database connection unavailable') ||
       err?.message?.includes('MongoDB Atlas connection unavailable') ||
       err?.message?.includes('GridFS storage unavailable') ||
-      err?.message?.includes('querySrv');
+      err?.message?.includes('MONGODB_URI is missing or invalid') ||
+      err?.message?.includes('querySrv') ||
+      err?.message?.includes('ENOTFOUND') ||
+      err?.message?.includes('ETIMEDOUT') ||
+      err?.name === 'MongoServerSelectionError' ||
+      err?.name === 'MongoNetworkError';
     const statusCode = isDbUnavailable ? 503 : 500;
     const clientMsg = isDbUnavailable
       ? 'The postal media vault is temporarily unavailable. Please try again in a few moments.'
@@ -4391,7 +4402,12 @@ app.get(['/api/payments', '/api/user/payments', '/payments', '/user/payments'], 
     const isDbUnavailable =
       err?.message?.includes('Database connection unavailable') ||
       err?.message?.includes('MongoDB Atlas connection unavailable') ||
-      err?.message?.includes('querySrv');
+      err?.message?.includes('MONGODB_URI is missing or invalid') ||
+      err?.message?.includes('querySrv') ||
+      err?.message?.includes('ENOTFOUND') ||
+      err?.message?.includes('ETIMEDOUT') ||
+      err?.name === 'MongoServerSelectionError' ||
+      err?.name === 'MongoNetworkError';
     const statusCode = isDbUnavailable ? 503 : 500;
     res.status(statusCode).json({ success: false, error: err.message, payments: [] });
   }
@@ -4580,7 +4596,12 @@ app.get(['/api/admin/payments', '/admin/payments'], requireAdmin, async (req: Au
     const isDbUnavailable =
       err?.message?.includes('Database connection unavailable') ||
       err?.message?.includes('MongoDB Atlas connection unavailable') ||
-      err?.message?.includes('querySrv');
+      err?.message?.includes('MONGODB_URI is missing or invalid') ||
+      err?.message?.includes('querySrv') ||
+      err?.message?.includes('ENOTFOUND') ||
+      err?.message?.includes('ETIMEDOUT') ||
+      err?.name === 'MongoServerSelectionError' ||
+      err?.name === 'MongoNetworkError';
     const statusCode = isDbUnavailable ? 503 : 500;
     res.status(statusCode).json({ success: false, error: err.message, payments: [] });
   }
@@ -4809,11 +4830,16 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // VITE CLIENT MOUNT
 // ====================================================================
 async function startServer() {
-  try {
-    await setupDatabaseIndexes();
-    await seedDatabase();
-  } catch (seedErr) {
-    console.warn('[OLD-LETTERS] Seeding notice:', seedErr);
+  const uri = getSanitizedMongoUri();
+  if (uri) {
+    try {
+      await setupDatabaseIndexes();
+      await seedDatabase();
+    } catch (seedErr) {
+      console.warn('[OLD-LETTERS] Seeding notice:', seedErr);
+    }
+  } else {
+    console.log('[OLD-LETTERS] MONGODB_URI not configured. Database initialization deferred until MONGODB_URI is set.');
   }
 
   if (!isProd) {
@@ -4837,6 +4863,9 @@ async function startServer() {
   // Start background delivery scheduler loop (every 30 seconds)
   setInterval(async () => {
     try {
+      if (!getSanitizedMongoUri()) {
+        return;
+      }
       const db = await getDb();
       await runDeliveryScheduler(db);
     } catch (schedErr) {

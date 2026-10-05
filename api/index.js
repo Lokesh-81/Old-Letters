@@ -533,364 +533,131 @@ var RecipientVerifySchema = z.object({
 
 // src/lib/mongodb.ts
 import { MongoClient, ObjectId, GridFSBucket } from "mongodb";
-import { PassThrough } from "stream";
-import dns from "dns";
-var MemoryCollection = class {
-  constructor() {
-    this.docs = /* @__PURE__ */ new Map();
-  }
-  find(query = {}) {
-    const list = Array.from(this.docs.values()).filter((doc) => this.matchQuery(doc, query));
-    return {
-      toArray: async () => list,
-      sort: (sortObj) => ({
-        toArray: async () => {
-          const keys = Object.keys(sortObj);
-          return [...list].sort((a, b) => {
-            for (const key of keys) {
-              const dir = sortObj[key] === 1 ? 1 : -1;
-              const valA = a[key];
-              const valB = b[key];
-              if (valA < valB) return -1 * dir;
-              if (valA > valB) return 1 * dir;
-            }
-            return 0;
-          });
-        }
-      })
-    };
-  }
-  async findOne(query) {
-    for (const doc of this.docs.values()) {
-      if (this.matchQuery(doc, query)) {
-        return doc;
-      }
-    }
-    return null;
-  }
-  async insertOne(doc) {
-    const newDoc = {
-      ...doc,
-      _id: doc._id || new ObjectId()
-    };
-    this.docs.set(newDoc._id.toString(), newDoc);
-    return { insertedId: newDoc._id, acknowledged: true };
-  }
-  async insertMany(docs) {
-    const insertedIds = {};
-    let idx = 0;
-    for (const doc of docs) {
-      const newDoc = {
-        ...doc,
-        _id: doc._id || new ObjectId()
-      };
-      this.docs.set(newDoc._id.toString(), newDoc);
-      insertedIds[idx++] = newDoc._id;
-    }
-    return { insertedIds, acknowledged: true };
-  }
-  async updateOne(filter, update) {
-    const doc = await this.findOne(filter);
-    if (!doc) return { matchedCount: 0, modifiedCount: 0 };
-    if (update.$set) {
-      Object.assign(doc, update.$set);
-    }
-    if (update.$inc) {
-      for (const [k, v] of Object.entries(update.$inc)) {
-        doc[k] = (doc[k] || 0) + v;
-      }
-    }
-    return { matchedCount: 1, modifiedCount: 1 };
-  }
-  async updateMany(filter, update) {
-    let matchedCount = 0;
-    let modifiedCount = 0;
-    for (const doc of this.docs.values()) {
-      if (this.matchQuery(doc, filter)) {
-        matchedCount++;
-        if (update.$set) {
-          Object.assign(doc, update.$set);
-          modifiedCount++;
-        }
-        if (update.$inc) {
-          for (const [k, v] of Object.entries(update.$inc)) {
-            doc[k] = (doc[k] || 0) + v;
-          }
-          modifiedCount++;
-        }
-      }
-    }
-    return { matchedCount, modifiedCount };
-  }
-  async deleteOne(filter) {
-    for (const [id, doc] of this.docs.entries()) {
-      if (this.matchQuery(doc, filter)) {
-        this.docs.delete(id);
-        return { deletedCount: 1 };
-      }
-    }
-    return { deletedCount: 0 };
-  }
-  async deleteMany(filter) {
-    let deletedCount = 0;
-    for (const [id, doc] of Array.from(this.docs.entries())) {
-      if (this.matchQuery(doc, filter)) {
-        this.docs.delete(id);
-        deletedCount++;
-      }
-    }
-    return { deletedCount };
-  }
-  async findOneAndUpdate(filter, update) {
-    const doc = await this.findOne(filter);
-    if (!doc) return null;
-    if (update.$set) {
-      Object.assign(doc, update.$set);
-    }
-    return doc;
-  }
-  async countDocuments(query = {}) {
-    let count = 0;
-    for (const doc of this.docs.values()) {
-      if (this.matchQuery(doc, query)) count++;
-    }
-    return count;
-  }
-  async createIndex() {
-    return "index_created";
-  }
-  matchQuery(doc, query) {
-    if (!query || Object.keys(query).length === 0) return true;
-    if (query.$or && Array.isArray(query.$or)) {
-      const matchAny = query.$or.some((subQuery) => this.matchQuery(doc, subQuery));
-      if (!matchAny) return false;
-    }
-    if (query.$and && Array.isArray(query.$and)) {
-      const matchAll = query.$and.every((subQuery) => this.matchQuery(doc, subQuery));
-      if (!matchAll) return false;
-    }
-    for (const [k, v] of Object.entries(query)) {
-      if (k === "$or" || k === "$and") continue;
-      if (v instanceof RegExp) {
-        if (!v.test(String(doc[k] ?? ""))) return false;
-      } else if (v && typeof v === "object" && !Array.isArray(v) && !(v instanceof Date) && !(v instanceof ObjectId)) {
-        if ("$lte" in v && !(doc[k] <= v.$lte)) return false;
-        if ("$gte" in v && !(doc[k] >= v.$gte)) return false;
-        if ("$eq" in v && doc[k] !== v.$eq) return false;
-        if ("$ne" in v && doc[k] === v.$ne) return false;
-        if ("$in" in v && !v.$in.includes(doc[k])) return false;
-      } else if (k === "_id" || k === "senderId" || k === "letterId" || k === "userId" || k === "paymentId") {
-        const idStr = v?.toString();
-        const docIdStr = doc[k]?.toString();
-        if (idStr !== docIdStr) return false;
-      } else if (doc[k] !== v) {
-        return false;
-      }
-    }
-    return true;
-  }
-};
-var MemoryGridFSBucket = class {
-  constructor() {
-    this.files = /* @__PURE__ */ new Map();
-  }
-  openUploadStream(filename, options) {
-    const fileId = new ObjectId();
-    const chunks = [];
-    const stream = new PassThrough();
-    stream.on("data", (chunk) => {
-      chunks.push(Buffer.from(chunk));
-    });
-    stream.on("finish", () => {
-      const buffer = Buffer.concat(chunks);
-      this.files.set(fileId.toString(), {
-        id: fileId,
-        filename,
-        metadata: options?.metadata || {},
-        buffer,
-        uploadDate: /* @__PURE__ */ new Date()
-      });
-    });
-    stream.id = fileId;
-    return stream;
-  }
-  openDownloadStream(id) {
-    const file = this.files.get(id.toString());
-    if (!file) {
-      const errStream = new PassThrough();
-      process.nextTick(() => errStream.emit("error", new Error("FileNotFound: File not found in GridFS")));
-      return errStream;
-    }
-    const stream = new PassThrough();
-    process.nextTick(() => {
-      stream.end(file.buffer);
-    });
-    return stream;
-  }
-  async delete(id) {
-    this.files.delete(id.toString());
-  }
-  find(filter = {}) {
-    const list = Array.from(this.files.values()).filter((f) => {
-      if (filter._id && f.id.toString() !== filter._id.toString()) return false;
-      if (filter.filename && f.filename !== filter.filename) return false;
-      return true;
-    });
-    return {
-      toArray: async () => list
-    };
-  }
-  getFile(id) {
-    return this.files.get(id.toString()) || null;
-  }
-};
-var MemoryDb = class {
-  constructor() {
-    this.collections = /* @__PURE__ */ new Map();
-  }
-  collection(name) {
-    if (!this.collections.has(name)) {
-      this.collections.set(name, new MemoryCollection());
-    }
-    return this.collections.get(name);
-  }
-};
 function isProductionEnvironment() {
   return process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV);
 }
 function getSanitizedMongoUri() {
-  const raw = process.env.MONGODB_URI || process.env.MONGODB_URL || process.env.DATABASE_URL || process.env.MONGO_URL || "";
+  const raw = process.env.MONGODB_URI || "";
   let cleaned = raw.trim();
   if (cleaned.startsWith('"') && cleaned.endsWith('"') || cleaned.startsWith("'") && cleaned.endsWith("'")) {
     cleaned = cleaned.slice(1, -1).trim();
   }
   return cleaned.replace(/[\r\n\t]/g, "");
 }
-function configureDnsForAtlas(forcePublicOnly = false) {
+function getSanitizedHostname(uri) {
+  if (!uri) return "none";
   try {
-    const publicDns = ["8.8.8.8", "1.1.1.1", "8.8.4.4"];
-    if (forcePublicOnly) {
-      dns.setServers(publicDns);
-      return;
-    }
-    const current = dns.getServers();
-    const hasPublic = current.some((s) => publicDns.includes(s));
-    if (!hasPublic) {
-      dns.setServers([...publicDns, ...current]);
-    }
-  } catch (err) {
-    console.warn("[OLD-LETTERS MongoDB] DNS resolver configuration note:", err);
+    const afterProtocol = uri.split("://")[1];
+    if (!afterProtocol) return "unknown";
+    const afterAuth = afterProtocol.includes("@") ? afterProtocol.split("@")[1] : afterProtocol;
+    const hostPortion = afterAuth.split("/")[0].split("?")[0];
+    return hostPortion || "empty-host";
+  } catch {
+    return "unparseable-host";
   }
 }
-if (getSanitizedMongoUri().startsWith("mongodb+srv://")) {
-  configureDnsForAtlas(false);
+function logMongoDiagnostics(uri) {
+  const exists = Boolean(process.env.MONGODB_URI && process.env.MONGODB_URI.trim().length > 0);
+  const protocol = uri.startsWith("mongodb+srv://") ? "mongodb+srv://" : uri.startsWith("mongodb://") ? "mongodb://" : "invalid/missing";
+  const hostname = getSanitizedHostname(uri);
+  console.log("[OLD-LETTERS MongoDB Diagnostics]", {
+    mongoUriConfigured: exists,
+    protocol,
+    sanitizedHostname: hostname,
+    environment: isProductionEnvironment() ? "production" : "development",
+    serverlessPlatform: Boolean(process.env.VERCEL) ? "Vercel Serverless" : "Node Runtime"
+  });
 }
-var cachedMongoClient = null;
+function validateMongoUri(uri, isProd2) {
+  if (!uri || uri.trim().length === 0) {
+    const errorMsg = "MONGODB_URI is missing or invalid in the production environment.";
+    console.error(`[OLD-LETTERS MongoDB] ${errorMsg} (MONGODB_URI environment variable is empty or undefined)`);
+    throw new Error(errorMsg);
+  }
+  if (!uri.startsWith("mongodb://") && !uri.startsWith("mongodb+srv://")) {
+    const errorMsg = "MONGODB_URI is missing or invalid in the production environment.";
+    console.error(`[OLD-LETTERS MongoDB] ${errorMsg} (URI must begin with mongodb:// or mongodb+srv://)`);
+    throw new Error(errorMsg);
+  }
+  const hostname = getSanitizedHostname(uri);
+  if (hostname.includes("xxxx") || hostname.includes("<") || hostname.includes(">") || hostname === "none" || hostname === "empty-host") {
+    const errorMsg = "MONGODB_URI is missing or invalid in the production environment.";
+    console.error(`[OLD-LETTERS MongoDB] ${errorMsg} (Detected invalid placeholder hostname: ${hostname})`);
+    throw new Error(errorMsg);
+  }
+  if (isProd2 && (hostname === "localhost" || hostname === "127.0.0.1")) {
+    const errorMsg = "MONGODB_URI is missing or invalid in the production environment.";
+    console.error(`[OLD-LETTERS MongoDB] ${errorMsg} (Localhost URI detected in production deployment)`);
+    throw new Error(errorMsg);
+  }
+}
+try {
+  logMongoDiagnostics(getSanitizedMongoUri());
+} catch {
+}
 function isUsingAtlas() {
-  return cachedMongoClient !== null;
+  return globalThis._mongoClient !== void 0;
 }
 async function getMongoClient() {
-  const currentUri = getSanitizedMongoUri();
+  const uri = getSanitizedMongoUri();
   const isProd2 = isProductionEnvironment();
-  if (!currentUri || !currentUri.startsWith("mongodb://") && !currentUri.startsWith("mongodb+srv://")) {
-    if (isProd2) {
-      throw new Error(
-        "MongoDB Atlas connection unavailable: MONGODB_URI environment variable is missing or malformed in production. Please check Vercel Project Settings."
-      );
-    }
-    return null;
+  if (!globalThis._mongoDiagnosticsLogged) {
+    globalThis._mongoDiagnosticsLogged = true;
+    logMongoDiagnostics(uri);
   }
-  if (cachedMongoClient) {
+  validateMongoUri(uri, isProd2);
+  if (globalThis._mongoClient) {
     try {
-      await cachedMongoClient.db(process.env.MONGODB_DB_NAME || "oldletters").command({ ping: 1 });
-      return cachedMongoClient;
+      await globalThis._mongoClient.db(process.env.MONGODB_DB_NAME || "oldletters").command({ ping: 1 });
+      return globalThis._mongoClient;
     } catch {
       console.warn("[OLD-LETTERS MongoDB] Stale connection detected, reconnecting...");
-      cachedMongoClient = null;
+      globalThis._mongoClient = void 0;
       globalThis._mongoClientPromise = void 0;
     }
   }
-  const createClient = (targetUri) => new MongoClient(targetUri, {
-    maxPoolSize: 10,
-    minPoolSize: 1,
-    connectTimeoutMS: 15e3,
-    serverSelectionTimeoutMS: 15e3,
-    socketTimeoutMS: 3e4,
-    retryWrites: true,
-    retryReads: true
-  });
   if (!globalThis._mongoClientPromise) {
-    if (currentUri.startsWith("mongodb+srv://")) {
-      configureDnsForAtlas(false);
-    }
-    const client = createClient(currentUri);
-    globalThis._mongoClientPromise = client.connect().catch(async (initialErr) => {
-      const isSrvIssue = initialErr?.message?.includes("querySrv") || initialErr?.code === "ENOTFOUND" || initialErr?.message?.includes("ENOTFOUND");
-      if (isSrvIssue && currentUri.startsWith("mongodb+srv://")) {
-        console.warn("[OLD-LETTERS MongoDB] querySrv DNS resolution failed with default resolver. Setting public DNS resolvers [8.8.8.8, 1.1.1.1] and retrying...");
-        try {
-          configureDnsForAtlas(true);
-          const retryClient = createClient(currentUri);
-          return await retryClient.connect();
-        } catch (retryErr) {
-          console.error("[OLD-LETTERS MongoDB] Retry with public DNS also failed:", retryErr?.message || retryErr);
-          throw retryErr;
-        }
-      }
-      throw initialErr;
+    const client = new MongoClient(uri, {
+      maxPoolSize: 10,
+      minPoolSize: 1,
+      serverSelectionTimeoutMS: 8e3,
+      connectTimeoutMS: 1e4,
+      socketTimeoutMS: 45e3,
+      retryWrites: true,
+      retryReads: true
+    });
+    globalThis._mongoClientPromise = client.connect().then((connectedClient) => {
+      globalThis._mongoClient = connectedClient;
+      return connectedClient;
     }).catch((err) => {
       globalThis._mongoClientPromise = void 0;
+      globalThis._mongoClient = void 0;
       throw err;
     });
   }
   try {
     const client = await globalThis._mongoClientPromise;
-    cachedMongoClient = client;
     return client;
   } catch (err) {
     globalThis._mongoClientPromise = void 0;
-    cachedMongoClient = null;
-    console.error("[OLD-LETTERS MongoDB] Atlas connection error:", err?.message || err);
-    if (isProd2) {
-      const isSrvError = err?.message?.includes("querySrv") || err?.message?.includes("ENOTFOUND");
-      const errorMsg = isSrvError ? `MongoDB Atlas connection unavailable: DNS resolution failed (${err?.message}). Please ensure your MONGODB_URI in Vercel contains your actual Atlas cluster hostname (not a placeholder like xxxx) and that 0.0.0.0/0 is whitelisted in Atlas Network Access.` : `MongoDB Atlas connection unavailable: ${err?.message || "Check cluster status and IP access list in MongoDB Atlas"}`;
-      throw new Error(errorMsg);
+    globalThis._mongoClient = void 0;
+    const errMsg = err?.message || String(err);
+    console.error("[OLD-LETTERS MongoDB] Atlas connection error:", errMsg);
+    if (errMsg.includes("ENOTFOUND") || errMsg.includes("querySrv") || errMsg.includes("ETIMEDOUT") || errMsg.includes("Server selection timed out")) {
+      throw new Error(
+        `MongoDB Atlas connection unavailable: ${errMsg}. Please verify that MONGODB_URI contains a valid cluster hostname and MongoDB Atlas Network Access allowlist permits connections (0.0.0.0/0 for Vercel serverless).`
+      );
     }
-    return null;
+    throw err;
   }
 }
 async function getDb(dbName) {
-  const isProd2 = isProductionEnvironment();
   const client = await getMongoClient();
-  if (client) {
-    return client.db(dbName || process.env.MONGODB_DB_NAME || "oldletters");
-  }
-  if (isProd2) {
-    throw new Error("Database connection unavailable: MongoDB Atlas connection is required in production.");
-  }
-  if (!global._memoryDbInstance) {
-    console.warn("[OLD-LETTERS MongoDB] Using in-memory database fallback for local offline development.");
-    global._memoryDbInstance = new MemoryDb();
-  }
-  return global._memoryDbInstance;
+  return client.db(dbName || process.env.MONGODB_DB_NAME || "oldletters");
 }
 async function getGridFSBucket(bucketName = "letterMedia") {
-  const isProd2 = isProductionEnvironment();
-  const client = await getMongoClient();
-  if (client) {
-    const db = client.db(process.env.MONGODB_DB_NAME || "oldletters");
-    return new GridFSBucket(db, { bucketName });
-  }
-  if (isProd2) {
-    throw new Error("GridFS storage unavailable: MongoDB Atlas connection is required in production.");
-  }
-  if (!global._memoryGridFSBuckets) {
-    global._memoryGridFSBuckets = /* @__PURE__ */ new Map();
-  }
-  if (!global._memoryGridFSBuckets.has(bucketName)) {
-    global._memoryGridFSBuckets.set(bucketName, new MemoryGridFSBucket());
-  }
-  return global._memoryGridFSBuckets.get(bucketName);
+  const db = await getDb();
+  return new GridFSBucket(db, { bucketName });
 }
 async function uploadGridFSBuffer(bucketName, filename, buffer, metadata = {}) {
   const bucket = await getGridFSBucket(bucketName);
@@ -5742,7 +5509,7 @@ app.post(["/api/payments", "/api/payments/create", "/payments", "/payments/creat
     });
   } catch (err) {
     console.error("[OLD-LETTERS Payment Error]", err);
-    const isDbUnavailable = err?.message?.includes("Database connection unavailable") || err?.message?.includes("MongoDB Atlas connection unavailable") || err?.message?.includes("querySrv");
+    const isDbUnavailable = err?.message?.includes("Database connection unavailable") || err?.message?.includes("MongoDB Atlas connection unavailable") || err?.message?.includes("MONGODB_URI is missing or invalid") || err?.message?.includes("querySrv") || err?.message?.includes("ENOTFOUND") || err?.message?.includes("ETIMEDOUT") || err?.name === "MongoServerSelectionError" || err?.name === "MongoNetworkError";
     const statusCode = isDbUnavailable ? 503 : 500;
     const clientMsg = isDbUnavailable ? "Payment could not be registered because the payment service is temporarily unavailable. Please try again." : err.message || "Payment submission could not be completed.";
     res.status(statusCode).json({ success: false, error: clientMsg });
@@ -5897,7 +5664,7 @@ app.post(["/api/payments/:id/media", "/api/letters/:id/media", "/payments/:id/me
     });
   } catch (err) {
     console.error("[OLD-LETTERS Media Upload Error]", err);
-    const isDbUnavailable = err?.message?.includes("Database connection unavailable") || err?.message?.includes("MongoDB Atlas connection unavailable") || err?.message?.includes("GridFS storage unavailable") || err?.message?.includes("querySrv");
+    const isDbUnavailable = err?.message?.includes("Database connection unavailable") || err?.message?.includes("MongoDB Atlas connection unavailable") || err?.message?.includes("GridFS storage unavailable") || err?.message?.includes("MONGODB_URI is missing or invalid") || err?.message?.includes("querySrv") || err?.message?.includes("ENOTFOUND") || err?.message?.includes("ETIMEDOUT") || err?.name === "MongoServerSelectionError" || err?.name === "MongoNetworkError";
     const statusCode = isDbUnavailable ? 503 : 500;
     const clientMsg = isDbUnavailable ? "The postal media vault is temporarily unavailable. Please try again in a few moments." : err.message || "Failed to upload media enclosure.";
     res.status(statusCode).json({ success: false, error: clientMsg });
@@ -6095,7 +5862,7 @@ app.get(["/api/payments", "/api/user/payments", "/payments", "/user/payments"], 
     });
   } catch (err) {
     console.error("[OLD-LETTERS List Payments Error]", err);
-    const isDbUnavailable = err?.message?.includes("Database connection unavailable") || err?.message?.includes("MongoDB Atlas connection unavailable") || err?.message?.includes("querySrv");
+    const isDbUnavailable = err?.message?.includes("Database connection unavailable") || err?.message?.includes("MongoDB Atlas connection unavailable") || err?.message?.includes("MONGODB_URI is missing or invalid") || err?.message?.includes("querySrv") || err?.message?.includes("ENOTFOUND") || err?.message?.includes("ETIMEDOUT") || err?.name === "MongoServerSelectionError" || err?.name === "MongoNetworkError";
     const statusCode = isDbUnavailable ? 503 : 500;
     res.status(statusCode).json({ success: false, error: err.message, payments: [] });
   }
@@ -6260,7 +6027,7 @@ app.get(["/api/admin/payments", "/admin/payments"], requireAdmin, async (req, re
     });
   } catch (err) {
     console.error("[OLD-LETTERS Admin List Payments Error]", err);
-    const isDbUnavailable = err?.message?.includes("Database connection unavailable") || err?.message?.includes("MongoDB Atlas connection unavailable") || err?.message?.includes("querySrv");
+    const isDbUnavailable = err?.message?.includes("Database connection unavailable") || err?.message?.includes("MongoDB Atlas connection unavailable") || err?.message?.includes("MONGODB_URI is missing or invalid") || err?.message?.includes("querySrv") || err?.message?.includes("ENOTFOUND") || err?.message?.includes("ETIMEDOUT") || err?.name === "MongoServerSelectionError" || err?.name === "MongoNetworkError";
     const statusCode = isDbUnavailable ? 503 : 500;
     res.status(statusCode).json({ success: false, error: err.message, payments: [] });
   }
@@ -6458,11 +6225,16 @@ app.use((err, req, res, next) => {
   next(err);
 });
 async function startServer() {
-  try {
-    await setupDatabaseIndexes();
-    await seedDatabase();
-  } catch (seedErr) {
-    console.warn("[OLD-LETTERS] Seeding notice:", seedErr);
+  const uri = getSanitizedMongoUri();
+  if (uri) {
+    try {
+      await setupDatabaseIndexes();
+      await seedDatabase();
+    } catch (seedErr) {
+      console.warn("[OLD-LETTERS] Seeding notice:", seedErr);
+    }
+  } else {
+    console.log("[OLD-LETTERS] MONGODB_URI not configured. Database initialization deferred until MONGODB_URI is set.");
   }
   if (!isProd) {
     const { createServer: createViteServer } = await import("vite");
@@ -6482,6 +6254,9 @@ async function startServer() {
   });
   setInterval(async () => {
     try {
+      if (!getSanitizedMongoUri()) {
+        return;
+      }
       const db = await getDb();
       await runDeliveryScheduler(db);
     } catch (schedErr) {
