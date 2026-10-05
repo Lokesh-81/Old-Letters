@@ -3955,7 +3955,16 @@ app.post(['/api/payments', '/api/payments/create', '/payments', '/payments/creat
       message: 'UPI payment submitted. Awaiting administrative verification.',
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error('[OLD-LETTERS Payment Error]', err);
+    const isDbUnavailable =
+      err?.message?.includes('Database connection unavailable') ||
+      err?.message?.includes('MongoDB Atlas connection unavailable') ||
+      err?.message?.includes('querySrv');
+    const statusCode = isDbUnavailable ? 503 : 500;
+    const clientMsg = isDbUnavailable
+      ? 'Payment could not be registered because the payment service is temporarily unavailable. Please try again.'
+      : (err.message || 'Payment submission could not be completed.');
+    res.status(statusCode).json({ success: false, error: clientMsg });
   }
 });
 
@@ -4134,7 +4143,17 @@ app.post(['/api/payments/:id/media', '/api/letters/:id/media', '/payments/:id/me
       message: 'Media recording successfully stored in private GridFS vault and linked to payment.',
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error('[OLD-LETTERS Media Upload Error]', err);
+    const isDbUnavailable =
+      err?.message?.includes('Database connection unavailable') ||
+      err?.message?.includes('MongoDB Atlas connection unavailable') ||
+      err?.message?.includes('GridFS storage unavailable') ||
+      err?.message?.includes('querySrv');
+    const statusCode = isDbUnavailable ? 503 : 500;
+    const clientMsg = isDbUnavailable
+      ? 'The postal media vault is temporarily unavailable. Please try again in a few moments.'
+      : (err.message || 'Failed to upload media enclosure.');
+    res.status(statusCode).json({ success: false, error: clientMsg });
   }
 });
 
@@ -4368,7 +4387,13 @@ app.get(['/api/payments', '/api/user/payments', '/payments', '/user/payments'], 
       payments: enriched,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error('[OLD-LETTERS List Payments Error]', err);
+    const isDbUnavailable =
+      err?.message?.includes('Database connection unavailable') ||
+      err?.message?.includes('MongoDB Atlas connection unavailable') ||
+      err?.message?.includes('querySrv');
+    const statusCode = isDbUnavailable ? 503 : 500;
+    res.status(statusCode).json({ success: false, error: err.message, payments: [] });
   }
 });
 
@@ -4551,7 +4576,13 @@ app.get(['/api/admin/payments', '/admin/payments'], requireAdmin, async (req: Au
       payments: enriched,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error('[OLD-LETTERS Admin List Payments Error]', err);
+    const isDbUnavailable =
+      err?.message?.includes('Database connection unavailable') ||
+      err?.message?.includes('MongoDB Atlas connection unavailable') ||
+      err?.message?.includes('querySrv');
+    const statusCode = isDbUnavailable ? 503 : 500;
+    res.status(statusCode).json({ success: false, error: err.message, payments: [] });
   }
 });
 

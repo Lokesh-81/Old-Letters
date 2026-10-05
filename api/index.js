@@ -515,8 +515,8 @@ var SubmitPaymentSchema = z.object({
   featureCode: z.enum(["VOICE_NOTE", "VIDEO_NOTE", "LIVE_MEETING", "VOICE", "VIDEO"]).optional(),
   featureType: z.enum(["VOICE_MESSAGE", "VIDEO_MESSAGE", "VOICE_NOTE", "VIDEO_NOTE"]).optional(),
   amount: z.number().positive(),
-  currency: z.string().default("INR"),
-  upiReference: z.string().min(6, "Valid UPI reference / UTR number required").max(50),
+  currency: z.string().optional().default("INR"),
+  upiReference: z.string().trim().min(6, "Please enter a valid UPI transaction reference / UTR number (at least 6 characters).").max(35, "UPI transaction reference cannot exceed 35 characters."),
   screenshotUrl: z.string().optional().nullable()
 });
 var AdminVerifyPaymentSchema = z.object({
@@ -534,6 +534,7 @@ var RecipientVerifySchema = z.object({
 // src/lib/mongodb.ts
 import { MongoClient, ObjectId, GridFSBucket } from "mongodb";
 import { PassThrough } from "stream";
+import dns from "dns";
 var MemoryCollection = class {
   constructor() {
     this.docs = /* @__PURE__ */ new Map();
@@ -754,15 +755,49 @@ var MemoryDb = class {
     return this.collections.get(name);
   }
 };
-var uri = process.env.MONGODB_URI || "";
-var isRealMongo = Boolean(uri && (uri.startsWith("mongodb://") || uri.startsWith("mongodb+srv://")));
+function isProductionEnvironment() {
+  return process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV);
+}
+function getSanitizedMongoUri() {
+  const raw = process.env.MONGODB_URI || process.env.MONGODB_URL || process.env.DATABASE_URL || process.env.MONGO_URL || "";
+  let cleaned = raw.trim();
+  if (cleaned.startsWith('"') && cleaned.endsWith('"') || cleaned.startsWith("'") && cleaned.endsWith("'")) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+  return cleaned.replace(/[\r\n\t]/g, "");
+}
+function configureDnsForAtlas(forcePublicOnly = false) {
+  try {
+    const publicDns = ["8.8.8.8", "1.1.1.1", "8.8.4.4"];
+    if (forcePublicOnly) {
+      dns.setServers(publicDns);
+      return;
+    }
+    const current = dns.getServers();
+    const hasPublic = current.some((s) => publicDns.includes(s));
+    if (!hasPublic) {
+      dns.setServers([...publicDns, ...current]);
+    }
+  } catch (err) {
+    console.warn("[OLD-LETTERS MongoDB] DNS resolver configuration note:", err);
+  }
+}
+if (getSanitizedMongoUri().startsWith("mongodb+srv://")) {
+  configureDnsForAtlas(false);
+}
 var cachedMongoClient = null;
 function isUsingAtlas() {
-  return isRealMongo;
+  return cachedMongoClient !== null;
 }
 async function getMongoClient() {
-  const currentUri = process.env.MONGODB_URI || uri;
+  const currentUri = getSanitizedMongoUri();
+  const isProd2 = isProductionEnvironment();
   if (!currentUri || !currentUri.startsWith("mongodb://") && !currentUri.startsWith("mongodb+srv://")) {
+    if (isProd2) {
+      throw new Error(
+        "MongoDB Atlas connection unavailable: MONGODB_URI environment variable is missing or malformed in production. Please check Vercel Project Settings."
+      );
+    }
     return null;
   }
   if (cachedMongoClient) {
@@ -775,15 +810,35 @@ async function getMongoClient() {
       globalThis._mongoClientPromise = void 0;
     }
   }
+  const createClient = (targetUri) => new MongoClient(targetUri, {
+    maxPoolSize: 10,
+    minPoolSize: 1,
+    connectTimeoutMS: 15e3,
+    serverSelectionTimeoutMS: 15e3,
+    socketTimeoutMS: 3e4,
+    retryWrites: true,
+    retryReads: true
+  });
   if (!globalThis._mongoClientPromise) {
-    const client = new MongoClient(currentUri, {
-      maxPoolSize: 10,
-      minPoolSize: 1,
-      connectTimeoutMS: 15e3,
-      serverSelectionTimeoutMS: 15e3,
-      socketTimeoutMS: 3e4
-    });
-    globalThis._mongoClientPromise = client.connect().catch((err) => {
+    if (currentUri.startsWith("mongodb+srv://")) {
+      configureDnsForAtlas(false);
+    }
+    const client = createClient(currentUri);
+    globalThis._mongoClientPromise = client.connect().catch(async (initialErr) => {
+      const isSrvIssue = initialErr?.message?.includes("querySrv") || initialErr?.code === "ENOTFOUND" || initialErr?.message?.includes("ENOTFOUND");
+      if (isSrvIssue && currentUri.startsWith("mongodb+srv://")) {
+        console.warn("[OLD-LETTERS MongoDB] querySrv DNS resolution failed with default resolver. Setting public DNS resolvers [8.8.8.8, 1.1.1.1] and retrying...");
+        try {
+          configureDnsForAtlas(true);
+          const retryClient = createClient(currentUri);
+          return await retryClient.connect();
+        } catch (retryErr) {
+          console.error("[OLD-LETTERS MongoDB] Retry with public DNS also failed:", retryErr?.message || retryErr);
+          throw retryErr;
+        }
+      }
+      throw initialErr;
+    }).catch((err) => {
       globalThis._mongoClientPromise = void 0;
       throw err;
     });
@@ -791,33 +846,43 @@ async function getMongoClient() {
   try {
     const client = await globalThis._mongoClientPromise;
     cachedMongoClient = client;
-    isRealMongo = true;
     return client;
   } catch (err) {
     globalThis._mongoClientPromise = void 0;
     cachedMongoClient = null;
     console.error("[OLD-LETTERS MongoDB] Atlas connection error:", err?.message || err);
-    if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
-      throw new Error(`MongoDB Atlas connection unavailable: ${err?.message || "Check cluster status and IP access list"}`);
+    if (isProd2) {
+      const isSrvError = err?.message?.includes("querySrv") || err?.message?.includes("ENOTFOUND");
+      const errorMsg = isSrvError ? `MongoDB Atlas connection unavailable: DNS resolution failed (${err?.message}). Please ensure your MONGODB_URI in Vercel contains your actual Atlas cluster hostname (not a placeholder like xxxx) and that 0.0.0.0/0 is whitelisted in Atlas Network Access.` : `MongoDB Atlas connection unavailable: ${err?.message || "Check cluster status and IP access list in MongoDB Atlas"}`;
+      throw new Error(errorMsg);
     }
     return null;
   }
 }
 async function getDb(dbName) {
+  const isProd2 = isProductionEnvironment();
   const client = await getMongoClient();
   if (client) {
     return client.db(dbName || process.env.MONGODB_DB_NAME || "oldletters");
   }
+  if (isProd2) {
+    throw new Error("Database connection unavailable: MongoDB Atlas connection is required in production.");
+  }
   if (!global._memoryDbInstance) {
+    console.warn("[OLD-LETTERS MongoDB] Using in-memory database fallback for local offline development.");
     global._memoryDbInstance = new MemoryDb();
   }
   return global._memoryDbInstance;
 }
 async function getGridFSBucket(bucketName = "letterMedia") {
+  const isProd2 = isProductionEnvironment();
   const client = await getMongoClient();
   if (client) {
     const db = client.db(process.env.MONGODB_DB_NAME || "oldletters");
     return new GridFSBucket(db, { bucketName });
+  }
+  if (isProd2) {
+    throw new Error("GridFS storage unavailable: MongoDB Atlas connection is required in production.");
   }
   if (!global._memoryGridFSBuckets) {
     global._memoryGridFSBuckets = /* @__PURE__ */ new Map();
@@ -5676,7 +5741,11 @@ app.post(["/api/payments", "/api/payments/create", "/payments", "/payments/creat
       message: "UPI payment submitted. Awaiting administrative verification."
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[OLD-LETTERS Payment Error]", err);
+    const isDbUnavailable = err?.message?.includes("Database connection unavailable") || err?.message?.includes("MongoDB Atlas connection unavailable") || err?.message?.includes("querySrv");
+    const statusCode = isDbUnavailable ? 503 : 500;
+    const clientMsg = isDbUnavailable ? "Payment could not be registered because the payment service is temporarily unavailable. Please try again." : err.message || "Payment submission could not be completed.";
+    res.status(statusCode).json({ success: false, error: clientMsg });
   }
 });
 app.post(["/api/payments/:id/media", "/api/letters/:id/media", "/payments/:id/media", "/letters/:id/media"], requireAuth, async (req, res) => {
@@ -5827,7 +5896,11 @@ app.post(["/api/payments/:id/media", "/api/letters/:id/media", "/payments/:id/me
       message: "Media recording successfully stored in private GridFS vault and linked to payment."
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[OLD-LETTERS Media Upload Error]", err);
+    const isDbUnavailable = err?.message?.includes("Database connection unavailable") || err?.message?.includes("MongoDB Atlas connection unavailable") || err?.message?.includes("GridFS storage unavailable") || err?.message?.includes("querySrv");
+    const statusCode = isDbUnavailable ? 503 : 500;
+    const clientMsg = isDbUnavailable ? "The postal media vault is temporarily unavailable. Please try again in a few moments." : err.message || "Failed to upload media enclosure.";
+    res.status(statusCode).json({ success: false, error: clientMsg });
   }
 });
 app.get(["/api/admin/media/:storageKey", "/admin/media/:storageKey", "/api/media/:storageKey", "/media/:storageKey"], requireAdmin, async (req, res) => {
@@ -6021,7 +6094,10 @@ app.get(["/api/payments", "/api/user/payments", "/payments", "/user/payments"], 
       payments: enriched
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[OLD-LETTERS List Payments Error]", err);
+    const isDbUnavailable = err?.message?.includes("Database connection unavailable") || err?.message?.includes("MongoDB Atlas connection unavailable") || err?.message?.includes("querySrv");
+    const statusCode = isDbUnavailable ? 503 : 500;
+    res.status(statusCode).json({ success: false, error: err.message, payments: [] });
   }
 });
 app.get(["/api/payments/:id", "/payments/:id"], requireAuth, async (req, res) => {
@@ -6183,7 +6259,10 @@ app.get(["/api/admin/payments", "/admin/payments"], requireAdmin, async (req, re
       payments: enriched
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[OLD-LETTERS Admin List Payments Error]", err);
+    const isDbUnavailable = err?.message?.includes("Database connection unavailable") || err?.message?.includes("MongoDB Atlas connection unavailable") || err?.message?.includes("querySrv");
+    const statusCode = isDbUnavailable ? 503 : 500;
+    res.status(statusCode).json({ success: false, error: err.message, payments: [] });
   }
 });
 app.post(["/api/admin/payments/:id/verify", "/api/admin/payments/:id/approve", "/api/admin/payments/:id/reject", "/admin/payments/:id/verify", "/admin/payments/:id/approve", "/admin/payments/:id/reject"], requireAdmin, async (req, res) => {

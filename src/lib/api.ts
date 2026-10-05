@@ -22,6 +22,7 @@ export function normalizeApiError(
 ): string {
   if (!err) return fallback;
 
+  // 1. If it's a string
   if (typeof err === 'string') {
     const trimmed = err.trim();
     if (
@@ -36,6 +37,7 @@ export function normalizeApiError(
     return trimmed;
   }
 
+  // 2. If it's an Error instance
   if (err instanceof Error) {
     const msg = typeof err.message === 'string' ? err.message.trim() : '';
     if (
@@ -46,11 +48,30 @@ export function normalizeApiError(
     ) {
       return msg;
     }
+    // Inspect underlying error response / cause if message is generic or [object Object]
+    const anyErr = err as any;
+    if (anyErr.response?.data) {
+      const sub = normalizeApiError(anyErr.response.data, '');
+      if (sub) return sub;
+    }
+    if (anyErr.cause) {
+      const sub = normalizeApiError(anyErr.cause, '');
+      if (sub) return sub;
+    }
+    if (anyErr.error) {
+      const sub = normalizeApiError(anyErr.error, '');
+      if (sub) return sub;
+    }
     return fallback;
   }
 
+  // 3. If it's a plain object / record
   if (typeof err === 'object') {
     const obj = err as Record<string, any>;
+    if (obj.response?.data) {
+      const sub = normalizeApiError(obj.response.data, '');
+      if (sub) return sub;
+    }
     if (typeof obj.error === 'string' && obj.error.trim() && obj.error !== '[object Object]') {
       return obj.error.trim();
     }
@@ -58,17 +79,17 @@ export function normalizeApiError(
       return obj.message.trim();
     }
     if (obj.error && typeof obj.error === 'object') {
-      if (typeof obj.error.message === 'string' && obj.error.message.trim()) {
-        return obj.error.message.trim();
-      }
-      if (typeof obj.error.code === 'string' && obj.error.code.trim()) {
-        return `Error: ${obj.error.code}`;
-      }
+      const sub = normalizeApiError(obj.error, '');
+      if (sub) return sub;
+    }
+    if (obj.data && typeof obj.data === 'object') {
+      const sub = normalizeApiError(obj.data, '');
+      if (sub) return sub;
     }
     if (Array.isArray(obj.errors) && obj.errors.length > 0) {
       const first = obj.errors[0];
-      if (typeof first === 'string' && first.trim()) return first.trim();
-      if (first && typeof first.message === 'string' && first.message.trim()) return first.message.trim();
+      const sub = normalizeApiError(first, '');
+      if (sub) return sub;
     }
     if (typeof obj.statusText === 'string' && obj.statusText.trim()) {
       return obj.statusText.trim();
@@ -154,6 +175,9 @@ async function safeParseJson<T = any>(res: Response, fallbackMessage: string): P
       }
       if (res.status === 403) {
         throw new Error('Access denied. You may only manage your own correspondence records.');
+      }
+      if (res.status === 503) {
+        throw new Error('Database service unavailable. Please verify your MongoDB Atlas connection.');
       }
       if (res.status >= 500) {
         throw new Error('The correspondence bureau is currently processing archives. Please try again shortly.');

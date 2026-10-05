@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { fetchAdminPayments, verifyAdminPayment, triggerSchedulerTick, apiFetch } from '../../lib/api';
+import { fetchAdminPayments, verifyAdminPayment, triggerSchedulerTick, apiFetch, normalizeApiError } from '../../lib/api';
 import { PaymentRecord } from '../../types/backend';
 import { isAdminEmail, isUserAdminRole } from '../../lib/admin';
 
@@ -77,7 +77,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       }
     } catch (err: any) {
       console.error('Failed to load admin ledger:', err);
-      setFeedbackMsg({ type: 'error', text: err.message || 'Failed to connect to Bureau Ledger.' });
+      setFeedbackMsg({ type: 'error', text: normalizeApiError(err, 'Failed to connect to Bureau Ledger.') });
     } finally {
       setIsLoading(false);
     }
@@ -104,7 +104,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       });
       await loadData();
     } catch (err: any) {
-      setFeedbackMsg({ type: 'error', text: err.message || 'Error updating payment status.' });
+      setFeedbackMsg({ type: 'error', text: normalizeApiError(err, 'Error updating payment status.') });
     } finally {
       setActionInProgress(null);
       setTimeout(() => setFeedbackMsg(null), 5000);
@@ -118,7 +118,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       setSchedulerStatus(`Delivered ${res.deliveredCount} letters due for arrival.`);
       setTimeout(() => setSchedulerStatus(null), 4000);
     } catch (err: any) {
-      setSchedulerStatus(`Scheduler error: ${err.message}`);
+      setSchedulerStatus(`Scheduler error: ${normalizeApiError(err, 'Delivery scheduler encountered an issue.')}`);
       setTimeout(() => setSchedulerStatus(null), 4000);
     }
   };

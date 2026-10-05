@@ -1,5 +1,6 @@
 import { MongoClient, Db, ObjectId, GridFSBucket, Document } from 'mongodb';
 import { PassThrough } from 'stream';
+import dns from 'dns';
 
 export { ObjectId };
 
@@ -460,17 +461,82 @@ declare global {
   var _memoryGridFSBuckets: Map<string, MemoryGridFSBucket> | undefined;
 }
 
-const uri = process.env.MONGODB_URI || '';
-let isRealMongo = Boolean(uri && (uri.startsWith('mongodb://') || uri.startsWith('mongodb+srv://')));
+export function isProductionEnvironment(): boolean {
+  return (
+    process.env.NODE_ENV === 'production' ||
+    Boolean(process.env.VERCEL) ||
+    Boolean(process.env.VERCEL_ENV)
+  );
+}
+
+/**
+ * Sanitizes MongoDB connection string:
+ * - Trims leading/trailing whitespace
+ * - Strips accidental surrounding quotes (' or ")
+ * - Removes internal carriage returns or newlines
+ * - Checks MONGODB_URI with fallbacks to MONGODB_URL, DATABASE_URL, MONGO_URL
+ */
+export function getSanitizedMongoUri(): string {
+  const raw =
+    process.env.MONGODB_URI ||
+    process.env.MONGODB_URL ||
+    process.env.DATABASE_URL ||
+    process.env.MONGO_URL ||
+    '';
+
+  let cleaned = raw.trim();
+  if (
+    (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+    (cleaned.startsWith("'") && cleaned.endsWith("'"))
+  ) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+  return cleaned.replace(/[\r\n\t]/g, '');
+}
+
+/**
+ * Ensures public DNS resolvers (Google, Cloudflare) are available in Node.js
+ * to prevent querySrv ENOTFOUND errors when default cloud/serverless/container
+ * resolvers do not support or block SRV record lookups.
+ */
+export function configureDnsForAtlas(forcePublicOnly: boolean = false): void {
+  try {
+    const publicDns = ['8.8.8.8', '1.1.1.1', '8.8.4.4'];
+    if (forcePublicOnly) {
+      dns.setServers(publicDns);
+      return;
+    }
+    const current = dns.getServers();
+    const hasPublic = current.some((s) => publicDns.includes(s));
+    if (!hasPublic) {
+      dns.setServers([...publicDns, ...current]);
+    }
+  } catch (err) {
+    console.warn('[OLD-LETTERS MongoDB] DNS resolver configuration note:', err);
+  }
+}
+
+// Proactively configure DNS resolvers on module load if mongodb+srv is in use
+if (getSanitizedMongoUri().startsWith('mongodb+srv://')) {
+  configureDnsForAtlas(false);
+}
+
 let cachedMongoClient: MongoClient | null = null;
 
 export function isUsingAtlas(): boolean {
-  return isRealMongo;
+  return cachedMongoClient !== null;
 }
 
 export async function getMongoClient(): Promise<MongoClient | null> {
-  const currentUri = process.env.MONGODB_URI || uri;
+  const currentUri = getSanitizedMongoUri();
+  const isProd = isProductionEnvironment();
+
   if (!currentUri || (!currentUri.startsWith('mongodb://') && !currentUri.startsWith('mongodb+srv://'))) {
+    if (isProd) {
+      throw new Error(
+        'MongoDB Atlas connection unavailable: MONGODB_URI environment variable is missing or malformed in production. Please check Vercel Project Settings.'
+      );
+    }
     return null;
   }
 
@@ -486,48 +552,89 @@ export async function getMongoClient(): Promise<MongoClient | null> {
     }
   }
 
-  // Initialize or reuse connection promise with auto-reset on error
-  if (!globalThis._mongoClientPromise) {
-    const client = new MongoClient(currentUri, {
+  // Helper to construct a fresh MongoClient with robust serverless pooling options
+  const createClient = (targetUri: string) =>
+    new MongoClient(targetUri, {
       maxPoolSize: 10,
       minPoolSize: 1,
       connectTimeoutMS: 15000,
       serverSelectionTimeoutMS: 15000,
       socketTimeoutMS: 30000,
+      retryWrites: true,
+      retryReads: true,
     });
-    globalThis._mongoClientPromise = client.connect().catch((err) => {
-      // Clear cached rejected promise so subsequent requests can retry
-      globalThis._mongoClientPromise = undefined;
-      throw err;
-    });
+
+  // Connect or reuse promise with auto-reset on rejection
+  if (!globalThis._mongoClientPromise) {
+    if (currentUri.startsWith('mongodb+srv://')) {
+      configureDnsForAtlas(false);
+    }
+
+    const client = createClient(currentUri);
+    globalThis._mongoClientPromise = client
+      .connect()
+      .catch(async (initialErr: any) => {
+        // If SRV lookup failed (querySrv ENOTFOUND / ETIMEOUT / ESERVFAIL), force Google & Cloudflare DNS and retry once
+        const isSrvIssue =
+          initialErr?.message?.includes('querySrv') ||
+          initialErr?.code === 'ENOTFOUND' ||
+          initialErr?.message?.includes('ENOTFOUND');
+
+        if (isSrvIssue && currentUri.startsWith('mongodb+srv://')) {
+          console.warn('[OLD-LETTERS MongoDB] querySrv DNS resolution failed with default resolver. Setting public DNS resolvers [8.8.8.8, 1.1.1.1] and retrying...');
+          try {
+            configureDnsForAtlas(true);
+            const retryClient = createClient(currentUri);
+            return await retryClient.connect();
+          } catch (retryErr: any) {
+            console.error('[OLD-LETTERS MongoDB] Retry with public DNS also failed:', retryErr?.message || retryErr);
+            throw retryErr;
+          }
+        }
+        throw initialErr;
+      })
+      .catch((err) => {
+        // Clear cached rejected promise so subsequent requests can retry
+        globalThis._mongoClientPromise = undefined;
+        throw err;
+      });
   }
 
   try {
     const client = await globalThis._mongoClientPromise;
     cachedMongoClient = client;
-    isRealMongo = true;
     return client;
   } catch (err: any) {
     globalThis._mongoClientPromise = undefined;
     cachedMongoClient = null;
     console.error('[OLD-LETTERS MongoDB] Atlas connection error:', err?.message || err);
 
-    // In production or when VERCEL is active, alert that persistent Atlas connection failed
-    if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
-      throw new Error(`MongoDB Atlas connection unavailable: ${err?.message || 'Check cluster status and IP access list'}`);
+    if (isProd) {
+      const isSrvError = err?.message?.includes('querySrv') || err?.message?.includes('ENOTFOUND');
+      const errorMsg = isSrvError
+        ? `MongoDB Atlas connection unavailable: DNS resolution failed (${err?.message}). Please ensure your MONGODB_URI in Vercel contains your actual Atlas cluster hostname (not a placeholder like xxxx) and that 0.0.0.0/0 is whitelisted in Atlas Network Access.`
+        : `MongoDB Atlas connection unavailable: ${err?.message || 'Check cluster status and IP access list in MongoDB Atlas'}`;
+      throw new Error(errorMsg);
     }
     return null;
   }
 }
 
 export async function getDb(dbName?: string): Promise<Db> {
+  const isProd = isProductionEnvironment();
   const client = await getMongoClient();
   if (client) {
     return client.db(dbName || process.env.MONGODB_DB_NAME || 'oldletters');
   }
 
-  // Provide cached memory database fallback in local non-production environments
+  // Under NO circumstances allow in-memory database fallback in production
+  if (isProd) {
+    throw new Error('Database connection unavailable: MongoDB Atlas connection is required in production.');
+  }
+
+  // Provide cached memory database fallback in local non-production environments ONLY
   if (!global._memoryDbInstance) {
+    console.warn('[OLD-LETTERS MongoDB] Using in-memory database fallback for local offline development.');
     global._memoryDbInstance = new MemoryDb();
   }
   return global._memoryDbInstance as unknown as Db;
@@ -540,10 +647,16 @@ export async function getCollection<T extends Document = any>(name: string) {
 }
 
 export async function getGridFSBucket(bucketName: string = 'letterMedia'): Promise<GridFSBucket | MemoryGridFSBucket> {
+  const isProd = isProductionEnvironment();
   const client = await getMongoClient();
   if (client) {
     const db = client.db(process.env.MONGODB_DB_NAME || 'oldletters');
     return new GridFSBucket(db, { bucketName });
+  }
+
+  // Under NO circumstances allow in-memory GridFS fallback in production
+  if (isProd) {
+    throw new Error('GridFS storage unavailable: MongoDB Atlas connection is required in production.');
   }
 
   if (!global._memoryGridFSBuckets) {

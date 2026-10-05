@@ -195,14 +195,23 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
       });
 
       const p = res.payment;
-      const canonicalId = res.paymentId || p.paymentId || res.payment.id || p.id;
+      const canonicalId = res.paymentId || p?.paymentId || res.payment?.id || p?.id;
+      if (!canonicalId) {
+        throw new Error('Payment reference could not be established in the postal ledger.');
+      }
       p.paymentId = canonicalId;
       setConfirmedPayment(p);
 
       // Open Recording Studio immediately with canonical payment ID
       setIsRecordingStudioOpen(true);
     } catch (err: any) {
-      setPaymentSubmitError(normalizeApiError(err, 'Failed to submit UPI payment reference.'));
+      setIsRecordingStudioOpen(false);
+      setPaymentSubmitError(
+        normalizeApiError(
+          err,
+          'Payment could not be registered because the payment service is temporarily unavailable. Please try again.'
+        )
+      );
     } finally {
       setIsSubmittingPayment(false);
     }
@@ -473,7 +482,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
       onLetterPosted(finalized);
       setIsPosting(true);
     } catch (err: any) {
-      const msg = err.message || 'Failed to seal and post letter.';
+      const msg = normalizeApiError(err, 'Failed to seal and post letter.');
       setPostError(msg);
     } finally {
       setIsSubmittingPost(false);

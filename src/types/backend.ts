@@ -61,8 +61,12 @@ export const SubmitPaymentSchema = z.object({
   featureCode: z.enum(['VOICE_NOTE', 'VIDEO_NOTE', 'LIVE_MEETING', 'VOICE', 'VIDEO']).optional(),
   featureType: z.enum(['VOICE_MESSAGE', 'VIDEO_MESSAGE', 'VOICE_NOTE', 'VIDEO_NOTE']).optional(),
   amount: z.number().positive(),
-  currency: z.string().default('INR'),
-  upiReference: z.string().min(6, 'Valid UPI reference / UTR number required').max(50),
+  currency: z.string().optional().default('INR'),
+  upiReference: z
+    .string()
+    .trim()
+    .min(6, 'Please enter a valid UPI transaction reference / UTR number (at least 6 characters).')
+    .max(35, 'UPI transaction reference cannot exceed 35 characters.'),
   screenshotUrl: z.string().optional().nullable(),
 });
 

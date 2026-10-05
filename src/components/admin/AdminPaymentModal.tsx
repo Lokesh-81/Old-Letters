@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchAdminPayments, verifyAdminPayment, triggerSchedulerTick } from '../../lib/api';
+import { fetchAdminPayments, verifyAdminPayment, triggerSchedulerTick, normalizeApiError } from '../../lib/api';
 import { PaymentRecord } from '../../types/backend';
 
 interface AdminPaymentModalProps {
@@ -18,6 +18,7 @@ export const AdminPaymentModal: React.FC<AdminPaymentModalProps> = ({
   const [activeTab, setActiveTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING');
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [schedulerStatus, setSchedulerStatus] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
 
@@ -41,9 +42,10 @@ export const AdminPaymentModal: React.FC<AdminPaymentModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleVerify = async (paymentId: string, status: 'APPROVED' | 'REJECTED') => {
+    const handleVerify = async (paymentId: string, status: 'APPROVED' | 'REJECTED') => {
     try {
       setActionInProgress(paymentId);
+      setModalError(null);
       const note = adminNotes[paymentId] || undefined;
       await verifyAdminPayment({ paymentId, status, adminNote: note });
       setAdminNotes((prev) => {
@@ -54,7 +56,7 @@ export const AdminPaymentModal: React.FC<AdminPaymentModalProps> = ({
       await loadPayments();
       onPaymentUpdated?.();
     } catch (err: any) {
-      alert(`Error updating payment: ${err.message}`);
+      setModalError(normalizeApiError(err, 'Failed to update payment status.'));
     } finally {
       setActionInProgress(null);
     }
@@ -63,11 +65,13 @@ export const AdminPaymentModal: React.FC<AdminPaymentModalProps> = ({
   const handleRunScheduler = async () => {
     try {
       setSchedulerStatus('Running delivery checks...');
+      setModalError(null);
       const res = await triggerSchedulerTick();
       setSchedulerStatus(`Delivered ${res.deliveredCount} letters due for arrival.`);
       setTimeout(() => setSchedulerStatus(null), 3500);
     } catch (err: any) {
-      setSchedulerStatus(`Error: ${err.message}`);
+      setSchedulerStatus(null);
+      setModalError(`Scheduler error: ${normalizeApiError(err, 'Failed to trigger delivery scheduler.')}`);
     }
   };
 
@@ -102,6 +106,19 @@ export const AdminPaymentModal: React.FC<AdminPaymentModalProps> = ({
             ✕
           </button>
         </div>
+
+        {modalError && (
+          <div className="px-6 py-2.5 bg-rose-50 border-b border-rose-200 text-rose-800 text-xs font-mono flex items-center justify-between">
+            <span>{modalError}</span>
+            <button
+              type="button"
+              onClick={() => setModalError(null)}
+              className="text-rose-500 hover:text-rose-800 cursor-pointer text-xs ml-3"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Action Controls & Tabs */}
         <div className="px-6 py-3 border-b border-[#eae4da] flex flex-wrap items-center justify-between gap-4 bg-stone-50 text-xs font-mono">
