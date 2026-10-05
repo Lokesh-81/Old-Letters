@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { uploadMediaAttachment } from '../../lib/api';
+import { uploadMediaAttachment, normalizeApiError } from '../../lib/api';
 import { Mic, Video, Square, Play, Pause, RotateCcw, Trash2, Check, AlertCircle, Volume2 } from 'lucide-react';
 
 interface RecordingStudioProps {
@@ -22,8 +22,8 @@ export const RecordingStudio: React.FC<RecordingStudioProps> = ({
   onComplete,
   onCancel,
 }) => {
-  // Max recording duration: Voice = 5 min (300s), Video = 3 min (180s)
-  const MAX_SECONDS = mediaType === 'VOICE' ? 300 : 180;
+  // Max recording duration: Voice = 5 min (300s), Video = 60s (optimal for postal transmission under 4MB)
+  const MAX_SECONDS = mediaType === 'VOICE' ? 300 : 60;
 
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [permissionState, setPermissionState] = useState<'prompt' | 'granted' | 'denied'>('prompt');
@@ -61,7 +61,7 @@ export const RecordingStudio: React.FC<RecordingStudioProps> = ({
 
       if (mediaType === 'VIDEO') {
         mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+          video: { width: { ideal: 854 }, height: { ideal: 480 }, facingMode: 'user' },
           audio: true,
         });
       } else {
@@ -134,7 +134,18 @@ export const RecordingStudio: React.FC<RecordingStudioProps> = ({
 
       setMimeType(supportedMime);
 
-      const recorder = new MediaRecorder(stream, { mimeType: supportedMime });
+      // Bitrate constraint: Keep video notes under 4 MB for safe transmission & Vercel serverless compliance
+      const recorderOptions: MediaRecorderOptions = {
+        mimeType: supportedMime,
+      };
+      if (mediaType === 'VIDEO') {
+        recorderOptions.videoBitsPerSecond = 600000; // 600 kbps
+        recorderOptions.audioBitsPerSecond = 64000;  // 64 kbps
+      } else {
+        recorderOptions.audioBitsPerSecond = 64000;
+      }
+
+      const recorder = new MediaRecorder(stream, recorderOptions);
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (event) => {
@@ -145,6 +156,11 @@ export const RecordingStudio: React.FC<RecordingStudioProps> = ({
 
       recorder.onstop = () => {
         const fullBlob = new Blob(audioChunksRef.current, { type: supportedMime });
+        if (fullBlob.size > 3.8 * 1024 * 1024) {
+          setUploadError('Your recorded message exceeds the 3.8 MB postal limit. Please record a slightly shorter message (under 45 seconds).');
+        } else {
+          setUploadError(null);
+        }
         setRecordedBlob(fullBlob);
         const url = URL.createObjectURL(fullBlob);
         setRecordedUrl(url);
@@ -233,6 +249,17 @@ export const RecordingStudio: React.FC<RecordingStudioProps> = ({
       return;
     }
 
+    if (recordedBlob.size > 3.8 * 1024 * 1024) {
+      setUploadError('The recorded enclosure exceeds 3.8 MB. Please click Re-record and keep the video under 45 seconds to attach.');
+      return;
+    }
+
+    const cleanPaymentId = (paymentId || '').trim();
+    if (!cleanPaymentId || cleanPaymentId === 'undefined' || cleanPaymentId === 'null') {
+      setUploadError('Payment identification is missing. Please return to the personal message step to confirm payment.');
+      return;
+    }
+
     try {
       setIsUploading(true);
       setUploadError(null);
@@ -247,7 +274,7 @@ export const RecordingStudio: React.FC<RecordingStudioProps> = ({
 
       const base64Data = await base64Promise;
 
-      const result = await uploadMediaAttachment(paymentId, {
+      const result = await uploadMediaAttachment(cleanPaymentId, {
         data: base64Data,
         mimeType,
         durationSeconds: seconds,
@@ -266,7 +293,8 @@ export const RecordingStudio: React.FC<RecordingStudioProps> = ({
       });
     } catch (err: any) {
       console.error('[RecordingStudio] Upload failed:', err);
-      setUploadError(err.message || 'Failed to save recording to the postal vault.');
+      const cleanError = normalizeApiError(err, 'Failed to save recording to the postal vault.');
+      setUploadError(cleanError);
     } finally {
       setIsUploading(false);
     }
@@ -305,7 +333,7 @@ export const RecordingStudio: React.FC<RecordingStudioProps> = ({
             Recording personal message for <strong>{recipientName || 'Recipient'}</strong>
           </span>
           <span className="font-mono text-[11px] text-stone-400">
-            LIMIT: {mediaType === 'VOICE' ? '5 MINUTES' : '3 MINUTES'}
+            LIMIT: {mediaType === 'VOICE' ? '5 MINUTES' : '60 SECONDS'}
           </span>
         </div>
 

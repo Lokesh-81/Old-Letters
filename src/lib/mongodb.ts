@@ -461,37 +461,63 @@ declare global {
 }
 
 const uri = process.env.MONGODB_URI || '';
-let clientPromise: Promise<MongoClient> | null = null;
-let isRealMongo = false;
-
-if (uri && (uri.startsWith('mongodb://') || uri.startsWith('mongodb+srv://'))) {
-  if (!globalThis._mongoClientPromise) {
-    const client = new MongoClient(uri, {
-      maxPoolSize: 10,
-      minPoolSize: 1,
-      connectTimeoutMS: 10000,
-      serverSelectionTimeoutMS: 10000,
-    });
-    globalThis._mongoClientPromise = client.connect();
-  }
-  clientPromise = globalThis._mongoClientPromise;
-  isRealMongo = true;
-}
+let isRealMongo = Boolean(uri && (uri.startsWith('mongodb://') || uri.startsWith('mongodb+srv://')));
+let cachedMongoClient: MongoClient | null = null;
 
 export function isUsingAtlas(): boolean {
   return isRealMongo;
 }
 
 export async function getMongoClient(): Promise<MongoClient | null> {
-  if (clientPromise) {
+  const currentUri = process.env.MONGODB_URI || uri;
+  if (!currentUri || (!currentUri.startsWith('mongodb://') && !currentUri.startsWith('mongodb+srv://'))) {
+    return null;
+  }
+
+  // If already connected, verify health with a fast ping
+  if (cachedMongoClient) {
     try {
-      return await clientPromise;
-    } catch (err) {
-      console.warn('[OLD-LETTERS MongoDB] Atlas connection error, using resilient fallback:', err);
-      return null;
+      await cachedMongoClient.db(process.env.MONGODB_DB_NAME || 'oldletters').command({ ping: 1 });
+      return cachedMongoClient;
+    } catch {
+      console.warn('[OLD-LETTERS MongoDB] Stale connection detected, reconnecting...');
+      cachedMongoClient = null;
+      globalThis._mongoClientPromise = undefined;
     }
   }
-  return null;
+
+  // Initialize or reuse connection promise with auto-reset on error
+  if (!globalThis._mongoClientPromise) {
+    const client = new MongoClient(currentUri, {
+      maxPoolSize: 10,
+      minPoolSize: 1,
+      connectTimeoutMS: 15000,
+      serverSelectionTimeoutMS: 15000,
+      socketTimeoutMS: 30000,
+    });
+    globalThis._mongoClientPromise = client.connect().catch((err) => {
+      // Clear cached rejected promise so subsequent requests can retry
+      globalThis._mongoClientPromise = undefined;
+      throw err;
+    });
+  }
+
+  try {
+    const client = await globalThis._mongoClientPromise;
+    cachedMongoClient = client;
+    isRealMongo = true;
+    return client;
+  } catch (err: any) {
+    globalThis._mongoClientPromise = undefined;
+    cachedMongoClient = null;
+    console.error('[OLD-LETTERS MongoDB] Atlas connection error:', err?.message || err);
+
+    // In production or when VERCEL is active, alert that persistent Atlas connection failed
+    if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+      throw new Error(`MongoDB Atlas connection unavailable: ${err?.message || 'Check cluster status and IP access list'}`);
+    }
+    return null;
+  }
 }
 
 export async function getDb(dbName?: string): Promise<Db> {
@@ -500,7 +526,7 @@ export async function getDb(dbName?: string): Promise<Db> {
     return client.db(dbName || process.env.MONGODB_DB_NAME || 'oldletters');
   }
 
-  // Provide cached memory database fallback
+  // Provide cached memory database fallback in local non-production environments
   if (!global._memoryDbInstance) {
     global._memoryDbInstance = new MemoryDb();
   }

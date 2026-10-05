@@ -143,8 +143,17 @@ async function safeParseJson<T = any>(res: Response, fallbackMessage: string): P
   // If response is HTML or plain text error page (starts with <!DOCTYPE, <html, "The page c"...)
   if (!contentType.includes('application/json') || trimmed.startsWith('<') || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) {
     if (!res.ok) {
+      if (res.status === 413) {
+        throw new Error('The recorded enclosure exceeds the 4.5 MB postal upload limit. Please record a slightly shorter message.');
+      }
       if (res.status === 404) {
-        throw new Error('The requested correspondence record could not be found.');
+        throw new Error('The requested correspondence or payment record could not be found.');
+      }
+      if (res.status === 401) {
+        throw new Error('Authentication required. Please sign in to continue.');
+      }
+      if (res.status === 403) {
+        throw new Error('Access denied. You may only manage your own correspondence records.');
       }
       if (res.status >= 500) {
         throw new Error('The correspondence bureau is currently processing archives. Please try again shortly.');
@@ -415,11 +424,12 @@ export async function submitUpiPayment(payload: SubmitPaymentInput): Promise<{
     paymentId?: string;
     id?: string;
     message?: string;
-    error?: string;
+    error?: any;
   }>(res, 'Failed to submit payment reference.');
 
   if (!res.ok || !data.success) {
-    throw new Error(data.error || 'Failed to submit payment reference.');
+    const errorMsg = normalizeApiError(data.error || data, 'Failed to submit payment reference.');
+    throw new Error(errorMsg);
   }
 
   const p = data.payment;
@@ -452,6 +462,15 @@ export async function uploadMediaAttachment(
   message: string;
 }> {
   const cleanId = (paymentIdOrLetterId || '').trim();
+  if (!cleanId) {
+    throw new Error('A valid payment reference ID is required to link media enclosures.');
+  }
+
+  // Pre-flight check on base64 size (4.5 MB serverless gateway constraint)
+  if (payload.data && payload.data.length > 5.5 * 1024 * 1024) {
+    throw new Error('The recorded enclosure is too large for the postal vault (over 4 MB). Please record a slightly shorter message.');
+  }
+
   const res = await apiFetch(`/payments/${cleanId}/media`, {
     method: 'POST',
     headers: {
@@ -472,14 +491,24 @@ export async function uploadMediaAttachment(
     durationSeconds?: number;
     paymentId?: string;
     message: string;
-    error?: string;
+    error?: any;
   }>(res, 'Failed to upload media enclosure.');
 
   if (!res.ok || !data.success) {
-    throw new Error(data.error || 'Failed to upload media enclosure.');
+    const errorMsg = normalizeApiError(data.error || data, 'Failed to upload media enclosure to the postal vault.');
+    throw new Error(errorMsg);
   }
 
-  return data;
+  return {
+    success: true,
+    storageKey: data.storageKey,
+    mediaType: data.mediaType,
+    mediaStatus: data.mediaStatus,
+    fileSize: data.fileSize,
+    durationSeconds: data.durationSeconds,
+    paymentId: data.paymentId || cleanId,
+    message: data.message || 'Media enclosure sealed successfully.',
+  };
 }
 
 export async function fetchAdminPayments(): Promise<PaymentRecord[]> {

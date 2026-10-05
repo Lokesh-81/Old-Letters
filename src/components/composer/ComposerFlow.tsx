@@ -6,7 +6,7 @@ import { PaperSheet } from '../common/PaperSheet';
 import { EnvelopeObject } from '../common/EnvelopeObject';
 import { StationeryGallery } from './StationeryGallery';
 import { PostingCeremony } from './PostingCeremony';
-import { postLetter, submitUpiPayment, fetchPaymentConfig } from '../../lib/api';
+import { postLetter, submitUpiPayment, fetchPaymentConfig, normalizeApiError } from '../../lib/api';
 import { PaymentRecord } from '../../types/backend';
 import { RecordingStudio } from './RecordingStudio';
 
@@ -87,12 +87,31 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
   const [customDateInput, setCustomDateInput] = useState('');
   const [activeLetterCategory, setActiveLetterCategory] = useState<LetterCategory>('ROMANTIC');
 
-  // Personal Voice/Video Message & UPI payment state
-  const [personalMessageChoice, setPersonalMessageChoice] = useState<'LETTER_ONLY' | 'VOICE' | 'VIDEO'>('LETTER_ONLY');
+  // Personal Voice/Video Message & UPI payment state with resilient session storage
+  const [personalMessageChoice, setPersonalMessageChoice] = useState<'LETTER_ONLY' | 'VOICE' | 'VIDEO'>(() => {
+    try {
+      const saved = sessionStorage.getItem('old_letters_enclosure');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.type) return parsed.type;
+      }
+    } catch {}
+    return 'LETTER_ONLY';
+  });
+
   const [upiReferenceInput, setUpiReferenceInput] = useState('');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [paymentSubmitError, setPaymentSubmitError] = useState<string | null>(null);
-  const [confirmedPayment, setConfirmedPayment] = useState<PaymentRecord | null>(null);
+
+  const [confirmedPayment, setConfirmedPayment] = useState<PaymentRecord | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('old_letters_confirmed_payment');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [isRecordingStudioOpen, setIsRecordingStudioOpen] = useState(false);
   const [personalMessageEnclosure, setPersonalMessageEnclosure] = useState<{
     type: 'LETTER_ONLY' | 'VOICE' | 'VIDEO';
@@ -102,7 +121,35 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
     durationSeconds?: number;
     previewUrl?: string;
     mediaStatus?: string;
-  } | null>(null);
+  } | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('old_letters_enclosure');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (confirmedPayment) {
+        sessionStorage.setItem('old_letters_confirmed_payment', JSON.stringify(confirmedPayment));
+      } else {
+        sessionStorage.removeItem('old_letters_confirmed_payment');
+      }
+    } catch {}
+  }, [confirmedPayment]);
+
+  useEffect(() => {
+    try {
+      if (personalMessageEnclosure) {
+        sessionStorage.setItem('old_letters_enclosure', JSON.stringify(personalMessageEnclosure));
+      } else {
+        sessionStorage.removeItem('old_letters_enclosure');
+      }
+    } catch {}
+  }, [personalMessageEnclosure]);
+
   const [paymentConfig, setPaymentConfig] = useState({
     upiId: 'oldletters@okhdfcbank',
     upiDisplayName: 'OLD-LETTERS CORRESPONDENCE',
@@ -148,14 +195,14 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
       });
 
       const p = res.payment;
-      if (!p.paymentId && res.paymentId) {
-        p.paymentId = res.paymentId;
-      }
+      const canonicalId = res.paymentId || p.paymentId || res.payment.id || p.id;
+      p.paymentId = canonicalId;
       setConfirmedPayment(p);
-      // Immediately launch recording studio
+
+      // Open Recording Studio immediately with canonical payment ID
       setIsRecordingStudioOpen(true);
     } catch (err: any) {
-      setPaymentSubmitError(err.message || 'Failed to submit UPI payment reference.');
+      setPaymentSubmitError(normalizeApiError(err, 'Failed to submit UPI payment reference.'));
     } finally {
       setIsSubmittingPayment(false);
     }
@@ -418,6 +465,8 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
 
       try {
         localStorage.removeItem('old_letters_working_draft');
+        sessionStorage.removeItem('old_letters_confirmed_payment');
+        sessionStorage.removeItem('old_letters_enclosure');
       } catch {}
 
       setGeneratedDeliveryToken(result.deliveryToken);

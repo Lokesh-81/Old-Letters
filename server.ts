@@ -4301,7 +4301,7 @@ app.get(['/api/payments', '/api/user/payments', '/payments', '/user/payments'], 
       ],
     };
 
-    const list = await (await paymentsColl.find(query)).sort({ createdAt: -1 }).toArray();
+    const list = await (paymentsColl.find(query) as any).sort({ createdAt: -1 }).toArray();
 
     const featureDescriptions: Record<string, string> = {
       VOICE: 'Audio Epistolary Wax Seal (Voice Message)',
@@ -4470,7 +4470,7 @@ app.get(['/api/admin/payments', '/admin/payments'], requireAdmin, async (req: Au
     const lettersColl = db.collection('letters');
     const usersColl = db.collection('users');
 
-    const list = await (await paymentsColl.find({})).sort({ createdAt: -1 }).toArray();
+    const list = await (paymentsColl.find({}) as any).sort({ createdAt: -1 }).toArray();
 
     const enriched = await Promise.all(
       list.map(async (p: any) => {

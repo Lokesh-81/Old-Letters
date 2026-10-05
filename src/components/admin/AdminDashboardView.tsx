@@ -429,6 +429,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         <span className="text-[10px] uppercase text-stone-400 block">Media Type</span>
                         <span className="text-stone-900 font-medium">{item.mediaType || (item.featureCode?.includes('VIDEO') ? 'VIDEO' : 'VOICE')}</span>
                       </div>
+                      <div>
+                        <span className="text-[10px] uppercase text-stone-400 block">Media Status</span>
+                        <span className={`inline-block font-mono text-[10px] uppercase px-2 py-0.5 rounded-xs font-semibold border ${
+                          item.hasMediaAttachment || item.mediaStorageKey
+                            ? 'text-teal-900 bg-teal-50 border-teal-200'
+                            : 'text-amber-800 bg-amber-50 border-amber-200'
+                        }`}>
+                          {item.hasMediaAttachment || item.mediaStorageKey
+                            ? 'PENDING VERIFICATION'
+                            : 'WAITING FOR RECORDING'}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Media Preview & Playback Player */}
@@ -459,8 +471,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         )}
                       </div>
                     ) : (
-                      <div className="text-xs font-mono text-stone-400 italic">
-                        No audio/video recording attached
+                      <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xs text-xs font-mono text-amber-900 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                        <span>WAITING FOR RECORDING — Payment registered in MongoDB; awaiting user media upload from Recording Studio</span>
                       </div>
                     )}
 
