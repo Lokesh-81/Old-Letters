@@ -557,6 +557,47 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
                 />
               </div>
 
+              {/* Personal Audio / Video Message Enclosure if attached */}
+              {(activeLetter as any).personalMessage && (
+                <div className="max-w-2xl mx-auto w-full p-6 bg-white border border-[#eae4da] shadow-paper rounded-xs space-y-4">
+                  <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-teal-900 font-serif text-lg">❦</span>
+                      <span className="text-xs font-mono tracking-widest uppercase text-stone-700 font-semibold">
+                        {(activeLetter as any).personalMessage.mediaType === 'VIDEO' ? 'PERSONAL VIDEO ENCLOSURE' : 'PERSONAL VOICE ENCLOSURE'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-xs border border-teal-200 bg-teal-50 text-teal-900 uppercase font-semibold">
+                      VERIFIED ENCLOSURE
+                    </span>
+                  </div>
+
+                  <p className="text-xs font-serif italic text-stone-600">
+                    {activeLetter.senderName} recorded a personal {(activeLetter as any).personalMessage.mediaType === 'VIDEO' ? 'video note' : 'voice message'} to accompany this correspondence.
+                  </p>
+
+                  {(activeLetter as any).personalMessage.mediaType === 'VIDEO' ? (
+                    <video
+                      src={(activeLetter as any).personalMessage.streamUrl || `/api/delivery/media/${deliveryToken || activeLetter.id}`}
+                      controls
+                      playsInline
+                      className="w-full max-h-72 rounded-xs bg-black shadow-inner"
+                    />
+                  ) : (
+                    <div className="p-4 bg-[#faf9f7] border border-stone-200 rounded-xs flex flex-col items-center space-y-3">
+                      <div className="w-12 h-12 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-900 text-lg">
+                        🎙️
+                      </div>
+                      <audio
+                        src={(activeLetter as any).personalMessage.streamUrl || `/api/delivery/media/${deliveryToken || activeLetter.id}`}
+                        controls
+                        className="w-full"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Reveal Trigger */}
               <div className="text-center pt-8 border-t border-[#eae4da] space-y-4">
                 <p className="font-serif italic text-stone-600 text-lg">

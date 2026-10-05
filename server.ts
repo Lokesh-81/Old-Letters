@@ -45,6 +45,10 @@ import {
   LetterRecipientDoc,
   LetterTemplateDoc,
   AdminUserDoc,
+  LetterMediaDoc,
+  uploadGridFSBuffer,
+  downloadGridFSBuffer,
+  deleteGridFSFile,
 } from './src/lib/mongodb';
 import { seedDatabase } from './scripts/seed';
 import { ADMIN_EMAILS, isAdminEmail, isUserAdminRole } from './src/lib/admin';
@@ -91,8 +95,8 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '15mb' }));
-app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 app.use(passport.initialize());
 
@@ -152,7 +156,7 @@ function setSessionCookie(res: express.Response, req: express.Request, token: st
   res.cookie('oldletters_session', token, {
     httpOnly: true,
     secure,
-    sameSite: 'lax',
+    sameSite: secure ? 'none' : 'lax',
     maxAge: 30 * 24 * 3600 * 1000,
     path: '/',
   });
@@ -161,7 +165,7 @@ function setSessionCookie(res: express.Response, req: express.Request, token: st
   res.cookie('oldletters_logged_in', '1', {
     httpOnly: false,
     secure,
-    sameSite: 'lax',
+    sameSite: secure ? 'none' : 'lax',
     maxAge: 30 * 24 * 3600 * 1000,
     path: '/',
   });
@@ -169,8 +173,8 @@ function setSessionCookie(res: express.Response, req: express.Request, token: st
 
 function clearSessionCookie(res: express.Response, req: express.Request) {
   const secure = getCookieSecurity(req);
-  res.clearCookie('oldletters_session', { path: '/', secure, sameSite: 'lax' });
-  res.clearCookie('oldletters_logged_in', { path: '/', secure, sameSite: 'lax' });
+  res.clearCookie('oldletters_session', { path: '/', secure, sameSite: secure ? 'none' : 'lax' });
+  res.clearCookie('oldletters_logged_in', { path: '/', secure, sameSite: secure ? 'none' : 'lax' });
 }
 
 // Token Extraction & Session Authentication Middleware
@@ -192,6 +196,11 @@ const authenticateToken: express.RequestHandler = (req, res, next) => {
   // Fallback to Bearer token header
   if (!token && req.headers.authorization) {
     token = req.headers.authorization.replace(/^Bearer\s+/i, '').trim();
+  }
+
+  // Fallback to query param token (essential for <audio src="..."> / <video src="..."> preview elements)
+  if (!token && req.query && typeof req.query.token === 'string') {
+    token = (req.query.token as string).trim();
   }
 
   if (token && typeof token === 'string') {
@@ -922,7 +931,7 @@ app.get(['/api/auth/google/callback', '/auth/google/callback'], (req, res, next)
     };
     const userParam = encodeURIComponent(JSON.stringify(safeUser));
 
-    res.redirect(`/?auth=google_success&u=${userParam}`);
+    res.redirect(`/?auth=google_success&token=${encodeURIComponent(token)}&u=${userParam}`);
   })(req, res, next);
 });
 
@@ -1909,6 +1918,129 @@ app.get(['/api/letters/received', '/api/letters-received'], requireAuth, async (
   }
 });
 
+// Save or sync working draft letter in MongoDB (Authenticated)
+app.post(['/api/letters/draft', '/api/letters/save-draft'], requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const db = await getDb();
+    const lettersColl = db.collection('letters');
+    const senderId = req.user!.id;
+    const senderEmail = (req.user?.email || '').toLowerCase();
+    const senderName = req.user?.fullName || 'Correspondent';
+
+    const {
+      letterId: requestedId,
+      type = 'LOVE',
+      templateId = 'ivory',
+      recipientName = 'Recipient',
+      recipientEmail = '',
+      greeting = 'Dear Recipient,',
+      content = '',
+      signoff = 'Yours,',
+      verificationMethod = 'open',
+      scheduledDeliveryAt,
+      waitingHours = 48,
+      postmarkCity = 'Hyderabad Bureau',
+      attachments = [],
+    } = req.body;
+
+    const now = new Date();
+    const deliveryDate = scheduledDeliveryAt ? new Date(scheduledDeliveryAt) : new Date(now.getTime() + 48 * 3600 * 1000);
+
+    let letter: any = null;
+    if (requestedId && ObjectId.isValid(requestedId)) {
+      letter = await lettersColl.findOne({
+        _id: new ObjectId(requestedId),
+        $or: [{ senderId }, { senderId: new ObjectId(senderId) }],
+      });
+    }
+
+    if (letter) {
+      await lettersColl.updateOne(
+        { _id: letter._id },
+        {
+          $set: {
+            letterType: type,
+            templateId,
+            recipientName: recipientName.trim(),
+            recipientEmail: recipientEmail.trim().toLowerCase(),
+            salutation: greeting,
+            body: content,
+            signoff,
+            recipientVerificationMethod: verificationMethod,
+            scheduledDeliveryAt: deliveryDate,
+            deliveryDate,
+            waitingHours: Number(waitingHours) || 48,
+            postmarkCity,
+            attachments,
+            updatedAt: now,
+          },
+        }
+      );
+      const updated = await lettersColl.findOne({ _id: letter._id });
+      return res.json({
+        success: true,
+        letter: {
+          id: updated._id.toString(),
+          trackingCode: updated.trackingCode,
+          type: updated.letterType,
+          templateId: updated.templateId,
+          recipientName: updated.recipientName,
+          recipientEmail: updated.recipientEmail,
+          status: updated.status,
+          scheduledDeliveryAt: updated.scheduledDeliveryAt?.toISOString(),
+          waitingHours: updated.waitingHours,
+        },
+      });
+    }
+
+    const newId = requestedId && ObjectId.isValid(requestedId) ? new ObjectId(requestedId) : new ObjectId();
+    const trackingCode = `OL-${Math.floor(1000 + Math.random() * 9000)}-${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`;
+
+    const draftDoc = {
+      _id: newId,
+      senderId,
+      senderEmail,
+      senderName,
+      recipientName: recipientName.trim(),
+      recipientEmail: recipientEmail.trim().toLowerCase(),
+      letterType: type,
+      templateId,
+      salutation: greeting,
+      body: content,
+      signoff,
+      status: 'DRAFT',
+      deliveryDate,
+      scheduledDeliveryAt: deliveryDate,
+      trackingCode,
+      recipientVerificationMethod: verificationMethod,
+      postmarkCity,
+      waitingHours: Number(waitingHours) || 48,
+      attachments,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await lettersColl.insertOne(draftDoc);
+
+    return res.status(201).json({
+      success: true,
+      letter: {
+        id: newId.toString(),
+        trackingCode,
+        type,
+        templateId,
+        recipientName: draftDoc.recipientName,
+        recipientEmail: draftDoc.recipientEmail,
+        status: 'DRAFT',
+        scheduledDeliveryAt: deliveryDate.toISOString(),
+        waitingHours: draftDoc.waitingHours,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 // 3. Create Letter / Schedule Post (Strictly authenticated & senderId bound)
 app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -1936,6 +2068,8 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
     const recipientsColl = db.collection('letterRecipients');
     const tokensColl = db.collection('deliveryTokens');
     const eventsColl = db.collection('deliveryEvents');
+    const paymentsColl = db.collection('payments');
+    const mediaMetadataColl = db.collection('mediaMetadata');
 
     const letterId = new ObjectId();
     const now = new Date();
@@ -1951,6 +2085,12 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
     if (!recipientEmail) {
       return res.status(400).json({ success: false, error: 'Recipient email address is required.' });
     }
+
+    const linkedPaymentId = input.paymentId || (req.body.personalMessage?.paymentId);
+    const hasMedia = Boolean(input.hasMediaAttachment || req.body.personalMessage?.hasMediaAttachment || req.body.personalMessage?.mediaStorageKey);
+    const mediaType = input.mediaType || req.body.personalMessage?.mediaType || (req.body.personalMessage?.type === 'VIDEO' ? 'VIDEO' : req.body.personalMessage?.type === 'VOICE' ? 'VOICE' : undefined);
+    const mediaStorageKey = input.mediaStorageKey || req.body.personalMessage?.mediaStorageKey || undefined;
+    const mediaStatus = input.mediaStatus || req.body.personalMessage?.mediaStatus || 'PENDING';
 
     // 1. Insert Letter document in MongoDB with distinct sender and recipient identities
     await lettersColl.insertOne({
@@ -1974,10 +2114,60 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
       postmarkCity: input.postmarkCity || 'Hyderabad Bureau',
       waitingHours: input.waitingHours,
       attachments: req.body.attachments || [],
+      personalMessage: req.body.personalMessage || undefined,
+      hasMediaAttachment: hasMedia,
+      mediaType: mediaType || undefined,
+      mediaStorageKey: mediaStorageKey || undefined,
+      mediaPaymentId: linkedPaymentId || undefined,
+      mediaStatus: hasMedia ? mediaStatus : undefined,
       postedAt: now,
       createdAt: now,
       updatedAt: now,
     });
+
+    // Link payment & media if payment was submitted prior to sealing
+    if (linkedPaymentId) {
+      try {
+        const foundPayment = await paymentsColl.findOne({
+          $or: [
+            { paymentId: linkedPaymentId },
+            ...(ObjectId.isValid(linkedPaymentId) ? [{ _id: new ObjectId(linkedPaymentId) }] : [{ _id: linkedPaymentId }]),
+          ],
+        });
+
+        if (foundPayment) {
+          await paymentsColl.updateOne(
+            { _id: foundPayment._id },
+            {
+              $set: {
+                letterId: letterId.toString(),
+                trackingCode,
+                recipientEmail,
+                recipientName,
+                updatedAt: now,
+              },
+            }
+          );
+          await mediaMetadataColl.updateMany(
+            {
+              $or: [
+                { paymentId: foundPayment._id.toString() },
+                { paymentId: foundPayment.paymentId },
+                ...(mediaStorageKey ? [{ storageKey: mediaStorageKey }] : []),
+              ],
+            },
+            {
+              $set: {
+                letterId: letterId.toString(),
+                updatedAt: now,
+              },
+            }
+          );
+        }
+      } catch (linkErr) {
+        console.warn('[OLD-LETTERS] Failed to link payment to letter:', linkErr);
+      }
+    }
 
     // 2. Insert Recipient document
     await recipientsColl.insertOne({
@@ -2628,6 +2818,24 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
         })
       ).toArray();
 
+      // Check for approved personal message enclosure
+      const paymentsColl = db.collection('payments');
+      const mediaColl = db.collection('mediaMetadata');
+      const approvedPayment = await paymentsColl.findOne({
+        letterId: letter._id.toString(),
+        status: 'APPROVED',
+      });
+      const approvedMedia = await mediaColl.findOne({
+        letterId: letter._id.toString(),
+        mediaStatus: 'APPROVED',
+      });
+      const personalMessage = (approvedPayment && approvedMedia && approvedMedia.mediaStatus === 'APPROVED') ? {
+        mediaType: approvedMedia.mediaType,
+        storageKey: approvedMedia.storageKey,
+        mediaStatus: 'APPROVED',
+        streamUrl: `/api/delivery/media/${rawToken}`,
+      } : null;
+
       return res.json({
         success: true,
         isSealed: false,
@@ -2670,6 +2878,7 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
           signoff: letter.signoff,
           attachments: letter.attachments || [],
           status: letter.status,
+          personalMessage,
           paidFeatures: paidList.map((pf: any) => pf.featureCode),
         },
       });
@@ -2806,9 +3015,11 @@ app.post(['/api/delivery/request-otp', '/api/recipient/request-otp'], async (req
 });
 
 // 6. Recipient Verification: Submit OTP or Passphrase & Unseal Letter (Strictly blocked before arrival)
-app.post(['/api/delivery/verify', '/api/delivery/verify-otp', '/api/recipient/verify', '/api/recipient/verify-otp', '/api/recipient/passphrase'], async (req, res) => {
+app.post(['/api/delivery/verify', '/api/delivery/verify/:token', '/api/delivery/verify-otp', '/api/recipient/verify', '/api/recipient/verify/:token', '/api/recipient/verify-otp', '/api/recipient/passphrase', '/api/letters/verify/:token', '/api/letters/:token/verify'], async (req, res) => {
   try {
-    const parseResult = RecipientVerifySchema.safeParse(req.body);
+    const rawToken = req.params.token || req.body.token;
+    const bodyWithToken = { ...req.body, token: rawToken };
+    const parseResult = RecipientVerifySchema.safeParse(bodyWithToken);
     if (!parseResult.success) {
       return res.status(400).json({
         success: false,
@@ -2963,6 +3174,36 @@ app.post(['/api/delivery/verify', '/api/delivery/verify-otp', '/api/recipient/ve
         path: '/',
       });
 
+      // Check for approved personal message enclosure
+      const paymentsColl = db.collection('payments');
+      const mediaColl = db.collection('mediaMetadata');
+      const approvedPayment = await paymentsColl.findOne({
+        $or: [
+          { letterId: letter._id.toString() },
+          ...(letter.trackingCode ? [{ letterId: letter.trackingCode }] : []),
+          ...(letter.mediaPaymentId ? [{ paymentId: letter.mediaPaymentId }, { _id: ObjectId.isValid(letter.mediaPaymentId) ? new ObjectId(letter.mediaPaymentId) : letter.mediaPaymentId }] : []),
+          ...(letter.personalMessage?.paymentId ? [{ paymentId: letter.personalMessage.paymentId }] : []),
+        ],
+        status: 'APPROVED',
+      });
+      const approvedMedia = await mediaColl.findOne({
+        $or: [
+          { letterId: letter._id.toString() },
+          ...(letter.mediaStorageKey ? [{ storageKey: letter.mediaStorageKey }] : []),
+          ...(letter.personalMessage?.mediaStorageKey ? [{ storageKey: letter.personalMessage.mediaStorageKey }] : []),
+          ...(approvedPayment ? [{ paymentId: approvedPayment._id.toString() }, { paymentId: approvedPayment.paymentId }] : []),
+        ],
+        mediaStatus: 'APPROVED',
+      });
+      const personalMessage = (approvedPayment && approvedMedia && approvedMedia.mediaStatus === 'APPROVED') ? {
+        mediaType: approvedMedia.mediaType,
+        storageKey: approvedMedia.storageKey,
+        mediaStatus: 'APPROVED',
+        streamUrl: `/api/delivery/media/${token}`,
+      } : (letter.personalMessage?.mediaStatus === 'REJECTED' || approvedPayment?.status === 'REJECTED') ? {
+        mediaStatus: 'REJECTED',
+      } : null;
+
       return res.json({
         success: true,
         recipientAccessToken,
@@ -2983,6 +3224,7 @@ app.post(['/api/delivery/verify', '/api/delivery/verify-otp', '/api/recipient/ve
           signoff: letter.signoff,
           attachments: letter.attachments || [],
           status: 'OPENED',
+          personalMessage,
           paidFeatures: paidList.map((pf: any) => pf.featureCode),
         },
       });
@@ -3342,6 +3584,74 @@ export async function runDeliveryScheduler(db: any) {
     });
   }
 
+  // ----------------------------------------------------
+  // MEDIA RETENTION & AUTO-DELETION (Part 13 & 14)
+  // After successful delivery and post-delivery retention period (default 7 days):
+  // Permanently delete: GridFS file, GridFS chunks, media metadata; set mediaStatus = DELETED.
+  // ----------------------------------------------------
+  const mediaRetentionMs = Number(process.env.MEDIA_RETENTION_MS) || (7 * 24 * 3600 * 1000);
+  const mediaRetentionCutoff = new Date(now.getTime() - mediaRetentionMs);
+  const mediaMetadataColl = db.collection('mediaMetadata');
+  const paymentsColl = db.collection('payments');
+
+  try {
+    const deliveredPastRetention = await lettersColl.find({
+      status: { $in: ['DELIVERED', 'OPENED', 'COMPLETED'] },
+      $or: [
+        { deliveredAt: { $lte: mediaRetentionCutoff } },
+        { deliveryDate: { $lte: mediaRetentionCutoff } },
+      ],
+    }).toArray();
+
+    let mediaCleanedCount = 0;
+    for (const dLetter of deliveredPastRetention) {
+      const activeMedia = await mediaMetadataColl.find({
+        letterId: dLetter._id.toString(),
+        mediaStatus: { $ne: 'DELETED' },
+      }).toArray();
+
+      for (const m of activeMedia) {
+        if (m.gridFsFileId) {
+          try {
+            await deleteGridFSFile('letterMedia', m.gridFsFileId);
+          } catch {}
+        }
+        await mediaMetadataColl.updateOne(
+          { _id: m._id },
+          {
+            $set: {
+              mediaStatus: 'DELETED',
+              storageKey: '',
+              deletedAt: now,
+              updatedAt: now,
+            },
+          }
+        );
+        if (m.paymentId) {
+          await paymentsColl.updateOne(
+            {
+              $or: [
+                { _id: ObjectId.isValid(m.paymentId) ? new ObjectId(m.paymentId) : m.paymentId },
+                { paymentId: m.paymentId },
+              ],
+            },
+            {
+              $set: {
+                mediaStatus: 'DELETED',
+                mediaStorageKey: null,
+                updatedAt: now,
+              },
+            }
+          );
+        }
+        mediaCleanedCount++;
+      }
+    }
+    (processed as any).mediaCleanedCount = mediaCleanedCount;
+  } catch (mediaCleanupErr) {
+    console.warn('[OLD-LETTERS Scheduler] Media retention cleanup notice:', mediaCleanupErr);
+  }
+
   return processed;
 }
 
@@ -3452,6 +3762,8 @@ app.post(['/api/testing/advance-delivery', '/api/delivery/advance'], async (req,
 // ====================================================================
 // PAYMENTS & PAID FEATURES (Manual UPI, Strictly PENDING by default)
 // ====================================================================
+
+// 1. Submit UTR Payment (Strictly authenticated, letter ownership verified, duplicate protected)
 app.post(['/api/payments', '/api/payments/create'], requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const parseResult = SubmitPaymentSchema.safeParse(req.body);
@@ -3465,67 +3777,167 @@ app.post(['/api/payments', '/api/payments/create'], requireAuth, async (req: Aut
     const input = parseResult.data;
     const db = await getDb();
     const paymentsColl = db.collection('payments');
-    const paidFeaturesColl = db.collection('paidFeatures');
+    const lettersColl = db.collection('letters');
     const eventsColl = db.collection('deliveryEvents');
+    const userId = req.user!.id;
+    const userEmail = (req.user!.email || '').toLowerCase();
+
+    // Verify Letter Ownership if letterId is supplied
+    let letter: any = null;
+    if (input.letterId) {
+      letter = await lettersColl.findOne({
+        $or: [
+          { _id: ObjectId.isValid(input.letterId) ? new ObjectId(input.letterId) : input.letterId },
+          { trackingCode: input.letterId },
+        ],
+      });
+
+      if (letter) {
+        const isOwner =
+          letter.senderId?.toString() === userId.toString() ||
+          (ObjectId.isValid(userId) && letter.senderId?.toString() === new ObjectId(userId).toString());
+        if (!isOwner) {
+          return res.status(403).json({
+            success: false,
+            error: 'Letter ownership verification failed. You may only submit payments for your own correspondence.',
+          });
+        }
+      }
+    }
+
+    // Determine normalized media type & pricing (VOICE: 99, VIDEO: 149)
+    const normalizedMediaType: 'VOICE' | 'VIDEO' =
+      input.mediaType === 'VIDEO' ||
+      input.featureCode === 'VIDEO_NOTE' ||
+      input.featureCode === 'VIDEO' ||
+      input.amount === 149
+        ? 'VIDEO'
+        : 'VOICE';
+
+    const cleanUpi = input.upiReference.trim();
+    if (cleanUpi.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'A valid UPI reference / UTR number (at least 6 alphanumeric characters) is required.',
+      });
+    }
+
+    // Duplicate Protection: If exact same UTR was already submitted by this user, return existing payment record
+    const existingPayment = await paymentsColl.findOne({
+      upiReference: cleanUpi,
+      $or: [
+        { userId: userId.toString() },
+        ...(ObjectId.isValid(userId) ? [{ userId: new ObjectId(userId) }] : []),
+      ],
+    });
+
+    const recipientEmail = (input.recipientEmail || letter?.recipientEmail || '').toLowerCase();
+    const recipientName = input.recipientName || letter?.recipientName || 'Recipient';
+    const senderName = input.senderName || req.user?.fullName || letter?.senderName || 'Correspondent';
+    const featureType = normalizedMediaType === 'VIDEO' ? 'VIDEO_MESSAGE' : 'VOICE_MESSAGE';
+
+    if (existingPayment) {
+      return res.status(200).json({
+        success: true,
+        paymentId: existingPayment.paymentId || `PAY-${existingPayment._id.toString().slice(-8).toUpperCase()}`,
+        id: existingPayment._id.toString(),
+        payment: {
+          id: existingPayment._id.toString(),
+          paymentId: existingPayment.paymentId || `PAY-${existingPayment._id.toString().slice(-8).toUpperCase()}`,
+          letterId: existingPayment.letterId || null,
+          userId: existingPayment.userId?.toString(),
+          userEmail: existingPayment.userEmail || userEmail,
+          senderName: existingPayment.senderName || senderName,
+          recipientEmail: existingPayment.recipientEmail || recipientEmail,
+          recipientName: existingPayment.recipientName || recipientName,
+          amount: existingPayment.amount,
+          currency: existingPayment.currency || 'INR',
+          paymentMethod: 'UPI',
+          upiReference: existingPayment.upiReference,
+          mediaType: existingPayment.mediaType || normalizedMediaType,
+          featureType: existingPayment.featureType || featureType,
+          status: existingPayment.status || 'PENDING',
+          mediaStatus: existingPayment.mediaStatus || 'AWAITING_RECORDING',
+          mediaStorageKey: existingPayment.mediaStorageKey || null,
+          hasMediaAttachment: Boolean(existingPayment.hasMediaAttachment),
+          createdAt: existingPayment.createdAt instanceof Date ? existingPayment.createdAt.toISOString() : existingPayment.createdAt,
+          updatedAt: existingPayment.updatedAt instanceof Date ? existingPayment.updatedAt.toISOString() : existingPayment.updatedAt,
+        },
+        message: 'Existing pending UPI payment reference returned.',
+      });
+    }
 
     const paymentId = new ObjectId();
+    const paymentIdStr = `PAY-${paymentId.toString().slice(-8).toUpperCase()}`;
     const now = new Date();
-    // Strictly obtain userId from session
-    const userId = req.user!.id;
 
-    const paymentRecord: PaymentDoc = {
+    const paymentRecord: any = {
       _id: paymentId,
-      userId,
-      letterId: input.letterId || undefined,
-      featureCode: input.featureCode,
+      paymentId: paymentIdStr,
+      letterId: letter ? letter._id.toString() : (input.letterId || undefined),
+      userId: userId.toString(),
+      userEmail,
+      senderName,
+      recipientEmail,
+      recipientName,
+      featureType,
+      mediaType: normalizedMediaType,
+      featureCode: input.featureCode || normalizedMediaType,
       amount: input.amount,
       currency: 'INR',
-      upiReference: input.upiReference,
+      paymentMethod: 'UPI',
+      upiReference: cleanUpi,
+      status: 'PENDING',
+      mediaStatus: 'AWAITING_RECORDING',
+      mediaStorageKey: null,
+      hasMediaAttachment: false,
       paymentScreenshotId: input.screenshotUrl || undefined,
-      status: 'PENDING', // NEVER automatically approved!
+      adminNote: null,
+      verifiedBy: null,
+      verifiedAt: null,
       createdAt: now,
       updatedAt: now,
     };
 
     await paymentsColl.insertOne(paymentRecord);
 
-    const paidFeatureId = new ObjectId();
-    await paidFeaturesColl.insertOne({
-      _id: paidFeatureId,
-      userId,
-      letterId: input.letterId || 'unassigned',
-      featureCode: input.featureCode,
-      paymentId: paymentId.toString(),
-      status: 'PENDING',
-      createdAt: now,
-    });
-
-    if (input.letterId) {
+    if (letter) {
       try {
         await eventsColl.insertOne({
           _id: new ObjectId(),
-          letterId: new ObjectId(input.letterId),
+          letterId: letter._id,
           eventType: 'PAYMENT_CREATED',
-          metadata: { amount: input.amount, upiReference: input.upiReference },
+          metadata: { paymentId: paymentIdStr, amount: input.amount, upiReference: cleanUpi, mediaType: normalizedMediaType },
           createdAt: now,
         });
-      } catch {
-        // letterId may not be standard ObjectId
-      }
+      } catch {}
     }
 
     res.status(201).json({
       success: true,
+      paymentId: paymentIdStr,
+      id: paymentId.toString(),
       payment: {
         id: paymentId.toString(),
-        userId,
-        letterId: input.letterId,
-        featureCode: input.featureCode,
+        paymentId: paymentIdStr,
+        letterId: paymentRecord.letterId || null,
+        userId: userId.toString(),
+        userEmail,
+        senderName,
+        recipientEmail,
+        recipientName,
         amount: input.amount,
         currency: 'INR',
-        upiReference: input.upiReference,
+        paymentMethod: 'UPI',
+        upiReference: cleanUpi,
+        mediaType: normalizedMediaType,
+        featureType,
         status: 'PENDING',
+        mediaStatus: 'AWAITING_RECORDING',
+        mediaStorageKey: null,
+        hasMediaAttachment: false,
         createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
       },
       message: 'UPI payment submitted. Awaiting administrative verification.',
     });
@@ -3534,7 +3946,288 @@ app.post(['/api/payments', '/api/payments/create'], requireAuth, async (req: Aut
   }
 });
 
-// List User's Payments (Protected with full Bureau transaction metadata)
+// 2. Upload Recorded Audio/Video Media to Private GridFS Vault
+app.post(['/api/payments/:id/media', '/api/letters/:id/media'], requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const rawId = req.params.id;
+    const db = await getDb();
+    const paymentsColl = db.collection('payments');
+    const lettersColl = db.collection('letters');
+    const mediaMetadataColl = db.collection('mediaMetadata');
+    const userId = req.user!.id;
+    const now = new Date();
+
+    // Find target payment record
+    let payment: any = await paymentsColl.findOne({
+      $or: [
+        { _id: ObjectId.isValid(rawId) ? new ObjectId(rawId) : rawId },
+        { paymentId: rawId },
+        { letterId: rawId },
+      ],
+    });
+
+    if (!payment) {
+      return res.status(404).json({ success: false, error: 'Associated payment record not found.' });
+    }
+
+    const isOwner =
+      payment.userId?.toString() === userId.toString() ||
+      (ObjectId.isValid(userId) && payment.userId?.toString() === new ObjectId(userId).toString());
+    const isAdmin = await verifyAdminServerSide(req);
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ success: false, error: 'Access denied: You can only attach media to your own payment.' });
+    }
+
+    // Extract binary buffer from request (JSON base64 or raw stream)
+    let buffer: Buffer | null = null;
+    let mimeType = 'audio/webm';
+    let durationSeconds = 0;
+
+    if (req.body && req.body.data) {
+      // Base64 payload
+      const base64Data = req.body.data.replace(/^data:[^;]+;base64,/, '');
+      buffer = Buffer.from(base64Data, 'base64');
+      mimeType = req.body.mimeType || (payment.mediaType === 'VIDEO' ? 'video/webm' : 'audio/webm');
+      durationSeconds = Number(req.body.durationSeconds) || 0;
+    } else if (Buffer.isBuffer(req.body)) {
+      buffer = req.body;
+      mimeType = (req.headers['content-type'] as string) || (payment.mediaType === 'VIDEO' ? 'video/webm' : 'audio/webm');
+    }
+
+    if (!buffer || buffer.length === 0) {
+      return res.status(400).json({ success: false, error: 'No media binary received in request.' });
+    }
+
+    const mediaType: 'VOICE' | 'VIDEO' =
+      payment.mediaType || (mimeType.toLowerCase().includes('video') ? 'VIDEO' : 'VOICE');
+    const storageKey = `media_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
+    const filename = `${storageKey}.${mediaType === 'VIDEO' ? 'webm' : 'webm'}`;
+
+    // Upload to GridFS
+    const gridResult = await uploadGridFSBuffer('letterMedia', filename, buffer, {
+      paymentId: payment._id.toString(),
+      letterId: payment.letterId || '',
+      userId: userId.toString(),
+      mimeType,
+      mediaType,
+      durationSeconds,
+    });
+
+    // Save Media Metadata Document
+    const mediaDoc: LetterMediaDoc = {
+      _id: new ObjectId(),
+      letterId: payment.letterId || '',
+      paymentId: payment._id.toString(),
+      userId: userId.toString(),
+      mediaType,
+      mediaStatus: 'PENDING',
+      storageKey,
+      mimeType,
+      fileSize: buffer.length,
+      durationSeconds,
+      gridFsFileId: gridResult.fileId,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await mediaMetadataColl.insertOne(mediaDoc);
+
+    // Update Payment Record with media link
+    await paymentsColl.updateOne(
+      { _id: payment._id },
+      {
+        $set: {
+          mediaStorageKey: storageKey,
+          hasMediaAttachment: true,
+          mediaType,
+          mediaStatus: 'PENDING',
+          updatedAt: now,
+        },
+      }
+    );
+
+    // Update Letter if linked
+    if (payment.letterId) {
+      try {
+        const lId = ObjectId.isValid(payment.letterId) ? new ObjectId(payment.letterId) : payment.letterId;
+        await lettersColl.updateOne(
+          { _id: lId },
+          {
+            $set: {
+              hasMediaAttachment: true,
+              mediaType,
+              mediaStorageKey: storageKey,
+              mediaPaymentId: payment._id.toString(),
+              mediaStatus: 'PENDING',
+              updatedAt: now,
+            },
+          }
+        );
+      } catch {}
+    }
+
+    res.status(201).json({
+      success: true,
+      storageKey,
+      mediaType,
+      mediaStatus: 'PENDING',
+      fileSize: buffer.length,
+      message: 'Media recording successfully stored in private GridFS vault and linked to payment.',
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3. Admin: Stream Private Media for Verification Preview
+app.get('/api/admin/media/:storageKey', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const storageKey = req.params.storageKey;
+    const db = await getDb();
+    const mediaColl = db.collection('mediaMetadata');
+
+    const media = await mediaColl.findOne({ storageKey });
+    if (!media || !media.gridFsFileId) {
+      return res.status(404).json({ success: false, error: 'Media file not found in vault.' });
+    }
+
+    const download = await downloadGridFSBuffer('letterMedia', media.gridFsFileId);
+    if (!download) {
+      return res.status(404).json({ success: false, error: 'Media stream not found in GridFS.' });
+    }
+
+    res.setHeader('Content-Type', media.mimeType || (media.mediaType === 'VIDEO' ? 'video/webm' : 'audio/webm'));
+    res.setHeader('Content-Length', download.buffer.length);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'private, no-cache');
+    res.send(download.buffer);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 4. Recipient: Stream Private Media (Strictly upon arrival & after admin verification approval)
+app.get(['/api/delivery/media/:token', '/api/delivery/media/:token/:storageKey'], async (req, res) => {
+  try {
+    const token = req.params.token;
+    const db = await getDb();
+    const tokensColl = db.collection('deliveryTokens');
+    const lettersColl = db.collection('letters');
+    const paymentsColl = db.collection('payments');
+    const mediaColl = db.collection('mediaMetadata');
+
+    // 1. Look up token
+    const tokenHash = hashSha256(token);
+    const tokenDoc = await tokensColl.findOne({
+      $or: [{ tokenHash }, { rawToken: token }, { letterId: token }],
+    });
+
+    if (!tokenDoc) {
+      return res.status(404).json({ success: false, error: 'Invalid delivery token.' });
+    }
+
+    // 2. Look up letter
+    const letter = await lettersColl.findOne({ _id: new ObjectId(tokenDoc.letterId.toString()) });
+    if (!letter) {
+      return res.status(404).json({ success: false, error: 'Letter not found.' });
+    }
+
+    const now = new Date();
+    const deliveryDate = new Date(letter.deliveryDate || letter.scheduledDeliveryAt);
+    const isDelivered = letter.status !== 'SCHEDULED' && letter.status !== 'DRAFT';
+
+    if (!isDelivered && now < deliveryDate) {
+      return res.status(403).json({ success: false, error: 'Sealed in transit. Media is locked until arrival.' });
+    }
+
+    // 3. Find payment & media metadata
+    const payment = await paymentsColl.findOne({
+      $or: [
+        { letterId: letter._id.toString() },
+        ...(letter.trackingCode ? [{ letterId: letter.trackingCode }] : []),
+        ...(letter.mediaPaymentId ? [{ paymentId: letter.mediaPaymentId }, { _id: ObjectId.isValid(letter.mediaPaymentId) ? new ObjectId(letter.mediaPaymentId) : letter.mediaPaymentId }] : []),
+        ...(letter.personalMessage?.paymentId ? [{ paymentId: letter.personalMessage.paymentId }] : []),
+      ],
+    });
+    const media = await mediaColl.findOne({
+      $or: [
+        { letterId: letter._id.toString() },
+        ...(letter.mediaStorageKey ? [{ storageKey: letter.mediaStorageKey }] : []),
+        ...(letter.personalMessage?.mediaStorageKey ? [{ storageKey: letter.personalMessage.mediaStorageKey }] : []),
+        ...(payment ? [{ paymentId: payment._id.toString() }, { paymentId: payment.paymentId }] : []),
+      ],
+    });
+
+    // CRITICAL (Part 9, 10, 11): Only APPROVED payment & media are delivered
+    if (!payment || payment.status !== 'APPROVED' || !media || media.mediaStatus !== 'APPROVED') {
+      return res.status(404).json({
+        success: false,
+        error: 'Personal voice/video message was not approved for delivery. Recipient receives letter only.',
+      });
+    }
+
+    // CRITICAL (Part 14): Expired / deleted media returns 410 Gone
+    if (media.mediaStatus === 'DELETED' || !media.gridFsFileId) {
+      return res.status(410).json({
+        success: false,
+        error: 'This personal message has expired and been permanently deleted per retention policy.',
+      });
+    }
+
+    const download = await downloadGridFSBuffer('letterMedia', media.gridFsFileId);
+    if (!download) {
+      return res.status(404).json({ success: false, error: 'Media stream not found in GridFS.' });
+    }
+
+    res.setHeader('Content-Type', media.mimeType || (media.mediaType === 'VIDEO' ? 'video/webm' : 'audio/webm'));
+    res.setHeader('Content-Length', download.buffer.length);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'private, no-cache');
+    res.send(download.buffer);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5. Sender Preview: Stream Own Media
+app.get('/api/user/media/:storageKey', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const storageKey = req.params.storageKey;
+    const db = await getDb();
+    const mediaColl = db.collection('mediaMetadata');
+    const userId = req.user!.id;
+
+    const media = await mediaColl.findOne({ storageKey });
+    if (!media || !media.gridFsFileId) {
+      return res.status(404).json({ success: false, error: 'Media recording not found.' });
+    }
+
+    const isOwner =
+      media.userId?.toString() === userId.toString() ||
+      (ObjectId.isValid(userId) && media.userId?.toString() === new ObjectId(userId).toString());
+    const isAdmin = await verifyAdminServerSide(req);
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ success: false, error: 'Access denied to this media recording.' });
+    }
+
+    const download = await downloadGridFSBuffer('letterMedia', media.gridFsFileId);
+    if (!download) {
+      return res.status(404).json({ success: false, error: 'Media file not found in vault.' });
+    }
+
+    res.setHeader('Content-Type', media.mimeType || (media.mediaType === 'VIDEO' ? 'video/webm' : 'audio/webm'));
+    res.setHeader('Content-Length', download.buffer.length);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'private, no-cache');
+    res.send(download.buffer);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 6. List User's Payments (All statuses: PENDING, APPROVED, REJECTED)
 app.get(['/api/payments', '/api/user/payments'], requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const db = await getDb();
@@ -3544,23 +4237,28 @@ app.get(['/api/payments', '/api/user/payments'], requireAuth, async (req: Authen
 
     const query: any = {
       $or: [
-        { userId: userId },
+        { userId: userId.toString() },
         ...(ObjectId.isValid(userId) ? [{ userId: new ObjectId(userId) }] : []),
+        ...(req.user?.email ? [{ userEmail: req.user.email.toLowerCase() }] : []),
       ],
     };
 
     const list = await (await paymentsColl.find(query)).sort({ createdAt: -1 }).toArray();
 
     const featureDescriptions: Record<string, string> = {
-      VOICE_NOTE: 'Audio Epistolary Wax Seal (Voice Note)',
-      VIDEO_NOTE: 'Video Epistolary Parchment (Video Note)',
+      VOICE: 'Audio Epistolary Wax Seal (Voice Message)',
+      VIDEO: 'Video Epistolary Parchment (Video Message)',
+      VOICE_NOTE: 'Audio Epistolary Wax Seal (Voice Message)',
+      VIDEO_NOTE: 'Video Epistolary Parchment (Video Message)',
       LIVE_MEETING: 'Bureau Live Dispatch Meeting',
     };
 
     const enriched = await Promise.all(
       list.map(async (p: any) => {
-        let recipientName = 'Postal Recipient';
+        let recipientName = p.recipientName || 'Postal Recipient';
+        let recipientEmail = p.recipientEmail || '';
         let trackingCode = 'OL-BUREAU';
+
         if (p.letterId) {
           try {
             const letter = await lettersColl.findOne({
@@ -3570,28 +4268,39 @@ app.get(['/api/payments', '/api/user/payments'], requireAuth, async (req: Authen
               ],
             });
             if (letter) {
-              recipientName = letter.recipientName || 'Recipient';
-              trackingCode = letter.trackingCode;
+              recipientName = letter.recipientName || recipientName;
+              recipientEmail = letter.recipientEmail || recipientEmail;
+              trackingCode = letter.trackingCode || trackingCode;
             }
           } catch {}
         }
 
+        const mediaType = p.mediaType || (p.featureCode?.includes('VIDEO') ? 'VIDEO' : 'VOICE');
+
         return {
           id: p._id.toString(),
-          paymentId: `PAY-${p._id.toString().slice(-8).toUpperCase()}`,
+          paymentId: p.paymentId || `PAY-${p._id.toString().slice(-8).toUpperCase()}`,
           letterId: p.letterId || null,
           trackingCode,
           recipientName,
-          featureCode: p.featureCode,
-          description: featureDescriptions[p.featureCode] || 'Premium Correspondence Dispatch',
+          recipientEmail,
+          mediaType,
+          featureCode: p.featureCode || mediaType,
+          description: featureDescriptions[mediaType] || featureDescriptions[p.featureCode] || 'Personal Message Enclosure',
           amount: p.amount,
           currency: p.currency || 'INR',
-          paymentMethod: 'UPI',
+          paymentMethod: p.paymentMethod || 'UPI',
           upiReference: p.upiReference,
           status: p.status || 'PENDING',
+          mediaStatus: p.mediaStatus || 'PENDING',
+          mediaStorageKey: p.mediaStorageKey || null,
+          hasMediaAttachment: Boolean(p.hasMediaAttachment),
           refundStatus: p.status === 'REFUNDED' ? 'REFUNDED' : 'NONE',
           adminNote: p.adminNote || null,
-          createdAt: p.createdAt ? (typeof p.createdAt === 'string' ? p.createdAt : p.createdAt.toISOString()) : new Date().toISOString(),
+          verifiedBy: p.verifiedBy || null,
+          verifiedAt: p.verifiedAt ? (p.verifiedAt instanceof Date ? p.verifiedAt.toISOString() : p.verifiedAt) : null,
+          createdAt: p.createdAt ? (p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt) : new Date().toISOString(),
+          updatedAt: p.updatedAt ? (p.updatedAt instanceof Date ? p.updatedAt.toISOString() : p.updatedAt) : new Date().toISOString(),
         };
       })
     );
@@ -3605,7 +4314,7 @@ app.get(['/api/payments', '/api/user/payments'], requireAuth, async (req: Authen
   }
 });
 
-// Single Payment Lookup (Protected: user or admin only)
+// 7. Single Payment Lookup (Protected: user or admin only)
 app.get('/api/payments/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const db = await getDb();
@@ -3620,7 +4329,7 @@ app.get('/api/payments/:id', requireAuth, async (req: AuthenticatedRequest, res)
     }
     if (!payment) {
       payment = await paymentsColl.findOne({
-        $or: [{ upiReference: paymentId }, { _id: paymentId as any }],
+        $or: [{ paymentId }, { upiReference: paymentId }, { _id: paymentId as any }],
       });
     }
 
@@ -3628,17 +4337,17 @@ app.get('/api/payments/:id', requireAuth, async (req: AuthenticatedRequest, res)
       return res.status(404).json({ success: false, error: 'Payment record not found.' });
     }
 
-    // Verify ownership or admin privileges
     const isAdmin = await verifyAdminServerSide(req);
     const isOwner =
-      payment.userId?.toString() === userId ||
+      payment.userId?.toString() === userId.toString() ||
       (ObjectId.isValid(userId) && payment.userId?.toString() === new ObjectId(userId).toString());
 
     if (!isOwner && !isAdmin) {
       return res.status(403).json({ success: false, error: 'Access denied to this payment record.' });
     }
 
-    let recipientName = 'Postal Recipient';
+    let recipientName = payment.recipientName || 'Postal Recipient';
+    let recipientEmail = payment.recipientEmail || '';
     let trackingCode = 'OL-BUREAU';
     if (payment.letterId) {
       try {
@@ -3649,37 +4358,41 @@ app.get('/api/payments/:id', requireAuth, async (req: AuthenticatedRequest, res)
           ],
         });
         if (letter) {
-          recipientName = letter.recipientName || 'Recipient';
+          recipientName = letter.recipientName || recipientName;
+          recipientEmail = letter.recipientEmail || recipientEmail;
           trackingCode = letter.trackingCode;
         }
       } catch {}
     }
 
-    const featureDescriptions: Record<string, string> = {
-      VOICE_NOTE: 'Audio Epistolary Wax Seal (Voice Note)',
-      VIDEO_NOTE: 'Video Epistolary Parchment (Video Note)',
-      LIVE_MEETING: 'Bureau Live Dispatch Meeting',
-    };
+    const mediaType = payment.mediaType || (payment.featureCode?.includes('VIDEO') ? 'VIDEO' : 'VOICE');
 
     res.json({
       success: true,
       payment: {
         id: payment._id.toString(),
-        paymentId: `PAY-${payment._id.toString().slice(-8).toUpperCase()}`,
+        paymentId: payment.paymentId || `PAY-${payment._id.toString().slice(-8).toUpperCase()}`,
         letterId: payment.letterId || null,
         trackingCode,
         recipientName,
-        featureCode: payment.featureCode,
-        description: featureDescriptions[payment.featureCode] || 'Premium Correspondence Dispatch',
+        recipientEmail,
+        mediaType,
+        featureCode: payment.featureCode || mediaType,
+        description: mediaType === 'VIDEO' ? 'Video Message Enclosure' : 'Voice Message Enclosure',
         amount: payment.amount,
         currency: payment.currency || 'INR',
-        paymentMethod: 'UPI',
+        paymentMethod: payment.paymentMethod || 'UPI',
         upiReference: payment.upiReference,
-        status: payment.status,
+        status: payment.status || 'PENDING',
+        mediaStatus: payment.mediaStatus || 'PENDING',
+        mediaStorageKey: payment.mediaStorageKey || null,
+        hasMediaAttachment: Boolean(payment.hasMediaAttachment),
         refundStatus: payment.status === 'REFUNDED' ? 'REFUNDED' : 'NONE',
         adminNote: payment.adminNote || null,
-        verifiedAt: payment.verifiedAt ? payment.verifiedAt.toISOString() : null,
-        createdAt: payment.createdAt ? (typeof payment.createdAt === 'string' ? payment.createdAt : payment.createdAt.toISOString()) : new Date().toISOString(),
+        verifiedBy: payment.verifiedBy || null,
+        verifiedAt: payment.verifiedAt ? (payment.verifiedAt instanceof Date ? payment.verifiedAt.toISOString() : payment.verifiedAt) : null,
+        createdAt: payment.createdAt ? (payment.createdAt instanceof Date ? payment.createdAt.toISOString() : payment.createdAt) : new Date().toISOString(),
+        updatedAt: payment.updatedAt ? (payment.updatedAt instanceof Date ? payment.updatedAt.toISOString() : payment.updatedAt) : new Date().toISOString(),
       },
     });
   } catch (err: any) {
@@ -3691,38 +4404,100 @@ app.get('/api/payments/:id', requireAuth, async (req: AuthenticatedRequest, res)
 // ADMIN BUREAU DESK (Server-Side Authorization Required)
 // ====================================================================
 
-// 9. Admin: List Payments for Review
+// 8. Admin: List Payments for Review (Exact same MongoDB payment document)
 app.get('/api/admin/payments', requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const db = await getDb();
     const paymentsColl = db.collection('payments');
+    const lettersColl = db.collection('letters');
+    const usersColl = db.collection('users');
+
     const list = await (await paymentsColl.find({})).sort({ createdAt: -1 }).toArray();
+
+    const enriched = await Promise.all(
+      list.map(async (p: any) => {
+        let senderEmail = p.userEmail || '';
+        let senderName = 'Sender';
+        let recipientEmail = p.recipientEmail || '';
+        let recipientName = p.recipientName || 'Recipient';
+        let trackingCode = 'OL-BUREAU';
+
+        if (p.userId) {
+          try {
+            const user = await usersColl.findOne({
+              $or: [
+                { _id: ObjectId.isValid(p.userId) ? new ObjectId(p.userId) : p.userId },
+                { email: p.userEmail },
+              ],
+            });
+            if (user) {
+              senderEmail = user.email || senderEmail;
+              senderName = user.fullName || senderName;
+            }
+          } catch {}
+        }
+
+        if (p.letterId) {
+          try {
+            const letter = await lettersColl.findOne({
+              $or: [
+                { _id: ObjectId.isValid(p.letterId) ? new ObjectId(p.letterId) : p.letterId },
+                { trackingCode: p.letterId },
+              ],
+            });
+            if (letter) {
+              recipientEmail = letter.recipientEmail || recipientEmail;
+              recipientName = letter.recipientName || recipientName;
+              trackingCode = letter.trackingCode || trackingCode;
+              senderName = letter.senderName || senderName;
+              senderEmail = letter.senderEmail || senderEmail;
+            }
+          } catch {}
+        }
+
+        const mediaType = p.mediaType || (p.featureCode?.includes('VIDEO') ? 'VIDEO' : 'VOICE');
+
+        return {
+          id: p._id.toString(),
+          paymentId: p.paymentId || `PAY-${p._id.toString().slice(-8).toUpperCase()}`,
+          userId: p.userId?.toString(),
+          senderEmail,
+          senderName,
+          letterId: p.letterId?.toString() || null,
+          trackingCode,
+          recipientEmail,
+          recipientName,
+          mediaType,
+          mediaStatus: p.mediaStatus || 'PENDING',
+          mediaStorageKey: p.mediaStorageKey || null,
+          hasMediaAttachment: Boolean(p.hasMediaAttachment),
+          mediaPreviewUrl: p.mediaStorageKey ? `/api/admin/media/${p.mediaStorageKey}` : null,
+          featureCode: p.featureCode || mediaType,
+          amount: p.amount,
+          currency: p.currency || 'INR',
+          paymentMethod: p.paymentMethod || 'UPI',
+          upiReference: p.upiReference,
+          paymentScreenshotPath: p.paymentScreenshotId,
+          status: p.status || 'PENDING',
+          adminNote: p.adminNote || null,
+          verifiedBy: p.verifiedBy || null,
+          verifiedAt: p.verifiedAt ? (p.verifiedAt instanceof Date ? p.verifiedAt.toISOString() : p.verifiedAt) : null,
+          createdAt: p.createdAt ? (p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt) : new Date().toISOString(),
+          updatedAt: p.updatedAt ? (p.updatedAt instanceof Date ? p.updatedAt.toISOString() : p.updatedAt) : new Date().toISOString(),
+        };
+      })
+    );
 
     res.json({
       success: true,
-      payments: list.map((p: any) => ({
-        id: p._id.toString(),
-        userId: p.userId?.toString(),
-        letterId: p.letterId?.toString(),
-        featureCode: p.featureCode,
-        amount: p.amount,
-        currency: p.currency,
-        upiReference: p.upiReference,
-        paymentScreenshotPath: p.paymentScreenshotId,
-        status: p.status,
-        adminNote: p.adminNote,
-        verifiedBy: p.verifiedBy,
-        verifiedAt: p.verifiedAt ? p.verifiedAt.toISOString() : null,
-        createdAt: p.createdAt.toISOString(),
-        updatedAt: p.updatedAt ? p.updatedAt.toISOString() : p.createdAt.toISOString(),
-      })),
+      payments: enriched,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// 10. Admin: Verify Payment (Approve or Reject)
+// 9. Admin: Verify Payment (Approve or Reject)
 app.post(['/api/admin/payments/:id/verify', '/api/admin/payments/:id/approve', '/api/admin/payments/:id/reject'], requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const paymentId = req.params.id;
@@ -3746,13 +4521,20 @@ app.post(['/api/admin/payments/:id/verify', '/api/admin/payments/:id/approve', '
     const { status, adminNote } = parseResult.data;
     const db = await getDb();
     const paymentsColl = db.collection('payments');
-    const paidFeaturesColl = db.collection('paidFeatures');
+    const mediaMetadataColl = db.collection('mediaMetadata');
+    const lettersColl = db.collection('letters');
     const auditColl = db.collection('auditLogs');
     const eventsColl = db.collection('deliveryEvents');
 
     let payment = null;
     try {
-      payment = await paymentsColl.findOne({ _id: new ObjectId(paymentId) });
+      payment = await paymentsColl.findOne({
+        $or: [
+          { _id: ObjectId.isValid(paymentId) ? new ObjectId(paymentId) : paymentId },
+          { paymentId },
+          { upiReference: paymentId },
+        ],
+      });
     } catch {
       payment = await paymentsColl.findOne({ upiReference: paymentId });
     }
@@ -3764,11 +4546,13 @@ app.post(['/api/admin/payments/:id/verify', '/api/admin/payments/:id/approve', '
     const now = new Date();
     const adminIdentifier = req.user!.email;
 
+    // 1. Update Payment status
     await paymentsColl.updateOne(
       { _id: payment._id },
       {
         $set: {
           status,
+          mediaStatus: status,
           adminNote: adminNote || null,
           verifiedBy: adminIdentifier,
           verifiedAt: now,
@@ -3777,65 +4561,72 @@ app.post(['/api/admin/payments/:id/verify', '/api/admin/payments/:id/approve', '
       }
     );
 
-    if (status === 'APPROVED') {
-      await paidFeaturesColl.updateOne(
-        { paymentId: payment._id.toString() },
-        {
-          $set: {
-            status: 'UNLOCKED',
-            unlockedAt: now,
-          },
-        }
-      );
-
-      await auditColl.insertOne({
-        _id: new ObjectId(),
-        action: 'PAYMENT_APPROVED',
-        adminId: adminIdentifier,
-        paymentId: payment._id.toString(),
-        entityType: 'PAYMENT',
-        entityId: payment._id.toString(),
-        timestamp: now,
-        metadata: {
-          featureCode: payment.featureCode,
-          amount: payment.amount,
-          upiReference: payment.upiReference,
+    // 2. Update Media metadata status
+    await mediaMetadataColl.updateMany(
+      {
+        $or: [
+          { paymentId: payment._id.toString() },
+          { paymentId: payment.paymentId },
+          ...(payment.letterId ? [{ letterId: payment.letterId }] : []),
+        ],
+      },
+      {
+        $set: {
+          mediaStatus: status,
+          updatedAt: now,
         },
-      });
-
-      if (payment.letterId) {
-        try {
-          await eventsColl.insertOne({
-            _id: new ObjectId(),
-            letterId: new ObjectId(payment.letterId),
-            eventType: 'PAYMENT_APPROVED',
-            metadata: { featureCode: payment.featureCode },
-            createdAt: now,
-          });
-        } catch {
-          // Non-ObjectId fallback
-        }
       }
-    } else if (status === 'REJECTED') {
-      await paidFeaturesColl.updateOne(
-        { paymentId: payment._id.toString() },
-        {
-          $set: {
-            status: 'CANCELLED',
-          },
-        }
-      );
+    );
 
-      await auditColl.insertOne({
-        _id: new ObjectId(),
-        action: 'PAYMENT_REJECTED',
-        adminId: adminIdentifier,
-        paymentId: payment._id.toString(),
-        entityType: 'PAYMENT',
-        entityId: payment._id.toString(),
-        timestamp: now,
-        metadata: { adminNote },
-      });
+    // 3. Update letter personalMessage status if applicable
+    if (payment.letterId) {
+      try {
+        const lId = ObjectId.isValid(payment.letterId) ? new ObjectId(payment.letterId) : payment.letterId;
+        await lettersColl.updateOne(
+          { _id: lId },
+          {
+            $set: {
+              'personalMessage.mediaStatus': status,
+              mediaStatus: status,
+              updatedAt: now,
+            },
+          }
+        );
+      } catch {}
+    }
+
+    // 4. Record Audit Log
+    await auditColl.insertOne({
+      _id: new ObjectId(),
+      action: status === 'APPROVED' ? 'PAYMENT_APPROVED' : 'PAYMENT_REJECTED',
+      adminId: adminIdentifier,
+      adminEmail: adminIdentifier,
+      paymentId: payment._id.toString(),
+      entityType: 'PAYMENT',
+      entityId: payment._id.toString(),
+      timestamp: now,
+      metadata: {
+        paymentId: payment.paymentId || `PAY-${payment._id.toString().slice(-8).toUpperCase()}`,
+        letterId: payment.letterId,
+        mediaType: payment.mediaType,
+        amount: payment.amount,
+        upiReference: payment.upiReference,
+        adminNote: adminNote || null,
+      },
+    });
+
+    // 5. Emit Delivery Event
+    if (payment.letterId) {
+      try {
+        const lId = ObjectId.isValid(payment.letterId) ? new ObjectId(payment.letterId) : payment.letterId;
+        await eventsColl.insertOne({
+          _id: new ObjectId(),
+          letterId: lId,
+          eventType: status === 'APPROVED' ? 'PAYMENT_APPROVED' : 'PAYMENT_REJECTED',
+          metadata: { amount: payment.amount, mediaType: payment.mediaType },
+          createdAt: now,
+        });
+      } catch {}
     }
 
     const updatedPayment = await paymentsColl.findOne({ _id: payment._id });
@@ -3845,9 +4636,11 @@ app.post(['/api/admin/payments/:id/verify', '/api/admin/payments/:id/approve', '
       message: `Payment marked as ${status}.`,
       payment: updatedPayment ? {
         id: updatedPayment._id.toString(),
+        paymentId: updatedPayment.paymentId || `PAY-${updatedPayment._id.toString().slice(-8).toUpperCase()}`,
         status: updatedPayment.status,
+        mediaStatus: updatedPayment.mediaStatus,
         verifiedBy: updatedPayment.verifiedBy,
-        verifiedAt: updatedPayment.verifiedAt ? updatedPayment.verifiedAt.toISOString() : null,
+        verifiedAt: updatedPayment.verifiedAt ? (updatedPayment.verifiedAt instanceof Date ? updatedPayment.verifiedAt.toISOString() : updatedPayment.verifiedAt) : null,
         adminNote: updatedPayment.adminNote,
       } : undefined,
     });

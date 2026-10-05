@@ -78,9 +78,30 @@ export function normalizeApiError(
   return fallback;
 }
 
+export function getStoredAuthToken(): string | null {
+  try {
+    return localStorage.getItem('old_letters_token') || sessionStorage.getItem('old_letters_token') || null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredAuthToken(token: string | null) {
+  try {
+    if (token) {
+      localStorage.setItem('old_letters_token', token);
+      sessionStorage.setItem('old_letters_token', token);
+    } else {
+      localStorage.removeItem('old_letters_token');
+      sessionStorage.removeItem('old_letters_token');
+    }
+  } catch {}
+}
+
 /**
  * Core HTTP client guaranteeing credentials: 'include' across all requests.
- * Ensures session cookies are sent for same-origin and cross-origin requests.
+ * Ensures session cookies are sent for same-origin and cross-origin requests,
+ * and attaches Authorization: Bearer <token> if available for full cross-site/iframe support.
  */
 export async function apiFetch(endpoint: string, init: RequestInit = {}): Promise<Response> {
   const url = endpoint.startsWith('http')
@@ -90,6 +111,11 @@ export async function apiFetch(endpoint: string, init: RequestInit = {}): Promis
   const headers = new Headers(init.headers || {});
   if (!headers.has('Accept')) {
     headers.set('Accept', 'application/json');
+  }
+
+  const token = getStoredAuthToken();
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
   return fetch(url, {
@@ -385,6 +411,8 @@ export async function submitUpiPayment(payload: SubmitPaymentInput): Promise<{
   const data = await safeParseJson<{
     success: boolean;
     payment: PaymentRecord;
+    paymentId?: string;
+    id?: string;
     message?: string;
     error?: string;
   }>(res, 'Failed to submit payment reference.');
@@ -392,10 +420,55 @@ export async function submitUpiPayment(payload: SubmitPaymentInput): Promise<{
   if (!res.ok || !data.success) {
     throw new Error(data.error || 'Failed to submit payment reference.');
   }
+
+  const p = data.payment;
+  if (data.paymentId && !p.paymentId) {
+    p.paymentId = data.paymentId;
+  }
+  if (data.id && !p.id) {
+    p.id = data.id;
+  }
+
   return {
-    payment: data.payment,
+    payment: p,
     message: data.message || 'Payment reference submitted.',
   };
+}
+
+export async function uploadMediaAttachment(
+  paymentIdOrLetterId: string,
+  payload: { data: string; mimeType: string; durationSeconds?: number }
+): Promise<{
+  success: boolean;
+  storageKey: string;
+  mediaType: 'VOICE' | 'VIDEO';
+  mediaStatus: string;
+  fileSize: number;
+  message: string;
+}> {
+  const res = await apiFetch(`/payments/${paymentIdOrLetterId}/media`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await safeParseJson<{
+    success: boolean;
+    storageKey: string;
+    mediaType: 'VOICE' | 'VIDEO';
+    mediaStatus: string;
+    fileSize: number;
+    message: string;
+    error?: string;
+  }>(res, 'Failed to upload media enclosure.');
+
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Failed to upload media enclosure.');
+  }
+
+  return data;
 }
 
 export async function fetchAdminPayments(): Promise<PaymentRecord[]> {
@@ -482,6 +555,9 @@ export async function verifyAuthOtp(email: string, otp: string, fullName?: strin
   }>(res, 'Authentication verification failed');
   if (data.user) {
     try { localStorage.setItem('old_letters_user', JSON.stringify(data.user)); } catch {}
+  }
+  if (data.token) {
+    setStoredAuthToken(data.token);
   }
   return data;
 }
@@ -596,6 +672,7 @@ export async function getCurrentUser(): Promise<{
 
 export async function logoutUser(): Promise<void> {
   try {
+    setStoredAuthToken(null);
     try { localStorage.removeItem('old_letters_user'); } catch {}
     await apiFetch('/auth/logout', {
       method: 'POST',
@@ -660,6 +737,10 @@ export async function signupUser(payload: {
   try {
     localStorage.setItem('old_letters_user', JSON.stringify(data.user));
   } catch {}
+
+  if (data.token) {
+    setStoredAuthToken(data.token);
+  }
 
   return { user: data.user, token: data.token };
 }
@@ -728,6 +809,10 @@ export async function loginUser(payload: {
   try {
     localStorage.setItem('old_letters_user', JSON.stringify(data.user));
   } catch {}
+
+  if (data.token) {
+    setStoredAuthToken(data.token);
+  }
 
   return { user: data.user, token: data.token };
 }

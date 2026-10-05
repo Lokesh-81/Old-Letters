@@ -977,8 +977,9 @@ export const BureauDashboard: React.FC<BureauDashboardProps> = ({
                           <tr>
                             <th className="py-3.5 px-4 font-medium">Date</th>
                             <th className="py-3.5 px-4 font-medium">Payment ID</th>
-                            <th className="py-3.5 px-4 font-medium">Dispatch Ref</th>
-                            <th className="py-3.5 px-4 font-medium">Service / Feature</th>
+                            <th className="py-3.5 px-4 font-medium">Letter Ref</th>
+                            <th className="py-3.5 px-4 font-medium">Recipient</th>
+                            <th className="py-3.5 px-4 font-medium">Type</th>
                             <th className="py-3.5 px-4 font-medium">Amount</th>
                             <th className="py-3.5 px-4 font-medium">UPI UTR</th>
                             <th className="py-3.5 px-4 font-medium">Status</th>
@@ -1001,13 +1002,19 @@ export const BureauDashboard: React.FC<BureauDashboardProps> = ({
                               <td className="py-3.5 px-4 font-mono text-stone-600">
                                 {p.trackingCode || '—'}
                               </td>
-                              <td className="py-3.5 px-4 font-medium text-stone-900 max-w-xs truncate">
-                                {p.description}
+                              <td className="py-3.5 px-4 text-stone-700 font-serif">
+                                {p.recipientName || p.recipientEmail || 'Recipient'}
+                              </td>
+                              <td className="py-3.5 px-4 font-medium text-stone-900">
+                                <span className="inline-flex items-center gap-1 font-mono text-[11px]">
+                                  <span>{p.mediaType === 'VIDEO' || p.featureCode?.includes('VIDEO') ? '🎥' : '🎙️'}</span>
+                                  <span>{p.mediaType === 'VIDEO' || p.featureCode?.includes('VIDEO') ? 'Video Note' : 'Voice Note'}</span>
+                                </span>
                               </td>
                               <td className="py-3.5 px-4 font-mono font-semibold text-stone-900">
                                 ₹{p.amount} {p.currency}
                               </td>
-                              <td className="py-3.5 px-4 font-mono text-stone-500 text-[11px]">
+                              <td className="py-3.5 px-4 font-mono text-stone-500 text-[11px] select-all">
                                 {p.upiReference}
                               </td>
                               <td className="py-3.5 px-4">

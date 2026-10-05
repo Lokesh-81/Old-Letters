@@ -408,24 +408,61 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     </div>
 
                     {/* Metadata Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-stone-50/70 p-3.5 border border-stone-200/70 text-xs font-mono">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-stone-50/70 p-3.5 border border-stone-200/70 text-xs font-mono">
                       <div>
                         <span className="text-[10px] uppercase text-stone-400 block">UTR / Transaction ID</span>
                         <strong className="text-stone-900 select-all">{item.upiReference}</strong>
                       </div>
                       <div>
-                        <span className="text-[10px] uppercase text-stone-400 block">Payment Reference</span>
-                        <span className="text-stone-700 select-all">{item.id}</span>
+                        <span className="text-[10px] uppercase text-stone-400 block">Payment ID</span>
+                        <span className="text-teal-900 font-semibold select-all">{item.paymentId || item.id}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] uppercase text-stone-400 block">Sender User ID</span>
-                        <span className="text-stone-700 truncate block select-all">{item.userId || '—'}</span>
+                        <span className="text-[10px] uppercase text-stone-400 block">Sender Email</span>
+                        <span className="text-stone-700 truncate block select-all">{item.userEmail || item.senderEmail || item.userId || '—'}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] uppercase text-stone-400 block">Letter Reference</span>
-                        <span className="text-stone-700 truncate block select-all">{item.letterId || '—'}</span>
+                        <span className="text-[10px] uppercase text-stone-400 block">Recipient</span>
+                        <span className="text-stone-700 truncate block select-all">{item.recipientEmail || item.recipientName || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase text-stone-400 block">Media Type</span>
+                        <span className="text-stone-900 font-medium">{item.mediaType || (item.featureCode?.includes('VIDEO') ? 'VIDEO' : 'VOICE')}</span>
                       </div>
                     </div>
+
+                    {/* Media Preview & Playback Player */}
+                    {item.mediaStorageKey || item.hasMediaAttachment ? (
+                      <div className="p-4 bg-stone-100/80 border border-stone-300/80 rounded-xs space-y-2">
+                        <div className="flex items-center justify-between text-xs font-mono">
+                          <span className="text-teal-950 font-semibold uppercase tracking-wider flex items-center gap-2">
+                            <span>{item.mediaType === 'VIDEO' ? '🎥' : '🎙️'}</span>
+                            <span>PERSONAL MESSAGE PREVIEW ({item.mediaType || 'AUDIO'})</span>
+                          </span>
+                          <span className="text-[11px] font-mono text-stone-500">
+                            VAULT KEY: {item.mediaStorageKey}
+                          </span>
+                        </div>
+                        {item.mediaType === 'VIDEO' ? (
+                          <video
+                            src={`/api/admin/media/${item.mediaStorageKey}`}
+                            controls
+                            playsInline
+                            className="w-full max-w-md max-h-56 rounded-xs bg-black"
+                          />
+                        ) : (
+                          <audio
+                            src={`/api/admin/media/${item.mediaStorageKey}`}
+                            controls
+                            className="w-full"
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-xs font-mono text-stone-400 italic">
+                        No audio/video recording attached
+                      </div>
+                    )}
 
                     {/* Screenshots & Verification Information */}
                     <div className="flex flex-wrap items-center justify-between gap-4 text-xs font-mono">
@@ -440,9 +477,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             View Screenshot ↗
                           </button>
                         </div>
-                      ) : (
-                        <span className="text-stone-400 italic">No screenshot attached</span>
-                      )}
+                      ) : null}
 
                       {item.verifiedBy && (
                         <div className="text-stone-600">

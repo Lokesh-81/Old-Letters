@@ -41,6 +41,12 @@ export const CreateLetterSchema = z.object({
   waitingHours: z.number().min(48, 'Minimum 48 hours required').default(48),
   postmarkCity: z.string().optional().default('Hyderabad Bureau'),
   status: z.enum(['DRAFT', 'SCHEDULED']).default('SCHEDULED'),
+  paymentId: z.string().optional().nullable(),
+  hasMediaAttachment: z.boolean().optional(),
+  mediaType: z.enum(['VOICE', 'VIDEO']).optional().nullable(),
+  mediaStorageKey: z.string().optional().nullable(),
+  mediaStatus: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'DELETED']).optional(),
+  personalMessage: z.any().optional(),
 });
 
 export type CreateLetterInput = z.infer<typeof CreateLetterSchema>;
@@ -48,7 +54,12 @@ export type CreateLetterInput = z.infer<typeof CreateLetterSchema>;
 // Manual UPI Payment Submission Schema
 export const SubmitPaymentSchema = z.object({
   letterId: z.string().optional().nullable(),
-  featureCode: z.enum(['VOICE_NOTE', 'VIDEO_NOTE', 'LIVE_MEETING']),
+  recipientEmail: z.string().optional().nullable(),
+  recipientName: z.string().optional().nullable(),
+  senderName: z.string().optional().nullable(),
+  mediaType: z.enum(['VOICE', 'VIDEO', 'VOICE_NOTE', 'VIDEO_NOTE']).optional(),
+  featureCode: z.enum(['VOICE_NOTE', 'VIDEO_NOTE', 'LIVE_MEETING', 'VOICE', 'VIDEO']).optional(),
+  featureType: z.enum(['VOICE_MESSAGE', 'VIDEO_MESSAGE', 'VOICE_NOTE', 'VIDEO_NOTE']).optional(),
   amount: z.number().positive(),
   currency: z.string().default('INR'),
   upiReference: z.string().min(6, 'Valid UPI reference / UTR number required').max(50),
@@ -79,12 +90,26 @@ export type RecipientVerifyInput = z.infer<typeof RecipientVerifySchema>;
 // Payment Record Type
 export interface PaymentRecord {
   id: string;
+  paymentId: string;
   userId: string;
+  userEmail?: string;
+  senderName?: string;
+  senderEmail?: string;
+  recipientEmail?: string;
+  recipientName?: string;
   letterId?: string | null;
-  featureCode: 'VOICE_NOTE' | 'VIDEO_NOTE' | 'LIVE_MEETING';
+  trackingCode?: string | null;
+  mediaType?: 'VOICE' | 'VIDEO';
+  featureCode?: 'VOICE_NOTE' | 'VIDEO_NOTE' | 'LIVE_MEETING' | 'VOICE' | 'VIDEO';
+  featureType?: 'VOICE_MESSAGE' | 'VIDEO_MESSAGE' | string;
+  description?: string;
   amount: number;
   currency: string;
+  paymentMethod?: string;
   upiReference: string;
+  mediaStatus?: 'AWAITING_RECORDING' | 'PENDING_REVIEW' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'DELETED' | string;
+  mediaStorageKey?: string | null;
+  hasMediaAttachment?: boolean;
   paymentScreenshotPath?: string | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'REFUNDED';
   adminNote?: string | null;
@@ -98,7 +123,7 @@ export interface PaymentRecord {
 export interface PaidFeatureRecord {
   id: string;
   letterId: string;
-  featureCode: 'VOICE_NOTE' | 'VIDEO_NOTE' | 'LIVE_MEETING';
+  featureCode: 'VOICE_NOTE' | 'VIDEO_NOTE' | 'LIVE_MEETING' | 'VOICE' | 'VIDEO';
   paymentId: string;
   status: 'PENDING' | 'UNLOCKED' | 'EXPIRED' | 'CANCELLED';
   createdAt: string;
@@ -149,13 +174,22 @@ export interface BureauPaymentItem {
   letterId?: string | null;
   trackingCode?: string | null;
   recipientName?: string | null;
-  featureCode: string;
+  recipientEmail?: string | null;
+  mediaType?: 'VOICE' | 'VIDEO';
+  featureCode?: string;
   description: string;
   amount: number;
   currency: string;
+  paymentMethod?: string;
   upiReference: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'REFUNDED';
+  mediaStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'DELETED';
+  mediaStorageKey?: string | null;
+  hasMediaAttachment?: boolean;
   refundStatus?: 'NONE' | 'REQUESTED' | 'REFUNDED';
   adminNote?: string | null;
+  verifiedBy?: string | null;
+  verifiedAt?: string | null;
   createdAt: string;
+  updatedAt?: string;
 }

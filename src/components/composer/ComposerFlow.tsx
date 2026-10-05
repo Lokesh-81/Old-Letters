@@ -6,7 +6,9 @@ import { PaperSheet } from '../common/PaperSheet';
 import { EnvelopeObject } from '../common/EnvelopeObject';
 import { StationeryGallery } from './StationeryGallery';
 import { PostingCeremony } from './PostingCeremony';
-import { postLetter } from '../../lib/api';
+import { postLetter, submitUpiPayment, fetchPaymentConfig } from '../../lib/api';
+import { PaymentRecord } from '../../types/backend';
+import { RecordingStudio } from './RecordingStudio';
 import { UpiPaymentModal } from '../payment/UpiPaymentModal';
 
 interface ComposerFlowProps {
@@ -25,7 +27,7 @@ interface ComposerFlowProps {
   onRequestAuth?: (action: 'post' | 'write') => void;
 }
 
-type ComposerStep = 'compose' | 'stationery' | 'dispatch' | 'delivery' | 'review';
+export type ComposerStep = 'compose' | 'stationery' | 'dispatch' | 'delivery' | 'personal-message' | 'review';
 
 const POSTAL_TEMPOS = [
   {
@@ -86,6 +88,64 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
   const [selectedTempoId, setSelectedTempoId] = useState<'48h' | '7d' | '30d' | 'custom'>('48h');
   const [customDateInput, setCustomDateInput] = useState('');
   const [activeLetterCategory, setActiveLetterCategory] = useState<LetterCategory>('ROMANTIC');
+
+  // Personal Voice/Video Message & UPI payment state
+  const [personalMessageChoice, setPersonalMessageChoice] = useState<'LETTER_ONLY' | 'VOICE' | 'VIDEO'>('LETTER_ONLY');
+  const [upiReferenceInput, setUpiReferenceInput] = useState('');
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+  const [paymentSubmitError, setPaymentSubmitError] = useState<string | null>(null);
+  const [confirmedPayment, setConfirmedPayment] = useState<PaymentRecord | null>(null);
+  const [isRecordingStudioOpen, setIsRecordingStudioOpen] = useState(false);
+  const [personalMessageEnclosure, setPersonalMessageEnclosure] = useState<{
+    type: 'LETTER_ONLY' | 'VOICE' | 'VIDEO';
+    price: number;
+    paymentId?: string;
+    mediaStorageKey?: string;
+    durationSeconds?: number;
+    previewUrl?: string;
+    mediaStatus?: string;
+  } | null>(null);
+  const [paymentConfig, setPaymentConfig] = useState({
+    upiId: 'oldletters@okhdfcbank',
+    upiDisplayName: 'OLD-LETTERS CORRESPONDENCE',
+    paymentQrUrl: '',
+  });
+  const [copiedUpi, setCopiedUpi] = useState(false);
+
+  useEffect(() => {
+    fetchPaymentConfig().then(setPaymentConfig).catch(() => {});
+  }, []);
+
+  const handleSubmitUpiPayment = async () => {
+    const cleanUpi = upiReferenceInput.trim();
+    if (!cleanUpi || cleanUpi.length < 6) {
+      setPaymentSubmitError('A valid UPI reference / UTR number (at least 6 alphanumeric characters) is required.');
+      return;
+    }
+
+    try {
+      setIsSubmittingPayment(true);
+      setPaymentSubmitError(null);
+
+      const price = personalMessageChoice === 'VIDEO' ? 149 : 99;
+      const res = await submitUpiPayment({
+        letterId: draft.id,
+        featureCode: personalMessageChoice,
+        mediaType: personalMessageChoice,
+        amount: price,
+        currency: 'INR',
+        upiReference: cleanUpi,
+      });
+
+      setConfirmedPayment(res.payment);
+      // Immediately launch recording studio
+      setIsRecordingStudioOpen(true);
+    } catch (err: any) {
+      setPaymentSubmitError(err.message || 'Failed to submit UPI payment reference.');
+    } finally {
+      setIsSubmittingPayment(false);
+    }
+  };
 
   // 3D Desk interactive tilt state
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
@@ -182,7 +242,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
 
   // Navigate between steps with directional animation
   const goToStep = (step: ComposerStep) => {
-    const order: ComposerStep[] = ['compose', 'stationery', 'dispatch', 'delivery', 'review'];
+    const order: ComposerStep[] = ['compose', 'stationery', 'dispatch', 'delivery', 'personal-message', 'review'];
     const curIdx = order.indexOf(activeStep);
     const targetIdx = order.indexOf(step);
     setDirection(targetIdx >= curIdx ? 1 : -1);
@@ -323,7 +383,13 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
         waitingHours: draft.waitingHours,
         postmarkCity: draft.postmarkCity || 'Hyderabad Bureau',
         status: 'SCHEDULED',
-      });
+        paymentId: personalMessageEnclosure?.paymentId,
+        hasMediaAttachment: Boolean(personalMessageEnclosure?.mediaStorageKey),
+        mediaType: personalMessageEnclosure?.type === 'VIDEO' ? 'VIDEO' : personalMessageEnclosure?.type === 'VOICE' ? 'VOICE' : undefined,
+        mediaStorageKey: personalMessageEnclosure?.mediaStorageKey,
+        mediaStatus: personalMessageEnclosure?.mediaStatus || (personalMessageEnclosure?.mediaStorageKey ? 'PENDING' : undefined),
+        personalMessage: personalMessageEnclosure || undefined,
+      } as any);
 
       const finalized: Letter = {
         ...draft,
@@ -333,6 +399,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
         senderEmail,
         status: 'SCHEDULED',
         postedAt: new Date().toISOString(),
+        paymentStatus: personalMessageEnclosure?.paymentId ? 'PENDING' : undefined,
       };
 
       try {
@@ -1006,16 +1073,279 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                   </button>
                   <button
                     type="button"
-                    onClick={() => goToStep('review')}
+                    onClick={() => goToStep('personal-message')}
                     className="px-5 py-2.5 bg-teal-900 hover:bg-teal-800 text-white text-xs font-sans font-medium uppercase tracking-wider rounded-xs cursor-pointer shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] active:scale-[0.96]"
                   >
-                    Review Letter →
+                    Personal Message Options →
                   </button>
                 </div>
               </motion.div>
             )}
 
-            {/* STEP 5: REVIEW STEP (Physical Sheet Inspection & Sealing) */}
+            {/* STEP 5: PERSONAL MESSAGE SELECTION (LETTER ONLY, VOICE NOTE, VIDEO NOTE) */}
+            {activeStep === 'personal-message' && (
+              <motion.div
+                key="step-personal-message"
+                custom={direction}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                className="space-y-6"
+              >
+                {isRecordingStudioOpen && confirmedPayment ? (
+                  /* Immediate Voice or Video Recording Studio */
+                  <RecordingStudio
+                    mediaType={personalMessageChoice === 'VIDEO' ? 'VIDEO' : 'VOICE'}
+                    paymentId={confirmedPayment.paymentId || confirmedPayment.id}
+                    recipientName={draft.recipientName}
+                    onComplete={(result) => {
+                      setPersonalMessageEnclosure({
+                        type: result.mediaType,
+                        price: result.mediaType === 'VIDEO' ? 149 : 99,
+                        paymentId: confirmedPayment.paymentId || confirmedPayment.id,
+                        mediaStorageKey: result.storageKey,
+                        durationSeconds: result.durationSeconds,
+                        previewUrl: result.previewUrl,
+                        mediaStatus: 'PENDING',
+                      });
+                      setIsRecordingStudioOpen(false);
+                      goToStep('review');
+                    }}
+                    onCancel={() => {
+                      setIsRecordingStudioOpen(false);
+                    }}
+                  />
+                ) : (
+                  <>
+                    <div className="border-b border-[#eae4da] pb-3">
+                      <span className="text-[11px] font-mono uppercase tracking-widest text-stone-500">
+                        STEP 05 OF 06 · PERSONAL MESSAGE OPTION
+                      </span>
+                      <h3 className="font-serif text-2xl text-teal-950 font-normal">
+                        Select Your Personal Message Enclosure
+                      </h3>
+                      <p className="text-xs text-stone-500 font-serif italic">
+                        Enclose an intimate audio or cinematic video recording to be delivered alongside your written letter.
+                      </p>
+                    </div>
+
+                    {/* The 3 Options */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {/* OPTION A: LETTER ONLY */}
+                      <div
+                        onClick={() => {
+                          setPersonalMessageChoice('LETTER_ONLY');
+                          setPersonalMessageEnclosure({ type: 'LETTER_ONLY', price: 0 });
+                        }}
+                        className={`p-5 rounded-xs border transition-all cursor-pointer flex flex-col justify-between ${
+                          personalMessageChoice === 'LETTER_ONLY'
+                            ? 'bg-white border-teal-900 shadow-md ring-1 ring-teal-900'
+                            : 'bg-[#faf8f5] border-[#eae4da] hover:bg-white'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-2xl">✉️</span>
+                            <span className="font-serif text-xl text-teal-950 font-medium">₹0</span>
+                          </div>
+                          <h4 className="font-serif text-lg text-teal-900 font-medium mb-1">LETTER ONLY</h4>
+                          <p className="text-xs text-stone-600 font-serif leading-relaxed">
+                            Traditional paper correspondence with zero digital enclosures. Delivered in 48 hours.
+                          </p>
+                        </div>
+                        <div className="pt-4 border-t border-stone-100 mt-4 text-[11px] font-mono text-stone-400">
+                          NO PAYMENT · PURE EPISTOLARY
+                        </div>
+                      </div>
+
+                      {/* OPTION B: VOICE MESSAGE */}
+                      <div
+                        onClick={() => setPersonalMessageChoice('VOICE')}
+                        className={`p-5 rounded-xs border transition-all cursor-pointer flex flex-col justify-between ${
+                          personalMessageChoice === 'VOICE'
+                            ? 'bg-white border-teal-900 shadow-md ring-1 ring-teal-900'
+                            : 'bg-[#faf8f5] border-[#eae4da] hover:bg-white'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-2xl">🎙️</span>
+                            <div className="text-right">
+                              <span className="font-serif text-xl text-teal-950 font-medium">₹99</span>
+                              <span className="text-[10px] font-mono text-stone-400 block">INR</span>
+                            </div>
+                          </div>
+                          <h4 className="font-serif text-lg text-teal-900 font-medium mb-1">VOICE MESSAGE</h4>
+                          <p className="text-xs text-stone-600 font-serif leading-relaxed">
+                            Record up to 5 minutes of personal audio. Stored securely and unsealed with the letter.
+                          </p>
+                        </div>
+                        <div className="pt-4 border-t border-stone-100 mt-4 text-[11px] font-mono text-amber-800 font-semibold">
+                          UPI PAYMENT REQUIRED (₹99)
+                        </div>
+                      </div>
+
+                      {/* OPTION C: VIDEO MESSAGE */}
+                      <div
+                        onClick={() => setPersonalMessageChoice('VIDEO')}
+                        className={`p-5 rounded-xs border transition-all cursor-pointer flex flex-col justify-between ${
+                          personalMessageChoice === 'VIDEO'
+                            ? 'bg-white border-teal-900 shadow-md ring-1 ring-teal-900'
+                            : 'bg-[#faf8f5] border-[#eae4da] hover:bg-white'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-2xl">🎥</span>
+                            <div className="text-right">
+                              <span className="font-serif text-xl text-teal-950 font-medium">₹149</span>
+                              <span className="text-[10px] font-mono text-stone-400 block">INR</span>
+                            </div>
+                          </div>
+                          <h4 className="font-serif text-lg text-teal-900 font-medium mb-1">VIDEO MESSAGE</h4>
+                          <p className="text-xs text-stone-600 font-serif leading-relaxed">
+                            Record up to 3 minutes of personal video note. Cinematic archival enclosure upon reading.
+                          </p>
+                        </div>
+                        <div className="pt-4 border-t border-stone-100 mt-4 text-[11px] font-mono text-amber-800 font-semibold">
+                          UPI PAYMENT REQUIRED (₹149)
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* If Voice or Video is selected, show UPI Payment Box immediately */}
+                    {personalMessageChoice !== 'LETTER_ONLY' && (
+                      <div className="p-6 bg-white border border-[#eae4da] rounded-xs shadow-paper space-y-5 animate-fade-in">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-stone-100 gap-3">
+                          <div>
+                            <span className="text-[10px] font-mono tracking-widest uppercase text-stone-500">
+                              MANUAL UPI PAYMENT · STRICTLY PENDING UNTIL VERIFIED
+                            </span>
+                            <h4 className="font-serif text-xl text-teal-950">
+                              Scan & Transfer ₹{personalMessageChoice === 'VIDEO' ? '149' : '99'} to Unlock Recording Studio
+                            </h4>
+                          </div>
+                          <div className="text-right font-mono text-xs text-stone-500">
+                            FEE: <strong className="text-teal-900 text-lg">₹{personalMessageChoice === 'VIDEO' ? '149' : '99'}</strong> INR
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                          {/* QR and UPI ID */}
+                          <div className="flex flex-col items-center justify-center p-4 bg-[#faf9f7] border border-[#eae4da] rounded-xs space-y-3 text-center">
+                            <div className="w-36 h-36 bg-white border border-stone-200 p-2 rounded-xs flex items-center justify-center shadow-2xs">
+                              <svg className="w-full h-full text-stone-900" viewBox="0 0 100 100" fill="currentColor">
+                                <rect x="0" y="0" width="30" height="30" />
+                                <rect x="4" y="4" width="22" height="22" fill="#fff" />
+                                <rect x="8" y="8" width="14" height="14" />
+                                <rect x="70" y="0" width="30" height="30" />
+                                <rect x="74" y="4" width="22" height="22" fill="#fff" />
+                                <rect x="78" y="8" width="14" height="14" />
+                                <rect x="0" y="70" width="30" height="30" />
+                                <rect x="4" y="74" width="22" height="22" fill="#fff" />
+                                <rect x="8" y="78" width="14" height="14" />
+                                <rect x="36" y="8" width="6" height="18" />
+                                <rect x="46" y="4" width="16" height="6" />
+                                <rect x="52" y="16" width="10" height="10" />
+                                <rect x="36" y="36" width="12" height="12" />
+                                <rect x="56" y="36" width="14" height="6" />
+                                <rect x="36" y="56" width="8" height="18" />
+                                <rect x="52" y="52" width="18" height="12" />
+                              </svg>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-mono text-stone-400 uppercase block">UPI VPA</span>
+                              <div className="flex items-center gap-1.5 justify-center">
+                                <code className="font-mono text-xs text-stone-800 font-semibold">{paymentConfig.upiId}</code>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard?.writeText(paymentConfig.upiId);
+                                    setCopiedUpi(true);
+                                    setTimeout(() => setCopiedUpi(false), 2000);
+                                  }}
+                                  className="text-[10px] font-mono text-teal-800 hover:underline cursor-pointer"
+                                >
+                                  {copiedUpi ? 'Copied!' : 'Copy'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* UTR Input Form */}
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-[11px] font-mono uppercase tracking-wider text-stone-600 mb-1.5">
+                                UPI Transaction ID / UTR Number (12 Digits)
+                              </label>
+                              <input
+                                type="text"
+                                value={upiReferenceInput}
+                                onChange={(e) => {
+                                  setUpiReferenceInput(e.target.value);
+                                  setPaymentSubmitError(null);
+                                }}
+                                placeholder="e.g. 427189034512"
+                                className="w-full bg-[#faf9f7] border border-stone-300 focus:border-teal-900 px-4 py-3 font-mono text-sm tracking-wider text-stone-900 rounded-xs focus:outline-none shadow-2xs"
+                              />
+                              <span className="text-[10px] font-mono text-stone-400 block mt-1">
+                                Found in your UPI app payment receipt (Google Pay, PhonePe, Paytm, etc.)
+                              </span>
+                            </div>
+
+                            {paymentSubmitError && (
+                              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-mono rounded-xs">
+                                {paymentSubmitError}
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              disabled={isSubmittingPayment || !upiReferenceInput.trim()}
+                              onClick={handleSubmitUpiPayment}
+                              className="w-full py-3.5 bg-teal-900 hover:bg-teal-800 disabled:bg-stone-300 text-white font-sans text-xs tracking-wider uppercase font-semibold rounded-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                            >
+                              {isSubmittingPayment ? (
+                                <span>CREATING PAYMENT & OPENING STUDIO...</span>
+                              ) : (
+                                <span>SUBMIT PAYMENT & OPEN RECORDING STUDIO →</span>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Step Navigation Bar */}
+                    <div className="pt-4 border-t border-[#eae4da] flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => goToStep('delivery')}
+                        className="text-xs font-mono text-stone-500 hover:text-stone-900 cursor-pointer"
+                      >
+                        ← Back to Delivery
+                      </button>
+
+                      {personalMessageChoice === 'LETTER_ONLY' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPersonalMessageEnclosure({ type: 'LETTER_ONLY', price: 0 });
+                            goToStep('review');
+                          }}
+                          className="px-6 py-3 bg-teal-900 hover:bg-teal-800 text-white text-xs font-sans font-medium uppercase tracking-wider rounded-xs cursor-pointer shadow-md active:scale-[0.96]"
+                        >
+                          Continue to Review Letter →
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            )}
+
+            {/* STEP 6: REVIEW STEP (Physical Sheet Inspection & Sealing) */}
             {activeStep === 'review' && (
               <motion.div
                 key="step-review"
@@ -1064,10 +1394,41 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between py-1.5">
+                    <div className="flex items-center justify-between py-1.5 border-b border-stone-100">
                       <span className="text-stone-500">ENCLOSURES:</span>
                       <span className="text-stone-900">{draft.attachments.length} photograph(s)</span>
                     </div>
+
+                    <div className="flex items-center justify-between py-1.5 border-b border-stone-100">
+                      <span className="text-stone-500">PERSONAL ENCLOSURE:</span>
+                      <span className="text-stone-900 font-semibold">
+                        {personalMessageEnclosure && personalMessageEnclosure.type !== 'LETTER_ONLY'
+                          ? `Personal ${personalMessageEnclosure.type === 'VIDEO' ? 'Video' : 'Voice'} Note (₹${personalMessageEnclosure.price} · Recorded · PENDING VERIFICATION)`
+                          : 'Letter Only (Pure Epistolary · ₹0)'}
+                      </span>
+                    </div>
+
+                    {/* Media Preview Player if user recorded voice/video */}
+                    {personalMessageEnclosure && personalMessageEnclosure.previewUrl && (
+                      <div className="p-3 bg-[#faf9f7] border border-stone-200 rounded-xs space-y-2">
+                        <span className="text-[10px] font-mono text-stone-500 uppercase block">
+                          Recorded Enclosure Preview
+                        </span>
+                        {personalMessageEnclosure.type === 'VIDEO' ? (
+                          <video
+                            src={personalMessageEnclosure.previewUrl}
+                            controls
+                            className="w-full max-h-48 rounded-xs object-cover"
+                          />
+                        ) : (
+                          <audio
+                            src={personalMessageEnclosure.previewUrl}
+                            controls
+                            className="w-full"
+                          />
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1082,10 +1443,10 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                   <div className="flex items-center justify-between">
                     <button
                       type="button"
-                      onClick={() => goToStep('delivery')}
+                      onClick={() => goToStep('personal-message')}
                       className="text-xs font-mono text-stone-500 hover:text-stone-900 cursor-pointer"
                     >
-                      ← Back to Delivery
+                      ← Back to Personal Enclosure
                     </button>
                     <button
                       type="button"

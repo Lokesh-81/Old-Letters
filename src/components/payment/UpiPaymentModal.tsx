@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { fetchPaymentConfig, submitUpiPayment } from '../../lib/api';
 import { PaymentRecord } from '../../types/backend';
+import { RecordingStudio } from '../composer/RecordingStudio';
 
 interface UpiPaymentModalProps {
   isOpen: boolean;
   featureCode: 'VOICE_NOTE' | 'VIDEO_NOTE' | 'LIVE_MEETING';
   letterId?: string;
+  recipientEmail?: string;
+  recipientName?: string;
   onClose: () => void;
   onPaymentSubmitted: (payment: PaymentRecord) => void;
 }
@@ -14,6 +17,8 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
   isOpen,
   featureCode,
   letterId,
+  recipientEmail,
+  recipientName,
   onClose,
   onPaymentSubmitted,
 }) => {
@@ -62,7 +67,11 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
 
       const res = await submitUpiPayment({
         letterId,
+        recipientEmail,
+        recipientName,
         featureCode,
+        featureType: featureCode === 'VIDEO_NOTE' ? 'VIDEO_MESSAGE' : 'VOICE_MESSAGE',
+        mediaType: featureCode === 'VIDEO_NOTE' ? 'VIDEO' : 'VOICE',
         amount: featureDetails.price,
         currency: 'INR',
         upiReference: upiReference.trim(),
@@ -78,14 +87,14 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 select-none">
-      <div className="w-full max-w-md bg-white border border-[#eae4da] shadow-paper-lg rounded-xs overflow-hidden animate-fade-in">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 select-none overflow-y-auto">
+      <div className={`w-full ${submittedPayment ? 'max-w-2xl' : 'max-w-md'} bg-white border border-[#eae4da] shadow-paper-lg rounded-xs overflow-hidden animate-fade-in my-8`}>
         {/* Top Header */}
         <div className="bg-[#faf9f7] px-6 py-4 border-b border-[#eae4da] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-teal-900 font-serif text-lg">❦</span>
             <span className="text-xs font-mono tracking-widest uppercase text-stone-600">
-              UPI DIGITAL ENCLOSURE
+              {submittedPayment ? 'RECORD PERSONAL ENCLOSURE' : 'UPI DIGITAL ENCLOSURE'}
             </span>
           </div>
           <button
@@ -99,29 +108,16 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
 
         <div className="p-6 space-y-6">
           {submittedPayment ? (
-            <div className="space-y-5 text-center py-4">
-              <div className="w-12 h-12 rounded-full bg-amber-50 border border-amber-200 text-amber-800 flex items-center justify-center mx-auto text-xl font-serif">
-                ⏳
-              </div>
-              <div className="space-y-2">
-                <span className="text-[10px] font-mono tracking-widest uppercase text-amber-800 bg-amber-50 px-2 py-0.5 border border-amber-200 rounded-xs">
-                  STATUS: PENDING VERIFICATION
-                </span>
-                <h3 className="font-serif text-2xl text-teal-900">Payment Submitted</h3>
-                <p className="text-xs text-stone-600 font-sans leading-relaxed max-w-sm mx-auto">
-                  Your UPI transaction reference (<strong>{submittedPayment.upiReference}</strong>) has been queued for review. Our correspondence officer will verify and unlock your {featureDetails.title}.
-                </p>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="w-full py-3 bg-teal-900 hover:bg-teal-800 text-white font-sans text-xs tracking-wider uppercase rounded-xs transition-colors cursor-pointer"
-                >
-                  Return to Letter
-                </button>
-              </div>
+            <div className="space-y-4">
+              <RecordingStudio
+                mediaType={featureCode === 'VIDEO_NOTE' ? 'VIDEO' : 'VOICE'}
+                paymentId={submittedPayment.paymentId || submittedPayment.id}
+                recipientName={recipientName || 'Recipient'}
+                onComplete={() => {
+                  onClose();
+                }}
+                onCancel={onClose}
+              />
             </div>
           ) : (
             <>

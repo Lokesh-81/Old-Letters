@@ -155,6 +155,13 @@ export default function App() {
         window.history.replaceState({}, document.title, window.location.pathname);
       } else if (authParam === 'google_success') {
         // Hydrate authenticated state synchronously from safe redirect payload if available
+        const tokenParam = searchParams.get('token');
+        if (tokenParam) {
+          try {
+            localStorage.setItem('old_letters_token', tokenParam);
+            sessionStorage.setItem('old_letters_token', tokenParam);
+          } catch {}
+        }
         const userParam = searchParams.get('u');
         let hydratedUser: any = null;
         if (userParam) {
@@ -309,7 +316,6 @@ export default function App() {
   const handleStartWriting = (type: LetterType = 'LOVE') => {
     setComposerInitialType(type);
 
-    // Check state, local storage cache, and cookies to prevent premature prompt
     let activeUser = currentUser;
     if (!activeUser) {
       try {
@@ -320,31 +326,27 @@ export default function App() {
       }
     }
 
-    const hasLoggedInCookie = typeof document !== 'undefined' && document.cookie.includes('oldletters_logged_in=1');
-
-    if (activeUser || hasLoggedInCookie) {
+    if (activeUser) {
+      if (!currentUser) setAndPersistUser(activeUser);
       setCurrentView('composer');
       return;
     }
 
-    if (authChecking) {
-      // Session verification in flight; await backend check before popping modal
-      getCurrentUser().then((user) => {
-        if (user) {
-          setAndPersistUser(user);
-          setCurrentView('composer');
-        } else {
-          setIntendedDestination('composer');
-          setAuthInitialMode('signup');
-          setShowAuthModal(true);
-        }
-      });
-      return;
-    }
-
-    setIntendedDestination('composer');
-    setAuthInitialMode('signup');
-    setShowAuthModal(true);
+    // Await authoritative session check before proceeding or popping auth modal
+    getCurrentUser().then((user) => {
+      if (user) {
+        setAndPersistUser(user);
+        setCurrentView('composer');
+      } else {
+        setIntendedDestination('composer');
+        setAuthInitialMode('signup');
+        setShowAuthModal(true);
+      }
+    }).catch(() => {
+      setIntendedDestination('composer');
+      setAuthInitialMode('signup');
+      setShowAuthModal(true);
+    });
   };
 
   // Intercept archive action

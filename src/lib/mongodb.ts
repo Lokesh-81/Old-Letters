@@ -1,4 +1,5 @@
 import { MongoClient, Db, ObjectId, GridFSBucket, Document } from 'mongodb';
+import { PassThrough } from 'stream';
 
 export { ObjectId };
 
@@ -109,15 +110,18 @@ export interface VerificationAttemptDoc extends Document {
 
 export interface LetterMediaDoc extends Document {
   _id: ObjectId;
-  letterId?: ObjectId | string;
-  userId?: ObjectId | string;
-  filename: string;
-  contentType: string;
-  size: number;
+  letterId: ObjectId | string;
+  paymentId: ObjectId | string;
+  userId: ObjectId | string;
+  mediaType: 'VOICE' | 'VIDEO';
+  mediaStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | 'DELETED';
+  storageKey: string;
+  mimeType: string;
+  fileSize: number;
+  durationSeconds?: number;
   gridFsFileId?: ObjectId;
-  storagePath?: string;
-  mediaType: string;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface DeliveryEventDoc extends Document {
@@ -130,17 +134,25 @@ export interface DeliveryEventDoc extends Document {
 
 export interface PaymentDoc extends Document {
   _id: ObjectId;
-  userId: ObjectId | string;
+  paymentId: string;
   letterId?: ObjectId | string;
-  featureCode: string;
+  userId: ObjectId | string;
+  userEmail: string;
+  recipientEmail?: string;
+  recipientName?: string;
   amount: number;
   currency: 'INR';
+  paymentMethod: 'UPI';
   upiReference: string;
-  paymentScreenshotId?: string;
+  mediaType?: 'VOICE' | 'VIDEO';
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'REFUNDED';
-  adminNote?: string;
-  verifiedBy?: string;
-  verifiedAt?: Date;
+  mediaStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'DELETED';
+  mediaStorageKey?: string | null;
+  hasMediaAttachment: boolean;
+  paymentScreenshotId?: string;
+  adminNote?: string | null;
+  verifiedBy?: string | null;
+  verifiedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -350,7 +362,7 @@ class MemoryCollection<T extends { _id?: any }> {
         if ('$eq' in v && doc[k] !== (v as any).$eq) return false;
         if ('$ne' in v && doc[k] === (v as any).$ne) return false;
         if ('$in' in v && !(v as any).$in.includes(doc[k])) return false;
-      } else if (k === '_id' || k === 'senderId' || k === 'letterId' || k === 'userId') {
+      } else if (k === '_id' || k === 'senderId' || k === 'letterId' || k === 'userId' || k === 'paymentId') {
         const idStr = v?.toString();
         const docIdStr = doc[k]?.toString();
         if (idStr !== docIdStr) return false;
@@ -359,6 +371,68 @@ class MemoryCollection<T extends { _id?: any }> {
       }
     }
     return true;
+  }
+}
+
+// In-Memory GridFS Bucket implementation for resilient operation
+export class MemoryGridFSBucket {
+  private files: Map<string, { id: ObjectId; filename: string; metadata: any; buffer: Buffer; uploadDate: Date }> = new Map();
+
+  openUploadStream(filename: string, options?: any) {
+    const fileId = new ObjectId();
+    const chunks: Buffer[] = [];
+    const stream = new PassThrough();
+
+    stream.on('data', (chunk) => {
+      chunks.push(Buffer.from(chunk));
+    });
+
+    stream.on('finish', () => {
+      const buffer = Buffer.concat(chunks);
+      this.files.set(fileId.toString(), {
+        id: fileId,
+        filename,
+        metadata: options?.metadata || {},
+        buffer,
+        uploadDate: new Date(),
+      });
+    });
+
+    (stream as any).id = fileId;
+    return stream;
+  }
+
+  openDownloadStream(id: ObjectId | string) {
+    const file = this.files.get(id.toString());
+    if (!file) {
+      const errStream = new PassThrough();
+      process.nextTick(() => errStream.emit('error', new Error('FileNotFound: File not found in GridFS')));
+      return errStream;
+    }
+    const stream = new PassThrough();
+    process.nextTick(() => {
+      stream.end(file.buffer);
+    });
+    return stream;
+  }
+
+  async delete(id: ObjectId | string): Promise<void> {
+    this.files.delete(id.toString());
+  }
+
+  find(filter: any = {}) {
+    const list = Array.from(this.files.values()).filter((f) => {
+      if (filter._id && f.id.toString() !== filter._id.toString()) return false;
+      if (filter.filename && f.filename !== filter.filename) return false;
+      return true;
+    });
+    return {
+      toArray: async () => list,
+    };
+  }
+
+  getFile(id: ObjectId | string) {
+    return this.files.get(id.toString()) || null;
   }
 }
 
@@ -380,6 +454,8 @@ declare global {
   var _mongoClientPromise: Promise<MongoClient> | undefined;
   // eslint-disable-next-line no-var
   var _memoryDbInstance: MemoryDb | undefined;
+  // eslint-disable-next-line no-var
+  var _memoryGridFSBuckets: Map<string, MemoryGridFSBucket> | undefined;
 }
 
 const uri = process.env.MONGODB_URI || '';
@@ -441,13 +517,75 @@ export async function getCollection<T extends Document = any>(name: string) {
   return (db as any).collection(name);
 }
 
-export async function getGridFSBucket(bucketName: string = 'letterMedia'): Promise<GridFSBucket | null> {
+export async function getGridFSBucket(bucketName: string = 'letterMedia'): Promise<GridFSBucket | MemoryGridFSBucket> {
   const client = await getMongoClient();
   if (client) {
     const db = client.db(process.env.MONGODB_DB_NAME || 'oldletters');
     return new GridFSBucket(db, { bucketName });
   }
-  return null;
+
+  if (!global._memoryGridFSBuckets) {
+    global._memoryGridFSBuckets = new Map();
+  }
+  if (!global._memoryGridFSBuckets.has(bucketName)) {
+    global._memoryGridFSBuckets.set(bucketName, new MemoryGridFSBucket());
+  }
+  return global._memoryGridFSBuckets.get(bucketName)!;
+}
+
+export async function uploadGridFSBuffer(
+  bucketName: string,
+  filename: string,
+  buffer: Buffer,
+  metadata: any = {}
+): Promise<{ fileId: ObjectId; filename: string }> {
+  const bucket = await getGridFSBucket(bucketName);
+  return new Promise((resolve, reject) => {
+    const uploadStream = bucket.openUploadStream(filename, { metadata });
+    const fileId = (uploadStream as any).id as ObjectId;
+    uploadStream.on('error', reject);
+    uploadStream.on('finish', () => resolve({ fileId, filename }));
+    uploadStream.end(buffer);
+  });
+}
+
+export async function downloadGridFSBuffer(
+  bucketName: string,
+  fileId: ObjectId | string
+): Promise<{ buffer: Buffer; filename?: string; contentType?: string } | null> {
+  const bucket = await getGridFSBucket(bucketName);
+  try {
+    const id = ObjectId.isValid(fileId.toString()) ? new ObjectId(fileId.toString()) : (fileId as any);
+    const downloadStream = bucket.openDownloadStream(id);
+    const chunks: Buffer[] = [];
+    return new Promise((resolve, reject) => {
+      downloadStream.on('data', (c) => chunks.push(Buffer.from(c)));
+      downloadStream.on('end', () => resolve({ buffer: Buffer.concat(chunks) }));
+      downloadStream.on('error', (err: any) => {
+        if (err.message?.includes('FileNotFound') || err.code === 'ENOENT') {
+          resolve(null);
+        } else {
+          reject(err);
+        }
+      });
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteGridFSFile(
+  bucketName: string,
+  fileId: ObjectId | string
+): Promise<boolean> {
+  const bucket = await getGridFSBucket(bucketName);
+  try {
+    const id = ObjectId.isValid(fileId.toString()) ? new ObjectId(fileId.toString()) : (fileId as any);
+    await bucket.delete(id);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Setup collection indexes for high performance and integrity

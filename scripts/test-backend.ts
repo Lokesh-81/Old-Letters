@@ -510,6 +510,181 @@ async function runTests() {
   }
   console.log('SUCCESS: Google OAuth admin sessions preserved admin role on /api/auth/me.');
 
+  // [TEST 12.13] End-to-End Voice/Video Payment & Media Lifecycle
+  console.log('\n[TEST 12.13] Running Full End-to-End Payment + Voice/Video Media Lifecycle Test...');
+  const testUtr = `UTR-${Date.now()}`;
+  const endToEndPaymentRes = await request('/api/payments', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${validToken}` },
+    body: JSON.stringify({
+      featureCode: 'VOICE_NOTE',
+      mediaType: 'VOICE',
+      amount: 99,
+      currency: 'INR',
+      upiReference: testUtr,
+    }),
+  });
+  console.log('Payment submission status (expect 201):', endToEndPaymentRes.status);
+  if (!endToEndPaymentRes.ok || !endToEndPaymentRes.data.success) {
+    throw new Error('End-to-End Payment creation failed');
+  }
+  const e2ePaymentId = endToEndPaymentRes.data.paymentId;
+  const e2eInternalId = endToEndPaymentRes.data.id || endToEndPaymentRes.data.payment?.id;
+  if (!e2ePaymentId || !e2ePaymentId.startsWith('PAY-')) {
+    throw new Error(`Expected paymentId to start with PAY-, got '${e2ePaymentId}'`);
+  }
+  if (endToEndPaymentRes.data.payment.status !== 'PENDING') {
+    throw new Error(`Expected initial payment status to be PENDING, got '${endToEndPaymentRes.data.payment.status}'`);
+  }
+  console.log(`Payment created successfully: ${e2ePaymentId} (status: PENDING)`);
+
+  // Verify payment appears in User's Payment History
+  const userPaymentsCheck = await request('/api/payments', {
+    headers: { Authorization: `Bearer ${validToken}` },
+  });
+  if (!userPaymentsCheck.ok || !Array.isArray(userPaymentsCheck.data.payments)) {
+    throw new Error('Failed to retrieve user payment history');
+  }
+  const foundInUserHistory = userPaymentsCheck.data.payments.find(
+    (p: any) => p.paymentId === e2ePaymentId || p.upiReference === testUtr
+  );
+  if (!foundInUserHistory) {
+    throw new Error(`Payment ${e2ePaymentId} did not appear in user's own payment history!`);
+  }
+  console.log(`Verified payment ${e2ePaymentId} appears in User's Payment History.`);
+
+  // Verify payment appears in Admin's Payment Verification table
+  const adminPaymentsCheck = await request('/api/admin/payments', {
+    headers: { Authorization: `Bearer ${poosalaToken}` },
+  });
+  if (!adminPaymentsCheck.ok || !Array.isArray(adminPaymentsCheck.data.payments)) {
+    throw new Error('Failed to retrieve admin payments list');
+  }
+  const foundInAdminList = adminPaymentsCheck.data.payments.find(
+    (p: any) => p.paymentId === e2ePaymentId || p.upiReference === testUtr
+  );
+  if (!foundInAdminList) {
+    throw new Error(`Payment ${e2ePaymentId} did not appear in Admin Payment Verification list!`);
+  }
+  console.log(`Verified payment ${e2ePaymentId} appears in Admin Payment Verification.`);
+
+  // Upload Voice Media to Private Vault
+  console.log('Uploading sample voice audio to private GridFS vault...');
+  const sampleAudioBuffer = Buffer.from('RIFF....WAVEfmt ....data....test-epistolary-audio');
+  const mediaUploadRes = await request(`/api/payments/${e2ePaymentId}/media`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${validToken}` },
+    body: JSON.stringify({
+      data: `data:audio/webm;base64,${sampleAudioBuffer.toString('base64')}`,
+      mimeType: 'audio/webm',
+      durationSeconds: 45,
+    }),
+  });
+  console.log('Media upload status (expect 201):', mediaUploadRes.status, mediaUploadRes.data);
+  if (!mediaUploadRes.ok || !mediaUploadRes.data.storageKey) {
+    throw new Error('Media upload to GridFS vault failed');
+  }
+  const e2eStorageKey = mediaUploadRes.data.storageKey;
+
+  // Admin previews media stream
+  console.log('Admin previewing media stream via /api/admin/media/:storageKey...');
+  const adminPreviewRes = await request(`/api/admin/media/${e2eStorageKey}`, {
+    headers: { Authorization: `Bearer ${poosalaToken}` },
+  });
+  if (adminPreviewRes.status !== 200) {
+    throw new Error(`Admin preview stream failed with status ${adminPreviewRes.status}`);
+  }
+  console.log('Admin media preview stream successfully verified.');
+
+  // Admin Approves Payment
+  console.log('Admin approving payment...');
+  const approveE2eRes = await request(`/api/admin/payments/${e2ePaymentId}/approve`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${poosalaToken}` },
+    body: JSON.stringify({
+      status: 'APPROVED',
+      adminNote: 'UTR verified against bank statement.',
+    }),
+  });
+  if (!approveE2eRes.ok || approveE2eRes.data.payment?.status !== 'APPROVED') {
+    throw new Error('Admin approval of E2E payment failed');
+  }
+  console.log('Payment status verified as APPROVED.');
+
+  // Create Letter linked to this approved payment
+  console.log('Posting letter with linked payment & voice enclosure...');
+  const letterWithMediaRes = await request('/api/letters', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${validToken}` },
+    body: JSON.stringify({
+      type: 'LOVE',
+      templateId: 'ivory',
+      senderName: 'Vasantha Rao',
+      senderEmail: 'vasantha.1791041148472@correspondence.in',
+      recipientName: 'Harshitha',
+      recipientEmail: 'harshitha@hyderabad.in',
+      greeting: 'Dearest Harshitha,',
+      content: 'Listen to my voice note enclosed in this parchment.',
+      signoff: 'Forever yours,',
+      scheduledDeliveryAt: new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
+      waitingHours: 48,
+      status: 'SCHEDULED',
+      paymentId: e2ePaymentId,
+      hasMediaAttachment: true,
+      mediaType: 'VOICE',
+      mediaStorageKey: e2eStorageKey,
+      mediaStatus: 'APPROVED',
+      personalMessage: {
+        type: 'VOICE',
+        price: 99,
+        paymentId: e2ePaymentId,
+        mediaStorageKey: e2eStorageKey,
+        durationSeconds: 45,
+        mediaStatus: 'APPROVED',
+      },
+    }),
+  });
+  if (!letterWithMediaRes.ok || !letterWithMediaRes.data.success) {
+    throw new Error('Failed to create letter with linked media');
+  }
+  const e2eLetterToken = letterWithMediaRes.data.deliveryToken;
+  console.log(`Letter created successfully with deliveryToken: ${e2eLetterToken.slice(0, 12)}...`);
+
+  // Recipient cannot access media while still in transit
+  console.log('Verifying media is locked in transit prior to arrival (expect 403)...');
+  const lockedMediaRes = await request(`/api/delivery/media/${e2eLetterToken}`);
+  if (lockedMediaRes.status !== 403) {
+    throw new Error(`Expected 403 when streaming media before arrival, got ${lockedMediaRes.status}`);
+  }
+  console.log('Media correctly locked in transit before arrival time.');
+
+  // Fast forward delivery for testing
+  await request('/api/testing/advance-delivery', {
+    method: 'POST',
+    body: JSON.stringify({ token: e2eLetterToken, stage: 'arrived' }),
+  });
+
+  // Recipient breaks seal and unseals letter
+  const unsealRes = await request(`/api/letters/verify/${e2eLetterToken}`, {
+    method: 'POST',
+    body: JSON.stringify({ verificationMethod: 'open' }),
+  });
+  if (!unsealRes.ok || !unsealRes.data.letter?.personalMessage) {
+    throw new Error('Unsealed letter did not return personalMessage enclosure');
+  }
+  if (unsealRes.data.letter.personalMessage.mediaStatus !== 'APPROVED') {
+    throw new Error(`Expected personalMessage mediaStatus to be APPROVED, got '${unsealRes.data.letter.personalMessage.mediaStatus}'`);
+  }
+  console.log('Recipient unsealed letter with verified personal message enclosure.');
+
+  // Recipient streams media after arrival & approval
+  const recipientStreamRes = await request(`/api/delivery/media/${e2eLetterToken}`);
+  if (recipientStreamRes.status !== 200) {
+    throw new Error(`Recipient media stream failed with status ${recipientStreamRes.status}`);
+  }
+  console.log('Recipient media stream verified with status 200.');
+  console.log('SUCCESS: Full End-to-End Payment + Voice/Video Lifecycle PASSED!');
+
   // TEST 13: Production Delivery Scheduler & Vercel Cron Endpoint Verification
   console.log('\n[TEST 13] Production Delivery Scheduler & Vercel Cron Verification...');
   const cronSecret = process.env.CRON_SECRET || 'old-letters-cron-secure-key-2026';
