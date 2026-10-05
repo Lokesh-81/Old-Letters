@@ -348,9 +348,15 @@ async function sendPreArrivalOtpRecipientEmail(params) {
   });
 }
 async function sendArrivalRecipientEmail(params) {
-  const subject = "Your letter is ready to be opened \xB7 OLD-LETTERS";
+  const subject = "Your letter has arrived \xB7 OLD-LETTERS";
+  const enclosureNoticeHtml = params.hasApprovedMedia ? `
+      <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 14px 18px; margin: 18px 0; border-radius: 4px; text-align: center;">
+        <span style="font-size: 13px; color: #166534; font-family: serif; font-weight: bold; display: block;">
+          \u2726 Your personal message enclosure is now available.
+        </span>
+      </div>` : "";
   const html = emailWrapper(
-    "Your letter is ready to be opened \xB7 OLD-LETTERS",
+    "Your Letter Has Arrived \xB7 OLD-LETTERS",
     `DISPATCH REF: ${params.trackingCode}`,
     `
       <p style="margin-top: 0;">Dear ${params.recipientName},</p>
@@ -360,6 +366,7 @@ async function sendArrivalRecipientEmail(params) {
       <p>
         Your correspondence has completed its journey and is ready to be unsealed.
       </p>
+      ${enclosureNoticeHtml}
       <div style="background-color: #f7f6f2; border: 1px solid #eae4da; padding: 18px; margin: 22px 0; border-radius: 4px; text-align: center;">
         <span style="font-size: 11px; font-family: monospace; letter-spacing: 0.2em; text-transform: uppercase; color: #78716c; display: block; margin-bottom: 6px;">
           CORRESPONDENCE STATUS
@@ -385,84 +392,92 @@ async function sendArrivalRecipientEmail(params) {
     to: params.recipientEmail,
     subject,
     html,
-    text: `Your letter (Ref: ${params.trackingCode}) has arrived! The 48-hour wait is complete. Unseal and read your letter now: ${params.recipientUrl}`
+    text: `Your letter (Ref: ${params.trackingCode}) has arrived! The 48-hour wait is complete.${params.hasApprovedMedia ? "\n\nYour personal message enclosure is now available." : ""}
+
+Unseal and read your letter now: ${params.recipientUrl}`
   });
 }
 async function sendPaymentApprovedEmail(params) {
-  const subject = "Payment confirmed \u2014 your OLD-LETTERS order is approved";
+  const subject = "OLD-LETTERS \u2014 Payment Verified";
+  const currency = params.currency || "INR";
+  const mediaLabel = params.mediaType === "VIDEO" ? "Video Message Enclosure" : "Voice Message Enclosure";
   const html = emailWrapper(
-    "Payment Confirmed \u2014 Order Approved",
+    "Payment Verified \xB7 OLD-LETTERS",
     `PAYMENT REF: ${params.orderReference}`,
     `
       <p style="margin-top: 0;">Greetings,</p>
       <p>
-        Your payment reference for <strong>${params.featureName}</strong> has been manually inspected and approved by the central correspondence bureau administrator.
+        Your payment reference for <strong>${params.featureName || mediaLabel}</strong> has been verified and approved by the central correspondence bureau administrator.
       </p>
       <div style="background-color: #f7f6f2; border-left: 3px solid #047857; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; font-family: monospace; font-size: 12px;">
-        <div style="margin-bottom: 4px;"><strong>ORDER / REF:</strong> ${params.orderReference}</div>
-        <div style="margin-bottom: 4px;"><strong>AMOUNT:</strong> \u20B9${params.amount} ${params.currency}</div>
-        <div style="margin-bottom: 4px;"><strong>FEATURE:</strong> ${params.featureName}</div>
-        <div><strong>STATUS:</strong> <span style="color: #047857; font-weight: bold;">APPROVED & UNLOCKED</span></div>
+        <div style="margin-bottom: 4px;"><strong>PAYMENT ID:</strong> ${params.orderReference}</div>
+        ${params.upiReference ? `<div style="margin-bottom: 4px;"><strong>UPI UTR:</strong> ${params.upiReference}</div>` : ""}
+        <div style="margin-bottom: 4px;"><strong>AMOUNT:</strong> \u20B9${params.amount} ${currency}</div>
+        <div style="margin-bottom: 4px;"><strong>ENCLOSURE:</strong> ${params.featureName || mediaLabel}</div>
+        <div><strong>STATUS:</strong> <span style="color: #047857; font-weight: bold;">APPROVED</span></div>
       </div>
       ${params.adminNote ? `<p style="font-size: 13px; color: #57534e; font-style: italic;">Bureau Note: &ldquo;${params.adminNote}&rdquo;</p>` : ""}
       <p style="font-size: 13px; color: #57534e;">
-        Your special correspondence features have been unlocked in the postal registry and will accompany your letter upon delivery.
+        Your personal voice/video message enclosure has been verified and will accompany your letter upon delivery.
       </p>
-      <div style="text-align: center; margin: 28px 0 10px 0;">
-        <a href="${params.statusUrl}" style="background-color: #134e4a; color: #ffffff; padding: 12px 26px; font-size: 11px; text-decoration: none; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
-          VIEW YOUR ARCHIVE \u2192
-        </a>
-      </div>
     `
   );
   return sendMail({
     to: params.userEmail,
     subject,
     html,
-    text: `Payment confirmed for ${params.orderReference} (\u20B9${params.amount}). Your ${params.featureName} has been approved and unlocked.`
+    text: `OLD-LETTERS \u2014 Payment Verified
+
+Payment ID: ${params.orderReference}
+Amount: \u20B9${params.amount} ${currency}
+${params.upiReference ? `UTR: ${params.upiReference}
+` : ""}Status: APPROVED
+Personal Message Type: ${params.featureName || mediaLabel}
+
+Your personal voice/video enclosure will accompany your letter upon delivery.`
   });
 }
 async function sendPaymentIssueEmail(params) {
-  const subject = "Your OLD-LETTERS payment requires attention";
+  const subject = "OLD-LETTERS \u2014 Payment Verification Failed";
+  const currency = params.currency || "INR";
   const html = emailWrapper(
-    "Your OLD-LETTERS payment requires attention",
+    "Payment Verification Failed \xB7 OLD-LETTERS",
     `PAYMENT REF: ${params.orderReference}`,
     `
       <p style="margin-top: 0;">Greetings,</p>
       <p>
-        Your payment could not be verified.
+        Your payment could not be fully verified. The UTR/payment details provided could not be confirmed.
       </p>
-      <div style="background-color: #fef2f2; border-left: 3px solid #dc2626; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; font-size: 13px; color: #991b1b;">
-        <strong style="display: block; margin-bottom: 4px;">Bureau Notice:</strong>
-        Your OLD-LETTERS payment could not be fully verified because the transaction details provided could not be confirmed.
-        ${params.adminNote ? `<br/><br/><strong>Administrator Note:</strong> ${params.adminNote}` : ""}
+      <div style="background-color: #fef2f2; border-left: 3px solid #dc2626; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; font-size: 13px; color: #991b1b; font-family: monospace;">
+        <div style="margin-bottom: 4px;"><strong>PAYMENT ID:</strong> ${params.orderReference}</div>
+        ${params.upiReference ? `<div style="margin-bottom: 4px;"><strong>UPI UTR:</strong> ${params.upiReference}</div>` : ""}
+        <div style="margin-bottom: 4px;"><strong>AMOUNT:</strong> \u20B9${params.amount} ${currency}</div>
+        <div style="margin-bottom: 4px;"><strong>STATUS:</strong> <span style="font-weight: bold;">REJECTED</span></div>
+        ${params.adminNote ? `<div style="margin-top: 6px;"><strong>ADMIN NOTE:</strong> ${params.adminNote}</div>` : ""}
       </div>
-      <p style="font-size: 13px; color: #44403c;">
-        Your letter will continue without the personal voice/video enclosure.
+      <p style="font-size: 13px; color: #44403c; font-weight: 500;">
+        The letter will continue without the personal voice/video enclosure.
       </p>
       <p style="font-size: 13px; color: #57534e;">
         If you believe this was an error, please contact the Correspondence Office.
       </p>
-      <div style="text-align: center; margin: 28px 0 10px 0;">
-        <a href="${params.contactUrl}" style="background-color: #134e4a; color: #ffffff; padding: 12px 26px; font-size: 11px; text-decoration: none; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
-          CONTACT CORRESPONDENCE OFFICE \u2192
-        </a>
-      </div>
     `
   );
   return sendMail({
     to: params.userEmail,
     subject,
     html,
-    text: `Your OLD-LETTERS payment requires attention.
+    text: `OLD-LETTERS \u2014 Payment Verification Failed
 
-Your payment could not be verified.
+Your payment could not be fully verified. The UTR/payment details provided could not be confirmed.
 
-Your OLD-LETTERS payment could not be fully verified because the transaction details provided could not be confirmed.
-
-Your letter will continue without the personal voice/video enclosure.
-
-If you believe this was an error, please contact the Correspondence Office.`
+Payment ID: ${params.orderReference}
+Amount: \u20B9${params.amount} ${currency}
+${params.upiReference ? `UTR: ${params.upiReference}
+` : ""}Status: REJECTED
+${params.adminNote ? `Reason: ${params.adminNote}
+` : ""}
+The letter will continue without the personal voice/video enclosure.`
   });
 }
 
@@ -479,19 +494,20 @@ var LegalConsentSchema = z.object({
 });
 var CreateLetterSchema = z.object({
   type: z.string().min(1),
-  templateId: z.string().default("ivory"),
-  senderName: z.string().min(1, "Sender name is required").max(100),
-  senderEmail: z.string().email("Valid sender email required"),
-  recipientName: z.string().min(1, "Recipient name is required").max(100),
-  recipientEmail: z.string().email("Valid recipient email required"),
-  greeting: z.string().min(1, "Salutation greeting is required"),
-  content: z.string().min(1, "Letter body content is required"),
-  signoff: z.string().min(1, "Signoff is required"),
+  templateId: z.string().trim().min(1, "Please choose your stationery before sealing the letter."),
+  senderName: z.string().trim().min(1, "Sender name is required").max(100),
+  senderEmail: z.string().trim().email("Valid sender email required"),
+  recipientName: z.string().trim().min(1, "Recipient name is required").max(100),
+  recipientEmail: z.string().trim().email("Valid recipient email required"),
+  greeting: z.string().trim().min(1, "Salutation greeting is required"),
+  content: z.string().trim().min(5, "Letter body content must be meaningful (at least 5 characters)"),
+  signoff: z.string().trim().min(1, "Signoff is required"),
   verificationMethod: z.enum(["otp", "passphrase", "open"]).default("open"),
   passphrase: z.string().optional(),
-  scheduledDeliveryAt: z.string().refine((val) => {
+  scheduledDeliveryAt: z.string().optional().refine((val) => {
+    if (!val) return true;
     const deliveryDate = new Date(val).getTime();
-    const minTime = Date.now() + (MIN_DELIVERY_HOURS - 1) * 3600 * 1e3;
+    const minTime = Date.now() + (MIN_DELIVERY_HOURS * 3600 * 1e3 - 6e4);
     return !isNaN(deliveryDate) && deliveryDate >= minTime;
   }, {
     message: `Delivery date must be at least ${MIN_DELIVERY_HOURS} hours in the future`
@@ -3919,14 +3935,20 @@ app.post("/api/letters", requireAuth, async (req, res) => {
     const mediaMetadataColl = db.collection("mediaMetadata");
     const letterId = new ObjectId();
     const now = /* @__PURE__ */ new Date();
-    const deliveryDate = new Date(input.scheduledDeliveryAt);
+    const deliveryDate = new Date(input.scheduledDeliveryAt || Date.now() + (input.waitingHours || 48) * 3600 * 1e3);
     const senderId = req.user.id;
     const senderEmail = (req.user?.email || input.senderEmail).toLowerCase();
     const senderName = input.senderName || req.user?.fullName || "Correspondent";
     const recipientEmail = input.recipientEmail.trim().toLowerCase();
     const recipientName = input.recipientName.trim();
-    if (!recipientEmail) {
-      return res.status(400).json({ success: false, error: "Recipient email address is required." });
+    if (!input.templateId || !input.templateId.trim()) {
+      return res.status(400).json({ success: false, error: "Please choose your stationery before sealing the letter." });
+    }
+    if (!recipientName) {
+      return res.status(400).json({ success: false, error: "Recipient name is required." });
+    }
+    if (!recipientEmail || !recipientEmail.includes("@")) {
+      return res.status(400).json({ success: false, error: "Valid recipient email required." });
     }
     const linkedPaymentId = input.paymentId || req.body.personalMessage?.paymentId;
     const hasMedia = Boolean(input.hasMediaAttachment || req.body.personalMessage?.hasMediaAttachment || req.body.personalMessage?.mediaStorageKey);

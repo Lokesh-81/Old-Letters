@@ -274,7 +274,7 @@ export async function postLetter(payload: CreateLetterInput): Promise<{
       verificationMethod: payload.verificationMethod,
       passphrase: payload.passphrase,
       postedAt: new Date().toISOString(),
-      scheduledDeliveryAt: payload.scheduledDeliveryAt,
+      scheduledDeliveryAt: payload.scheduledDeliveryAt || new Date(Date.now() + (payload.waitingHours || 48) * 3600 * 1000).toISOString(),
       waitingHours: payload.waitingHours,
       status: 'SCHEDULED',
       postmarkCity: payload.postmarkCity || 'Hyderabad Bureau',

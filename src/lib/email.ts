@@ -470,10 +470,21 @@ export async function sendArrivalRecipientEmail(params: {
   arrivalFormatted: string;
   recipientUrl: string;
   requiresOtp?: boolean;
+  hasApprovedMedia?: boolean;
+  mediaType?: 'VOICE' | 'VIDEO';
 }) {
-  const subject = 'Your letter is ready to be opened · OLD-LETTERS';
+  const subject = 'Your letter has arrived · OLD-LETTERS';
+  const enclosureNoticeHtml = params.hasApprovedMedia
+    ? `
+      <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 14px 18px; margin: 18px 0; border-radius: 4px; text-align: center;">
+        <span style="font-size: 13px; color: #166534; font-family: serif; font-weight: bold; display: block;">
+          ✦ Your personal message enclosure is now available.
+        </span>
+      </div>`
+    : '';
+
   const html = emailWrapper(
-    'Your letter is ready to be opened · OLD-LETTERS',
+    'Your Letter Has Arrived · OLD-LETTERS',
     `DISPATCH REF: ${params.trackingCode}`,
     `
       <p style="margin-top: 0;">Dear ${params.recipientName},</p>
@@ -483,6 +494,7 @@ export async function sendArrivalRecipientEmail(params: {
       <p>
         Your correspondence has completed its journey and is ready to be unsealed.
       </p>
+      ${enclosureNoticeHtml}
       <div style="background-color: #f7f6f2; border: 1px solid #eae4da; padding: 18px; margin: 22px 0; border-radius: 4px; text-align: center;">
         <span style="font-size: 11px; font-family: monospace; letter-spacing: 0.2em; text-transform: uppercase; color: #78716c; display: block; margin-bottom: 6px;">
           CORRESPONDENCE STATUS
@@ -509,46 +521,96 @@ export async function sendArrivalRecipientEmail(params: {
     to: params.recipientEmail,
     subject,
     html,
-    text: `Your letter (Ref: ${params.trackingCode}) has arrived! The 48-hour wait is complete. Unseal and read your letter now: ${params.recipientUrl}`,
+    text: `Your letter (Ref: ${params.trackingCode}) has arrived! The 48-hour wait is complete.${params.hasApprovedMedia ? '\n\nYour personal message enclosure is now available.' : ''}\n\nUnseal and read your letter now: ${params.recipientUrl}`,
   });
 }
 
 /**
- * 6A. ADMIN PAYMENT CONFIRMED EMAIL
+ * 5. PAYMENT SUBMITTED NOTIFICATION (TO SENDER ONLY)
+ */
+export async function sendPaymentSubmittedSenderEmail(params: {
+  senderEmail: string;
+  senderName: string;
+  paymentId: string;
+  upiReference: string;
+  amount: number;
+  currency?: string;
+  mediaType: 'VOICE' | 'VIDEO';
+  recipientName?: string;
+  letterReference?: string;
+}) {
+  const subject = 'OLD-LETTERS — Payment Submitted for Verification';
+  const currency = params.currency || 'INR';
+  const mediaLabel = params.mediaType === 'VIDEO' ? 'Video Message Enclosure' : 'Voice Message Enclosure';
+
+  const html = emailWrapper(
+    'Payment Submitted for Verification · OLD-LETTERS',
+    `PAYMENT REF: ${params.paymentId}`,
+    `
+      <p style="margin-top: 0;">Dear ${params.senderName || 'Correspondent'},</p>
+      <p>
+        Your payment reference has been submitted to the Central Correspondence Bureau and is currently awaiting administrative verification.
+      </p>
+      <div style="background-color: #f7f6f2; border-left: 3px solid #0d9488; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; font-family: monospace; font-size: 12px;">
+        <div style="margin-bottom: 4px;"><strong>PAYMENT ID:</strong> ${params.paymentId}</div>
+        <div style="margin-bottom: 4px;"><strong>UPI UTR REF:</strong> ${params.upiReference}</div>
+        <div style="margin-bottom: 4px;"><strong>AMOUNT:</strong> ₹${params.amount} ${currency}</div>
+        <div style="margin-bottom: 4px;"><strong>SELECTION:</strong> ${mediaLabel}</div>
+        ${params.recipientName ? `<div style="margin-bottom: 4px;"><strong>RECIPIENT:</strong> ${params.recipientName}</div>` : ''}
+        ${params.letterReference ? `<div style="margin-bottom: 4px;"><strong>LETTER REF:</strong> ${params.letterReference}</div>` : ''}
+        <div><strong>STATUS:</strong> <span style="color: #d97706; font-weight: bold;">PENDING VERIFICATION</span></div>
+      </div>
+      <p style="font-size: 13px; color: #57534e;">
+        Our bureau staff verifies each UPI reference against our postal bank statement. Once verified, your ${mediaLabel.toLowerCase()} will be approved to accompany your sealed correspondence upon arrival.
+      </p>
+    `
+  );
+
+  return sendMail({
+    to: params.senderEmail,
+    subject,
+    html,
+    text: `OLD-LETTERS — Payment Submitted for Verification\n\nPayment ID: ${params.paymentId}\nUTR: ${params.upiReference}\nAmount: ₹${params.amount} ${currency}\nSelection: ${mediaLabel}\nStatus: Pending Verification\n\nOur bureau staff will verify your payment against our postal bank records.`,
+  });
+}
+
+/**
+ * 6A. ADMIN PAYMENT CONFIRMED EMAIL (TO SENDER)
  */
 export async function sendPaymentApprovedEmail(params: {
   userEmail: string;
   orderReference: string;
   amount: number;
-  currency: string;
-  featureName: string;
+  currency?: string;
+  upiReference?: string;
+  mediaType?: 'VOICE' | 'VIDEO';
+  featureName?: string;
   adminNote?: string;
-  statusUrl: string;
+  statusUrl?: string;
 }) {
-  const subject = 'Payment confirmed — your OLD-LETTERS order is approved';
+  const subject = 'OLD-LETTERS — Payment Verified';
+  const currency = params.currency || 'INR';
+  const mediaLabel = params.mediaType === 'VIDEO' ? 'Video Message Enclosure' : 'Voice Message Enclosure';
+
   const html = emailWrapper(
-    'Payment Confirmed — Order Approved',
+    'Payment Verified · OLD-LETTERS',
     `PAYMENT REF: ${params.orderReference}`,
     `
       <p style="margin-top: 0;">Greetings,</p>
       <p>
-        Your payment reference for <strong>${params.featureName}</strong> has been manually inspected and approved by the central correspondence bureau administrator.
+        Your payment reference for <strong>${params.featureName || mediaLabel}</strong> has been verified and approved by the central correspondence bureau administrator.
       </p>
       <div style="background-color: #f7f6f2; border-left: 3px solid #047857; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; font-family: monospace; font-size: 12px;">
-        <div style="margin-bottom: 4px;"><strong>ORDER / REF:</strong> ${params.orderReference}</div>
-        <div style="margin-bottom: 4px;"><strong>AMOUNT:</strong> ₹${params.amount} ${params.currency}</div>
-        <div style="margin-bottom: 4px;"><strong>FEATURE:</strong> ${params.featureName}</div>
-        <div><strong>STATUS:</strong> <span style="color: #047857; font-weight: bold;">APPROVED & UNLOCKED</span></div>
+        <div style="margin-bottom: 4px;"><strong>PAYMENT ID:</strong> ${params.orderReference}</div>
+        ${params.upiReference ? `<div style="margin-bottom: 4px;"><strong>UPI UTR:</strong> ${params.upiReference}</div>` : ''}
+        <div style="margin-bottom: 4px;"><strong>AMOUNT:</strong> ₹${params.amount} ${currency}</div>
+        <div style="margin-bottom: 4px;"><strong>ENCLOSURE:</strong> ${params.featureName || mediaLabel}</div>
+        <div><strong>STATUS:</strong> <span style="color: #047857; font-weight: bold;">APPROVED</span></div>
       </div>
       ${params.adminNote ? `<p style="font-size: 13px; color: #57534e; font-style: italic;">Bureau Note: &ldquo;${params.adminNote}&rdquo;</p>` : ''}
       <p style="font-size: 13px; color: #57534e;">
-        Your special correspondence features have been unlocked in the postal registry and will accompany your letter upon delivery.
+        Your personal voice/video message enclosure has been verified and will accompany your letter upon delivery.
       </p>
-      <div style="text-align: center; margin: 28px 0 10px 0;">
-        <a href="${params.statusUrl}" style="background-color: #134e4a; color: #ffffff; padding: 12px 26px; font-size: 11px; text-decoration: none; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
-          VIEW YOUR ARCHIVE →
-        </a>
-      </div>
     `
   );
 
@@ -556,46 +618,46 @@ export async function sendPaymentApprovedEmail(params: {
     to: params.userEmail,
     subject,
     html,
-    text: `Payment confirmed for ${params.orderReference} (₹${params.amount}). Your ${params.featureName} has been approved and unlocked.`,
+    text: `OLD-LETTERS — Payment Verified\n\nPayment ID: ${params.orderReference}\nAmount: ₹${params.amount} ${currency}\n${params.upiReference ? `UTR: ${params.upiReference}\n` : ''}Status: APPROVED\nPersonal Message Type: ${params.featureName || mediaLabel}\n\nYour personal voice/video enclosure will accompany your letter upon delivery.`,
   });
 }
 
 /**
- * 6B. ADMIN PAYMENT ISSUE / REJECTION EMAIL
+ * 6B. ADMIN PAYMENT ISSUE / REJECTION EMAIL (TO SENDER)
  */
 export async function sendPaymentIssueEmail(params: {
   userEmail: string;
   orderReference: string;
   amount: number;
-  currency: string;
+  currency?: string;
+  upiReference?: string;
   adminNote?: string;
-  contactUrl: string;
+  contactUrl?: string;
 }) {
-  const subject = 'Your OLD-LETTERS payment requires attention';
+  const subject = 'OLD-LETTERS — Payment Verification Failed';
+  const currency = params.currency || 'INR';
+
   const html = emailWrapper(
-    'Your OLD-LETTERS payment requires attention',
+    'Payment Verification Failed · OLD-LETTERS',
     `PAYMENT REF: ${params.orderReference}`,
     `
       <p style="margin-top: 0;">Greetings,</p>
       <p>
-        Your payment could not be verified.
+        Your payment could not be fully verified. The UTR/payment details provided could not be confirmed.
       </p>
-      <div style="background-color: #fef2f2; border-left: 3px solid #dc2626; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; font-size: 13px; color: #991b1b;">
-        <strong style="display: block; margin-bottom: 4px;">Bureau Notice:</strong>
-        Your OLD-LETTERS payment could not be fully verified because the transaction details provided could not be confirmed.
-        ${params.adminNote ? `<br/><br/><strong>Administrator Note:</strong> ${params.adminNote}` : ''}
+      <div style="background-color: #fef2f2; border-left: 3px solid #dc2626; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; font-size: 13px; color: #991b1b; font-family: monospace;">
+        <div style="margin-bottom: 4px;"><strong>PAYMENT ID:</strong> ${params.orderReference}</div>
+        ${params.upiReference ? `<div style="margin-bottom: 4px;"><strong>UPI UTR:</strong> ${params.upiReference}</div>` : ''}
+        <div style="margin-bottom: 4px;"><strong>AMOUNT:</strong> ₹${params.amount} ${currency}</div>
+        <div style="margin-bottom: 4px;"><strong>STATUS:</strong> <span style="font-weight: bold;">REJECTED</span></div>
+        ${params.adminNote ? `<div style="margin-top: 6px;"><strong>ADMIN NOTE:</strong> ${params.adminNote}</div>` : ''}
       </div>
-      <p style="font-size: 13px; color: #44403c;">
-        Your letter will continue without the personal voice/video enclosure.
+      <p style="font-size: 13px; color: #44403c; font-weight: 500;">
+        The letter will continue without the personal voice/video enclosure.
       </p>
       <p style="font-size: 13px; color: #57534e;">
         If you believe this was an error, please contact the Correspondence Office.
       </p>
-      <div style="text-align: center; margin: 28px 0 10px 0;">
-        <a href="${params.contactUrl}" style="background-color: #134e4a; color: #ffffff; padding: 12px 26px; font-size: 11px; text-decoration: none; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
-          CONTACT CORRESPONDENCE OFFICE →
-        </a>
-      </div>
     `
   );
 
@@ -603,6 +665,6 @@ export async function sendPaymentIssueEmail(params: {
     to: params.userEmail,
     subject,
     html,
-    text: `Your OLD-LETTERS payment requires attention.\n\nYour payment could not be verified.\n\nYour OLD-LETTERS payment could not be fully verified because the transaction details provided could not be confirmed.\n\nYour letter will continue without the personal voice/video enclosure.\n\nIf you believe this was an error, please contact the Correspondence Office.`,
+    text: `OLD-LETTERS — Payment Verification Failed\n\nYour payment could not be fully verified. The UTR/payment details provided could not be confirmed.\n\nPayment ID: ${params.orderReference}\nAmount: ₹${params.amount} ${currency}\n${params.upiReference ? `UTR: ${params.upiReference}\n` : ''}Status: REJECTED\n${params.adminNote ? `Reason: ${params.adminNote}\n` : ''}\nThe letter will continue without the personal voice/video enclosure.`,
   });
 }

@@ -21,19 +21,23 @@ export type LegalConsentInput = z.infer<typeof LegalConsentSchema>;
 // Letter creation Zod schema
 export const CreateLetterSchema = z.object({
   type: z.string().min(1) as z.ZodType<LetterType>,
-  templateId: z.string().default('ivory'),
-  senderName: z.string().min(1, 'Sender name is required').max(100),
-  senderEmail: z.string().email('Valid sender email required'),
-  recipientName: z.string().min(1, 'Recipient name is required').max(100),
-  recipientEmail: z.string().email('Valid recipient email required'),
-  greeting: z.string().min(1, 'Salutation greeting is required'),
-  content: z.string().min(1, 'Letter body content is required'),
-  signoff: z.string().min(1, 'Signoff is required'),
+  templateId: z
+    .string()
+    .trim()
+    .min(1, 'Please choose your stationery before sealing the letter.'),
+  senderName: z.string().trim().min(1, 'Sender name is required').max(100),
+  senderEmail: z.string().trim().email('Valid sender email required'),
+  recipientName: z.string().trim().min(1, 'Recipient name is required').max(100),
+  recipientEmail: z.string().trim().email('Valid recipient email required'),
+  greeting: z.string().trim().min(1, 'Salutation greeting is required'),
+  content: z.string().trim().min(5, 'Letter body content must be meaningful (at least 5 characters)'),
+  signoff: z.string().trim().min(1, 'Signoff is required'),
   verificationMethod: z.enum(['otp', 'passphrase', 'open']).default('open'),
   passphrase: z.string().optional(),
-  scheduledDeliveryAt: z.string().refine((val) => {
+  scheduledDeliveryAt: z.string().optional().refine((val) => {
+    if (!val) return true;
     const deliveryDate = new Date(val).getTime();
-    const minTime = Date.now() + (MIN_DELIVERY_HOURS - 1) * 3600 * 1000; // 1-hour tolerance for client clock skew
+    const minTime = Date.now() + (MIN_DELIVERY_HOURS * 3600 * 1000 - 60000); // 60-second network skew tolerance
     return !isNaN(deliveryDate) && deliveryDate >= minTime;
   }, {
     message: `Delivery date must be at least ${MIN_DELIVERY_HOURS} hours in the future`,

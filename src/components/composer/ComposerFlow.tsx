@@ -87,8 +87,76 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
   const [customDateInput, setCustomDateInput] = useState('');
   const [activeLetterCategory, setActiveLetterCategory] = useState<LetterCategory>('ROMANTIC');
 
-  // Personal Voice/Video Message & UPI payment state with resilient session storage
+  // Canonical Composer & Draft state definition preserving all workflow steps
+  const [draft, setDraft] = useState<Letter & {
+    personalMessageType?: 'LETTER_ONLY' | 'VOICE' | 'VIDEO';
+    paymentId?: string;
+    upiReference?: string;
+    mediaStorageKey?: string;
+    mediaType?: 'VOICE' | 'VIDEO';
+    mediaDuration?: number;
+    mediaStatus?: string;
+    previewUrl?: string;
+    selectedTempoId?: '48h' | '7d' | '30d' | 'custom';
+  }>(() => {
+    const todayFormatted = new Date().toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const defaultDeliveryAt = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
+
+    try {
+      const savedSession = sessionStorage.getItem('old_letters_working_draft');
+      const savedLocal = localStorage.getItem('old_letters_working_draft');
+      const raw = savedSession || savedLocal;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (currentUser) {
+          parsed.senderName = currentUser.fullName || parsed.senderName;
+          parsed.senderEmail = currentUser.email || parsed.senderEmail;
+        }
+        return parsed;
+      }
+    } catch {
+      // Safe fallback
+    }
+
+    const defaultSender = currentUser?.fullName || 'Correspondent';
+    const defaultEmail = currentUser?.email || 'correspondent@oldletters.in';
+
+    return {
+      id: `ol-${Date.now()}`,
+      trackingCode: `OL-${Math.floor(1000 + Math.random() * 9000)}-${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`,
+      type: initialType,
+      templateId: '', // PART 2: Stationery MUST be selected; do not silently default to ivory
+      senderName: defaultSender,
+      senderEmail: defaultEmail,
+      recipientName: '', // PART 3: Recipient MUST be entered; do not silently default
+      recipientEmail: '', // PART 3: Recipient email MUST be entered; do not silently default
+      letterDate: todayFormatted,
+      greeting: 'Dear Friend,',
+      content: `I am writing this on the balcony as the evening cools down over the city.
+
+I wanted to tell you something I rarely say properly: how much I value your presence in my life. In a world where everyone is perpetually rushing to the next appointment, your calm presence is a gift.
+
+I chose the 48-hour post because some words deserve to be waited for. Take your time with this.`,
+      signoff: 'Yours in correspondence,',
+      attachments: [],
+      verificationMethod: 'open',
+      postedAt: new Date().toISOString(),
+      scheduledDeliveryAt: defaultDeliveryAt,
+      waitingHours: 48,
+      selectedTempoId: '48h',
+      personalMessageType: 'LETTER_ONLY',
+      status: 'IN TRANSIT',
+      postmarkCity: 'Hyderabad Bureau',
+    };
+  });
+
+  // Personal Voice/Video Message & UPI payment state initialized from canonical draft
   const [personalMessageChoice, setPersonalMessageChoice] = useState<'LETTER_ONLY' | 'VOICE' | 'VIDEO'>(() => {
+    if (draft.personalMessageType) return draft.personalMessageType;
     try {
       const saved = sessionStorage.getItem('old_letters_enclosure');
       if (saved) {
@@ -99,11 +167,29 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
     return 'LETTER_ONLY';
   });
 
-  const [upiReferenceInput, setUpiReferenceInput] = useState('');
+  const [upiReferenceInput, setUpiReferenceInput] = useState(draft.upiReference || '');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [paymentSubmitError, setPaymentSubmitError] = useState<string | null>(null);
 
   const [confirmedPayment, setConfirmedPayment] = useState<PaymentRecord | null>(() => {
+    if (draft.paymentId) {
+      return {
+        id: draft.paymentId,
+        paymentId: draft.paymentId,
+        upiReference: draft.upiReference || '',
+        amount: draft.personalMessageType === 'VIDEO' ? 149 : 99,
+        currency: 'INR',
+        status: (draft.mediaStatus as any) || 'PENDING',
+        letterId: draft.id,
+        senderName: draft.senderName,
+        recipientName: draft.recipientName,
+        recipientEmail: draft.recipientEmail,
+        featureCode: draft.personalMessageType === 'VIDEO' ? 'VIDEO_NOTE' : 'VOICE_NOTE',
+        featureType: draft.personalMessageType === 'VIDEO' ? 'VIDEO_MESSAGE' : 'VOICE_MESSAGE',
+        mediaType: draft.personalMessageType === 'VIDEO' ? 'VIDEO' : 'VOICE',
+        createdAt: new Date().toISOString(),
+      };
+    }
     try {
       const saved = sessionStorage.getItem('old_letters_confirmed_payment');
       return saved ? JSON.parse(saved) : null;
@@ -122,6 +208,17 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
     previewUrl?: string;
     mediaStatus?: string;
   } | null>(() => {
+    if (draft.mediaStorageKey) {
+      return {
+        type: (draft.personalMessageType as any) || 'VOICE',
+        price: draft.personalMessageType === 'VIDEO' ? 149 : 99,
+        paymentId: draft.paymentId,
+        mediaStorageKey: draft.mediaStorageKey,
+        durationSeconds: draft.mediaDuration,
+        previewUrl: draft.previewUrl,
+        mediaStatus: draft.mediaStatus || 'PENDING',
+      };
+    }
     try {
       const saved = sessionStorage.getItem('old_letters_enclosure');
       return saved ? JSON.parse(saved) : null;
@@ -160,6 +257,18 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
   useEffect(() => {
     fetchPaymentConfig().then(setPaymentConfig).catch(() => {});
   }, []);
+
+  const updateDraft = (updates: Partial<typeof draft>) => {
+    setDraft((prev) => {
+      const next = { ...prev, ...updates };
+      try {
+        const serialized = JSON.stringify(next);
+        localStorage.setItem('old_letters_working_draft', serialized);
+        sessionStorage.setItem('old_letters_working_draft', serialized);
+      } catch {}
+      return next;
+    });
+  };
 
   const handleSubmitUpiPayment = async () => {
     const cleanUpi = upiReferenceInput.trim();
@@ -200,7 +309,14 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
         throw new Error('Payment reference could not be established in the postal ledger.');
       }
       p.paymentId = canonicalId;
+      p.upiReference = cleanUpi;
       setConfirmedPayment(p);
+
+      updateDraft({
+        paymentId: canonicalId,
+        upiReference: cleanUpi,
+        personalMessageType: personalMessageChoice,
+      });
 
       // Open Recording Studio immediately with canonical payment ID
       setIsRecordingStudioOpen(true);
@@ -221,88 +337,49 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
   const deskRef = useRef<HTMLDivElement>(null);
 
-  const todayFormatted = new Date().toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-
-  // Minimum allowed 48 hours delivery constraint
-  const minDeliveryMs = Date.now() + 48 * 3600 * 1000;
-  const defaultDeliveryAt = new Date(minDeliveryMs).toISOString();
-
-  // Working letter state with natural defaults & localStorage draft recovery
-  const [draft, setDraft] = useState<Letter>(() => {
-    try {
-      const saved = localStorage.getItem('old_letters_working_draft');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (currentUser) {
-          parsed.senderName = currentUser.fullName || parsed.senderName;
-          parsed.senderEmail = currentUser.email || parsed.senderEmail;
-        }
-        return parsed;
-      }
-    } catch {
-      // Safe fallback
-    }
-
-    const defaultSender = currentUser?.fullName || 'Correspondent';
-    const defaultEmail = currentUser?.email || 'correspondent@oldletters.in';
-
-    return {
-      id: `ol-${Date.now()}`,
-      trackingCode: `OL-${Math.floor(1000 + Math.random() * 9000)}-${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`,
-      type: initialType,
-      templateId: 'ivory',
-      senderName: defaultSender,
-      senderEmail: defaultEmail,
-      recipientName: 'Vasantha',
-      recipientEmail: 'vasantha@correspondence.in',
-      letterDate: todayFormatted,
-      greeting: 'Dear Vasantha,',
-      content: `I am writing this on the balcony as the evening cools down over the city.
-
-I wanted to tell you something I rarely say properly: how much I value your presence in my life. In a world where everyone is perpetually rushing to the next appointment, your calm presence is a gift.
-
-I chose the 48-hour post because some words deserve to be waited for. Take your time with this.`,
-      signoff: 'Yours in correspondence,',
-      attachments: [],
-      verificationMethod: 'open',
-      postedAt: new Date().toISOString(),
-      scheduledDeliveryAt: defaultDeliveryAt,
-      waitingHours: 48,
-      status: 'IN TRANSIT',
-      postmarkCity: 'Hyderabad Bureau',
-    };
-  });
-
   // Sync draft sender info with currentUser if session is established
   useEffect(() => {
     if (currentUser) {
-      setDraft((prev) => ({
-        ...prev,
-        senderName: currentUser.fullName || prev.senderName,
-        senderEmail: currentUser.email || prev.senderEmail,
-      }));
+      updateDraft({
+        senderName: currentUser.fullName || draft.senderName,
+        senderEmail: currentUser.email || draft.senderEmail,
+      });
     }
   }, [currentUser]);
 
-  // Persist working draft to localStorage so words are never lost
+  // Persist working draft to localStorage and sessionStorage so words are never lost
   useEffect(() => {
     setSaveIndicator('typing');
     try {
-      localStorage.setItem('old_letters_working_draft', JSON.stringify(draft));
+      const serialized = JSON.stringify(draft);
+      localStorage.setItem('old_letters_working_draft', serialized);
+      sessionStorage.setItem('old_letters_working_draft', serialized);
     } catch {}
     const timer = setTimeout(() => {
       setSaveIndicator('saved');
     }, 500);
     return () => clearTimeout(timer);
-  }, [draft.content, draft.greeting, draft.signoff, draft.senderName, draft.recipientName, draft.scheduledDeliveryAt, draft.templateId, draft.type]);
-
-  const updateDraft = (updates: Partial<Letter>) => {
-    setDraft((prev) => ({ ...prev, ...updates }));
-  };
+  }, [
+    draft.content,
+    draft.greeting,
+    draft.signoff,
+    draft.senderName,
+    draft.recipientName,
+    draft.recipientEmail,
+    draft.scheduledDeliveryAt,
+    draft.templateId,
+    draft.type,
+    draft.waitingHours,
+    draft.selectedTempoId,
+    draft.personalMessageType,
+    draft.paymentId,
+    draft.upiReference,
+    draft.mediaStorageKey,
+    draft.mediaType,
+    draft.mediaDuration,
+    draft.mediaStatus,
+    draft.previewUrl,
+  ]);
 
   const activeTemplate =
     TEMPLATES.find((t) => t.id === draft.templateId) || TEMPLATES[0];
@@ -310,8 +387,38 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
   const wordCount = draft.content.trim() ? draft.content.trim().split(/\s+/).length : 0;
   const readingTime = Math.max(1, Math.ceil(wordCount / 160));
 
-  // Navigate between steps with directional animation
+  // Navigate between steps with directional animation and strict validation
   const goToStep = (step: ComposerStep) => {
+    // PART 2: Stationery MUST be selected before reaching dispatch, delivery, personal-message, or review
+    if (['dispatch', 'delivery', 'personal-message', 'review'].includes(step)) {
+      if (!draft.templateId || !draft.templateId.trim()) {
+        setPostError('Please choose your stationery before sealing the letter.');
+        setDirection(1);
+        setActiveStep('stationery');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+    }
+
+    // PART 3: Recipient MUST be specified before reaching delivery, personal-message, or review
+    if (['delivery', 'personal-message', 'review'].includes(step)) {
+      if (!draft.recipientName || !draft.recipientName.trim()) {
+        setPostError('Please specify the recipient name before continuing.');
+        setDirection(step === 'compose' || step === 'stationery' ? 1 : -1);
+        setActiveStep('dispatch');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      if (!draft.recipientEmail || !draft.recipientEmail.trim() || !draft.recipientEmail.includes('@')) {
+        setPostError('Please specify a valid recipient email address before continuing.');
+        setDirection(step === 'compose' || step === 'stationery' ? 1 : -1);
+        setActiveStep('dispatch');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+    }
+
+    setPostError(null);
     const order: ComposerStep[] = ['compose', 'stationery', 'dispatch', 'delivery', 'personal-message', 'review'];
     const curIdx = order.indexOf(activeStep);
     const targetIdx = order.indexOf(step);
@@ -423,10 +530,37 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
     if (!currentUser) {
       try {
         localStorage.setItem('old_letters_working_draft', JSON.stringify(draft));
+        sessionStorage.setItem('old_letters_working_draft', JSON.stringify(draft));
       } catch {}
       if (onRequestAuth) {
         onRequestAuth('post');
       }
+      return;
+    }
+
+    // PART 2: Stationery MUST be selected
+    if (!draft.templateId || !draft.templateId.trim()) {
+      setPostError('Please choose your stationery before sealing the letter.');
+      goToStep('stationery');
+      return;
+    }
+
+    // PART 3: Recipient MUST be specified
+    if (!draft.recipientName || !draft.recipientName.trim()) {
+      setPostError('Please specify the recipient name before sealing the letter.');
+      goToStep('dispatch');
+      return;
+    }
+
+    if (!draft.recipientEmail || !draft.recipientEmail.trim() || !draft.recipientEmail.includes('@')) {
+      setPostError('Please specify a valid recipient email address before sealing the letter.');
+      goToStep('dispatch');
+      return;
+    }
+
+    if (!draft.content || draft.content.trim().length < 5) {
+      setPostError('Letter body content must be meaningful (at least 5 characters).');
+      goToStep('compose');
       return;
     }
 
@@ -442,8 +576,8 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
         templateId: draft.templateId,
         senderName,
         senderEmail,
-        recipientName: draft.recipientName || 'Vasantha',
-        recipientEmail: draft.recipientEmail || 'vasantha@correspondence.in',
+        recipientName: draft.recipientName.trim(),
+        recipientEmail: draft.recipientEmail.trim().toLowerCase(),
         greeting: draft.greeting,
         content: draft.content,
         signoff: draft.signoff,
@@ -453,11 +587,11 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
         waitingHours: draft.waitingHours,
         postmarkCity: draft.postmarkCity || 'Hyderabad Bureau',
         status: 'SCHEDULED',
-        paymentId: personalMessageEnclosure?.paymentId,
-        hasMediaAttachment: Boolean(personalMessageEnclosure?.mediaStorageKey),
-        mediaType: personalMessageEnclosure?.type === 'VIDEO' ? 'VIDEO' : personalMessageEnclosure?.type === 'VOICE' ? 'VOICE' : undefined,
-        mediaStorageKey: personalMessageEnclosure?.mediaStorageKey,
-        mediaStatus: personalMessageEnclosure?.mediaStatus || (personalMessageEnclosure?.mediaStorageKey ? 'PENDING' : undefined),
+        paymentId: draft.paymentId || personalMessageEnclosure?.paymentId,
+        hasMediaAttachment: Boolean(draft.mediaStorageKey || personalMessageEnclosure?.mediaStorageKey),
+        mediaType: draft.mediaType || (personalMessageEnclosure?.type === 'VIDEO' ? 'VIDEO' : personalMessageEnclosure?.type === 'VOICE' ? 'VOICE' : undefined),
+        mediaStorageKey: draft.mediaStorageKey || personalMessageEnclosure?.mediaStorageKey,
+        mediaStatus: draft.mediaStatus || personalMessageEnclosure?.mediaStatus || (draft.mediaStorageKey ? 'PENDING' : undefined),
         personalMessage: personalMessageEnclosure || undefined,
       } as any);
 
@@ -469,11 +603,12 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
         senderEmail,
         status: 'SCHEDULED',
         postedAt: new Date().toISOString(),
-        paymentStatus: personalMessageEnclosure?.paymentId ? 'PENDING' : undefined,
+        paymentStatus: (draft.paymentId || personalMessageEnclosure?.paymentId) ? 'PENDING' : undefined,
       };
 
       try {
         localStorage.removeItem('old_letters_working_draft');
+        sessionStorage.removeItem('old_letters_working_draft');
         sessionStorage.removeItem('old_letters_confirmed_payment');
         sessionStorage.removeItem('old_letters_enclosure');
       } catch {}
@@ -693,13 +828,14 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
           }`}
         >
           {/* Studio Steps Navigation Tabs */}
-          <div className="flex items-center border-b border-[#eae4da] gap-4 sm:gap-6 text-xs font-mono uppercase tracking-wider overflow-x-auto pb-1">
+          <div className="flex items-center border-b border-[#eae4da] gap-3 sm:gap-5 text-xs font-mono uppercase tracking-wider overflow-x-auto pb-1">
             {[
               { id: 'compose', label: '1. Writing' },
               { id: 'stationery', label: '2. Stationery' },
               { id: 'dispatch', label: '3. Recipient' },
               { id: 'delivery', label: '4. Delivery' },
-              { id: 'review', label: '5. Review' },
+              { id: 'personal-message', label: '5. Enclosure' },
+              { id: 'review', label: '6. Review & Seal' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -931,26 +1067,26 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                 <div className="space-y-4">
                   <div>
                     <label className="block text-[11px] font-mono text-stone-500 uppercase tracking-wider mb-1.5">
-                      Recipient Full Name
+                      Recipient Full Name <span className="text-rose-600 font-bold">*</span>
                     </label>
                     <input
                       type="text"
                       value={draft.recipientName}
                       onChange={(e) => updateDraft({ recipientName: e.target.value })}
-                      placeholder="e.g. Vasantha"
+                      placeholder="e.g. Vasantha Rao"
                       className="w-full bg-white border border-[#eae4da] focus:border-teal-900 px-4 py-3 text-stone-900 font-serif text-lg focus:outline-none rounded-xs shadow-2xs"
                     />
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-mono text-stone-500 uppercase tracking-wider mb-1.5">
-                      Recipient Email Address
+                      Recipient Email Address <span className="text-rose-600 font-bold">*</span>
                     </label>
                     <input
                       type="email"
                       value={draft.recipientEmail}
                       onChange={(e) => updateDraft({ recipientEmail: e.target.value })}
-                      placeholder="vasantha@correspondence.in"
+                      placeholder="e.g. vasantha@correspondence.in"
                       className="w-full bg-white border border-[#eae4da] focus:border-teal-900 px-4 py-3 text-stone-900 text-sm focus:outline-none rounded-xs shadow-2xs"
                     />
                   </div>
@@ -1031,7 +1167,17 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                   </button>
                   <button
                     type="button"
-                    onClick={() => goToStep('delivery')}
+                    onClick={() => {
+                      if (!draft.recipientName || !draft.recipientName.trim()) {
+                        setPostError('Please specify the recipient name.');
+                        return;
+                      }
+                      if (!draft.recipientEmail || !draft.recipientEmail.trim() || !draft.recipientEmail.includes('@')) {
+                        setPostError('Please specify a valid recipient email address.');
+                        return;
+                      }
+                      goToStep('delivery');
+                    }}
                     className="px-5 py-2.5 bg-teal-900 hover:bg-teal-800 text-white text-xs font-sans font-medium uppercase tracking-wider rounded-xs cursor-pointer shadow-[inset_0_1px_0_2px_rgba(255,255,255,0.10),inset_0_-1px_0_2px_rgba(0,0,0,0.12)] active:scale-[0.96]"
                   >
                     Delivery Passage →
@@ -1176,19 +1322,32 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                   <RecordingStudio
                     mediaType={personalMessageChoice === 'VIDEO' ? 'VIDEO' : 'VOICE'}
                     paymentId={confirmedPayment.paymentId || confirmedPayment.id}
-                    recipientName={draft.recipientName}
+                    recipientName={draft.recipientName || 'Recipient'}
                     onComplete={(result) => {
-                      setPersonalMessageEnclosure({
+                      const updatedEnclosure = {
                         type: result.mediaType,
                         price: result.mediaType === 'VIDEO' ? 149 : 99,
-                        paymentId: confirmedPayment.paymentId || confirmedPayment.id,
+                        paymentId: confirmedPayment.paymentId || confirmedPayment.id || draft.paymentId,
                         mediaStorageKey: result.storageKey,
                         durationSeconds: result.durationSeconds,
                         previewUrl: result.previewUrl,
                         mediaStatus: 'PENDING',
+                      };
+                      setPersonalMessageEnclosure(updatedEnclosure);
+                      updateDraft({
+                        personalMessageType: result.mediaType,
+                        paymentId: updatedEnclosure.paymentId,
+                        upiReference: confirmedPayment.upiReference || upiReferenceInput.trim() || draft.upiReference,
+                        mediaStorageKey: result.storageKey,
+                        mediaDuration: result.durationSeconds,
+                        mediaType: result.mediaType,
+                        previewUrl: result.previewUrl,
+                        mediaStatus: 'PENDING',
                       });
                       setIsRecordingStudioOpen(false);
-                      goToStep('review');
+                      // CRITICAL WORKFLOW FIX (PART 1):
+                      // Do NOT jump directly to the final review step.
+                      // Remain on the personal message step and show the attached enclosure card with preview and re-record controls.
                     }}
                     onCancel={() => {
                       setIsRecordingStudioOpen(false);
@@ -1323,10 +1482,32 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                             <div className="flex justify-between">
                               <span className="text-stone-500">RECORDING ATTACHMENT:</span>
                               <span className={personalMessageEnclosure?.mediaStorageKey ? 'text-emerald-700 font-semibold' : 'text-amber-800'}>
-                                {personalMessageEnclosure?.mediaStorageKey ? `Attached (${personalMessageEnclosure.durationSeconds || 0}s duration)` : 'Awaiting Recording Studio'}
+                                {personalMessageEnclosure?.mediaStorageKey ? `Attached (${personalMessageEnclosure.durationSeconds || draft.mediaDuration || 0}s duration)` : 'Awaiting Recording Studio'}
                               </span>
                             </div>
                           </div>
+
+                          {/* Media Preview Player inside Enclosure Card */}
+                          {(personalMessageEnclosure?.previewUrl || draft.previewUrl) && (
+                            <div className="p-3 bg-stone-50 border border-stone-200 rounded-xs space-y-2">
+                              <span className="text-[10px] font-mono text-stone-500 uppercase block font-semibold">
+                                Attached Recording Preview
+                              </span>
+                              {(personalMessageEnclosure?.type || draft.mediaType) === 'VIDEO' ? (
+                                <video
+                                  src={personalMessageEnclosure?.previewUrl || draft.previewUrl}
+                                  controls
+                                  className="w-full max-h-48 rounded-xs object-cover"
+                                />
+                              ) : (
+                                <audio
+                                  src={personalMessageEnclosure?.previewUrl || draft.previewUrl}
+                                  controls
+                                  className="w-full"
+                                />
+                              )}
+                            </div>
+                          )}
 
                           <div className="flex flex-col sm:flex-row gap-3 pt-2">
                             <button
@@ -1512,8 +1693,13 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
 
                   <div className="space-y-3 text-xs font-mono">
                     <div className="flex items-center justify-between py-1.5 border-b border-stone-100">
+                      <span className="text-stone-500">SELECTED STATIONERY:</span>
+                      <span className="text-teal-900 font-semibold">{activeTemplate.name} ({activeTemplate.paperWeight})</span>
+                    </div>
+
+                    <div className="flex items-center justify-between py-1.5 border-b border-stone-100">
                       <span className="text-stone-500">ADDRESSED TO:</span>
-                      <span className="text-stone-900 font-semibold">{draft.recipientName} ({draft.recipientEmail})</span>
+                      <span className="text-stone-900 font-semibold">{draft.recipientName || 'Unspecified'} ({draft.recipientEmail || 'No email'})</span>
                     </div>
 
                     <div className="flex items-center justify-between py-1.5 border-b border-stone-100">
@@ -1545,8 +1731,8 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                     <div className="flex items-center justify-between py-1.5 border-b border-stone-100">
                       <span className="text-stone-500">PERSONAL ENCLOSURE:</span>
                       <span className="text-stone-900 font-semibold">
-                        {personalMessageEnclosure && personalMessageEnclosure.type !== 'LETTER_ONLY'
-                          ? `Personal ${personalMessageEnclosure.type === 'VIDEO' ? 'Video' : 'Voice'} Note (₹${personalMessageEnclosure.price} · Recorded · PENDING VERIFICATION)`
+                        {(personalMessageEnclosure && personalMessageEnclosure.type !== 'LETTER_ONLY') || (draft.personalMessageType && draft.personalMessageType !== 'LETTER_ONLY')
+                          ? `Personal ${(personalMessageEnclosure?.type || draft.mediaType || draft.personalMessageType) === 'VIDEO' ? 'Video' : 'Voice'} Note (₹${personalMessageEnclosure?.price || (draft.personalMessageType === 'VIDEO' ? 149 : 99)} · Attached · PENDING VERIFICATION)`
                           : 'Letter Only (Pure Epistolary · ₹0)'}
                       </span>
                     </div>

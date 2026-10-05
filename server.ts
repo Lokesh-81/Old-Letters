@@ -2086,7 +2086,7 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
 
     const letterId = new ObjectId();
     const now = new Date();
-    const deliveryDate = new Date(input.scheduledDeliveryAt);
+    const deliveryDate = new Date(input.scheduledDeliveryAt || (Date.now() + (input.waitingHours || 48) * 3600 * 1000));
 
     // CRITICAL: Always use req.user.id as senderId (never trust client body senderId)
     const senderId = req.user!.id;
@@ -2095,8 +2095,16 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
     const recipientEmail = input.recipientEmail.trim().toLowerCase();
     const recipientName = input.recipientName.trim();
 
-    if (!recipientEmail) {
-      return res.status(400).json({ success: false, error: 'Recipient email address is required.' });
+    if (!input.templateId || !input.templateId.trim()) {
+      return res.status(400).json({ success: false, error: 'Please choose your stationery before sealing the letter.' });
+    }
+
+    if (!recipientName) {
+      return res.status(400).json({ success: false, error: 'Recipient name is required.' });
+    }
+
+    if (!recipientEmail || !recipientEmail.includes('@')) {
+      return res.status(400).json({ success: false, error: 'Valid recipient email required.' });
     }
 
     const linkedPaymentId = input.paymentId || (req.body.personalMessage?.paymentId);
