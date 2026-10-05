@@ -665,14 +665,6 @@ export default function App() {
             ? 'Create your correspondence account before sending your first letter.'
             : undefined
         }
-        onGuestPreview={
-          intendedDestination === 'composer'
-            ? () => {
-                setShowAuthModal(false);
-                setCurrentView('composer');
-              }
-            : undefined
-        }
         onClose={() => {
           setShowAuthModal(false);
           setIntendedDestination(null);

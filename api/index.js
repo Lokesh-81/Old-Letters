@@ -388,6 +388,83 @@ async function sendArrivalRecipientEmail(params) {
     text: `Your letter (Ref: ${params.trackingCode}) has arrived! The 48-hour wait is complete. Unseal and read your letter now: ${params.recipientUrl}`
   });
 }
+async function sendPaymentApprovedEmail(params) {
+  const subject = "Payment confirmed \u2014 your OLD-LETTERS order is approved";
+  const html = emailWrapper(
+    "Payment Confirmed \u2014 Order Approved",
+    `PAYMENT REF: ${params.orderReference}`,
+    `
+      <p style="margin-top: 0;">Greetings,</p>
+      <p>
+        Your payment reference for <strong>${params.featureName}</strong> has been manually inspected and approved by the central correspondence bureau administrator.
+      </p>
+      <div style="background-color: #f7f6f2; border-left: 3px solid #047857; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; font-family: monospace; font-size: 12px;">
+        <div style="margin-bottom: 4px;"><strong>ORDER / REF:</strong> ${params.orderReference}</div>
+        <div style="margin-bottom: 4px;"><strong>AMOUNT:</strong> \u20B9${params.amount} ${params.currency}</div>
+        <div style="margin-bottom: 4px;"><strong>FEATURE:</strong> ${params.featureName}</div>
+        <div><strong>STATUS:</strong> <span style="color: #047857; font-weight: bold;">APPROVED & UNLOCKED</span></div>
+      </div>
+      ${params.adminNote ? `<p style="font-size: 13px; color: #57534e; font-style: italic;">Bureau Note: &ldquo;${params.adminNote}&rdquo;</p>` : ""}
+      <p style="font-size: 13px; color: #57534e;">
+        Your special correspondence features have been unlocked in the postal registry and will accompany your letter upon delivery.
+      </p>
+      <div style="text-align: center; margin: 28px 0 10px 0;">
+        <a href="${params.statusUrl}" style="background-color: #134e4a; color: #ffffff; padding: 12px 26px; font-size: 11px; text-decoration: none; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
+          VIEW YOUR ARCHIVE \u2192
+        </a>
+      </div>
+    `
+  );
+  return sendMail({
+    to: params.userEmail,
+    subject,
+    html,
+    text: `Payment confirmed for ${params.orderReference} (\u20B9${params.amount}). Your ${params.featureName} has been approved and unlocked.`
+  });
+}
+async function sendPaymentIssueEmail(params) {
+  const subject = "Your OLD-LETTERS payment requires attention";
+  const html = emailWrapper(
+    "Your OLD-LETTERS payment requires attention",
+    `PAYMENT REF: ${params.orderReference}`,
+    `
+      <p style="margin-top: 0;">Greetings,</p>
+      <p>
+        Your payment could not be verified.
+      </p>
+      <div style="background-color: #fef2f2; border-left: 3px solid #dc2626; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; font-size: 13px; color: #991b1b;">
+        <strong style="display: block; margin-bottom: 4px;">Bureau Notice:</strong>
+        Your OLD-LETTERS payment could not be fully verified because the transaction details provided could not be confirmed.
+        ${params.adminNote ? `<br/><br/><strong>Administrator Note:</strong> ${params.adminNote}` : ""}
+      </div>
+      <p style="font-size: 13px; color: #44403c;">
+        Your letter will continue without the personal voice/video enclosure.
+      </p>
+      <p style="font-size: 13px; color: #57534e;">
+        If you believe this was an error, please contact the Correspondence Office.
+      </p>
+      <div style="text-align: center; margin: 28px 0 10px 0;">
+        <a href="${params.contactUrl}" style="background-color: #134e4a; color: #ffffff; padding: 12px 26px; font-size: 11px; text-decoration: none; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
+          CONTACT CORRESPONDENCE OFFICE \u2192
+        </a>
+      </div>
+    `
+  );
+  return sendMail({
+    to: params.userEmail,
+    subject,
+    html,
+    text: `Your OLD-LETTERS payment requires attention.
+
+Your payment could not be verified.
+
+Your OLD-LETTERS payment could not be fully verified because the transaction details provided could not be confirmed.
+
+Your letter will continue without the personal voice/video enclosure.
+
+If you believe this was an error, please contact the Correspondence Office.`
+  });
+}
 
 // src/types/backend.ts
 import { z } from "zod";
@@ -593,7 +670,9 @@ var MemoryCollection = class {
     }
     for (const [k, v] of Object.entries(query)) {
       if (k === "$or" || k === "$and") continue;
-      if (v && typeof v === "object" && !Array.isArray(v) && !(v instanceof Date) && !(v instanceof ObjectId)) {
+      if (v instanceof RegExp) {
+        if (!v.test(String(doc[k] ?? ""))) return false;
+      } else if (v && typeof v === "object" && !Array.isArray(v) && !(v instanceof Date) && !(v instanceof ObjectId)) {
         if ("$lte" in v && !(doc[k] <= v.$lte)) return false;
         if ("$gte" in v && !(doc[k] >= v.$gte)) return false;
         if ("$eq" in v && doc[k] !== v.$eq) return false;
@@ -679,22 +758,16 @@ var uri = process.env.MONGODB_URI || "";
 var clientPromise = null;
 var isRealMongo = false;
 if (uri && (uri.startsWith("mongodb://") || uri.startsWith("mongodb+srv://"))) {
-  if (process.env.NODE_ENV === "development") {
-    if (!global._mongoClientPromise) {
-      const client = new MongoClient(uri, {
-        maxPoolSize: 10,
-        serverSelectionTimeoutMS: 5e3
-      });
-      global._mongoClientPromise = client.connect();
-    }
-    clientPromise = global._mongoClientPromise;
-  } else {
+  if (!globalThis._mongoClientPromise) {
     const client = new MongoClient(uri, {
       maxPoolSize: 10,
-      serverSelectionTimeoutMS: 5e3
+      minPoolSize: 1,
+      connectTimeoutMS: 1e4,
+      serverSelectionTimeoutMS: 1e4
     });
-    clientPromise = client.connect();
+    globalThis._mongoClientPromise = client.connect();
   }
+  clientPromise = globalThis._mongoClientPromise;
   isRealMongo = true;
 }
 function isUsingAtlas() {
@@ -2346,6 +2419,8 @@ app.use((req, res, next) => {
   const forwardedUri = req.headers["x-forwarded-uri"] || req.headers["x-matched-path"] || req.headers["x-invoke-path"];
   if (forwardedUri && forwardedUri.startsWith("/api") && !req.url.startsWith("/api")) {
     req.url = forwardedUri;
+  } else if (!req.url.startsWith("/api") && (req.url.startsWith("/payments") || req.url.startsWith("/letters") || req.url.startsWith("/auth") || req.url.startsWith("/admin") || req.url.startsWith("/delivery") || req.url.startsWith("/user") || req.url.startsWith("/scheduler"))) {
+    req.url = `/api${req.url}`;
   }
   next();
 });
@@ -3907,19 +3982,19 @@ app.post(["/api/letters/draft", "/api/letters/save-draft"], requireAuth, async (
           }
         }
       );
-      const updated = await lettersColl.findOne({ _id: letter._id });
+      const updated = await lettersColl.findOne({ _id: letter._id }) || letter;
       return res.json({
         success: true,
         letter: {
-          id: updated._id.toString(),
-          trackingCode: updated.trackingCode,
-          type: updated.letterType,
-          templateId: updated.templateId,
-          recipientName: updated.recipientName,
-          recipientEmail: updated.recipientEmail,
-          status: updated.status,
-          scheduledDeliveryAt: updated.scheduledDeliveryAt?.toISOString(),
-          waitingHours: updated.waitingHours
+          id: (updated._id || letter._id).toString(),
+          trackingCode: updated.trackingCode || letter.trackingCode,
+          type: updated.letterType || letter.letterType,
+          templateId: updated.templateId || letter.templateId,
+          recipientName: updated.recipientName || letter.recipientName,
+          recipientEmail: updated.recipientEmail || letter.recipientEmail,
+          status: updated.status || letter.status,
+          scheduledDeliveryAt: updated.scheduledDeliveryAt?.toISOString ? updated.scheduledDeliveryAt.toISOString() : updated.scheduledDeliveryAt,
+          waitingHours: updated.waitingHours || letter.waitingHours
         }
       });
     }
@@ -5426,7 +5501,7 @@ app.post(["/api/testing/advance-delivery", "/api/delivery/advance"], async (req,
     res.status(500).json({ success: false, error: err.message });
   }
 });
-app.post(["/api/payments", "/api/payments/create"], requireAuth, async (req, res) => {
+app.post(["/api/payments", "/api/payments/create", "/payments", "/payments/create"], requireAuth, async (req, res) => {
   try {
     const parseResult = SubmitPaymentSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -5444,12 +5519,13 @@ app.post(["/api/payments", "/api/payments/create"], requireAuth, async (req, res
     const userEmail = (req.user.email || "").toLowerCase();
     let letter = null;
     if (input.letterId) {
-      letter = await lettersColl.findOne({
-        $or: [
-          { _id: ObjectId.isValid(input.letterId) ? new ObjectId(input.letterId) : input.letterId },
-          { trackingCode: input.letterId }
-        ]
-      });
+      const letterConds = [{ trackingCode: input.letterId }];
+      if (ObjectId.isValid(input.letterId)) {
+        letterConds.unshift({ _id: new ObjectId(input.letterId) });
+      } else {
+        letterConds.unshift({ _id: input.letterId });
+      }
+      letter = await lettersColl.findOne({ $or: letterConds });
       if (letter) {
         const isOwner = letter.senderId?.toString() === userId.toString() || ObjectId.isValid(userId) && letter.senderId?.toString() === new ObjectId(userId).toString();
         if (!isOwner) {
@@ -5584,24 +5660,64 @@ app.post(["/api/payments", "/api/payments/create"], requireAuth, async (req, res
     res.status(500).json({ success: false, error: err.message });
   }
 });
-app.post(["/api/payments/:id/media", "/api/letters/:id/media"], requireAuth, async (req, res) => {
+app.post(["/api/payments/:id/media", "/api/letters/:id/media", "/payments/:id/media", "/letters/:id/media"], requireAuth, async (req, res) => {
   try {
-    const rawId = req.params.id;
+    const rawId = (req.params.id || req.body?.paymentId || "").trim();
     const db = await getDb();
     const paymentsColl = db.collection("payments");
     const lettersColl = db.collection("letters");
     const mediaMetadataColl = db.collection("mediaMetadata");
     const userId = req.user.id;
     const now = /* @__PURE__ */ new Date();
-    let payment = await paymentsColl.findOne({
-      $or: [
-        { _id: ObjectId.isValid(rawId) ? new ObjectId(rawId) : rawId },
-        { paymentId: rawId },
-        { letterId: rawId }
-      ]
-    });
+    if (!rawId || rawId === "undefined" || rawId === "null") {
+      return res.status(400).json({
+        success: false,
+        error: "A valid payment reference ID is required to link media enclosures."
+      });
+    }
+    const lookupConditions = [
+      { paymentId: rawId },
+      { paymentId: rawId.toUpperCase() },
+      { letterId: rawId },
+      { upiReference: rawId },
+      { _id: rawId }
+    ];
+    if (ObjectId.isValid(rawId)) {
+      try {
+        lookupConditions.unshift({ _id: new ObjectId(rawId) });
+      } catch {
+      }
+    }
+    if (req.body?.paymentId && req.body.paymentId !== rawId) {
+      const altId = req.body.paymentId.trim();
+      lookupConditions.push({ paymentId: altId });
+      lookupConditions.push({ paymentId: altId.toUpperCase() });
+      if (ObjectId.isValid(altId)) {
+        try {
+          lookupConditions.push({ _id: new ObjectId(altId) });
+        } catch {
+        }
+      }
+    }
+    let payment = await paymentsColl.findOne({ $or: lookupConditions });
     if (!payment) {
-      return res.status(404).json({ success: false, error: "Associated payment record not found." });
+      payment = await paymentsColl.findOne(
+        {
+          $or: [
+            { userId: userId.toString() },
+            ...ObjectId.isValid(userId) ? [{ userId: new ObjectId(userId) }] : [],
+            ...req.user?.email ? [{ userEmail: req.user.email.toLowerCase() }] : []
+          ],
+          status: "PENDING"
+        },
+        { sort: { createdAt: -1 } }
+      );
+    }
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        error: `Associated payment record not found. Please ensure payment is submitted before uploading media.`
+      });
     }
     const isOwner = payment.userId?.toString() === userId.toString() || ObjectId.isValid(userId) && payment.userId?.toString() === new ObjectId(userId).toString();
     const isAdmin = await verifyAdminServerSide(req);
@@ -5687,13 +5803,15 @@ app.post(["/api/payments/:id/media", "/api/letters/:id/media"], requireAuth, asy
       mediaType,
       mediaStatus: "PENDING",
       fileSize: buffer.length,
+      durationSeconds,
+      paymentId: payment.paymentId || payment._id.toString(),
       message: "Media recording successfully stored in private GridFS vault and linked to payment."
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-app.get("/api/admin/media/:storageKey", requireAdmin, async (req, res) => {
+app.get(["/api/admin/media/:storageKey", "/admin/media/:storageKey", "/api/media/:storageKey", "/media/:storageKey"], requireAdmin, async (req, res) => {
   try {
     const storageKey = req.params.storageKey;
     const db = await getDb();
@@ -5715,7 +5833,7 @@ app.get("/api/admin/media/:storageKey", requireAdmin, async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-app.get(["/api/delivery/media/:token", "/api/delivery/media/:token/:storageKey"], async (req, res) => {
+app.get(["/api/delivery/media/:token", "/api/delivery/media/:token/:storageKey", "/delivery/media/:token", "/delivery/media/:token/:storageKey"], async (req, res) => {
   try {
     const token = req.params.token;
     const db = await getDb();
@@ -5809,7 +5927,7 @@ app.get("/api/user/media/:storageKey", requireAuth, async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-app.get(["/api/payments", "/api/user/payments"], requireAuth, async (req, res) => {
+app.get(["/api/payments", "/api/user/payments", "/payments", "/user/payments"], requireAuth, async (req, res) => {
   try {
     const db = await getDb();
     const paymentsColl = db.collection("payments");
@@ -5887,7 +6005,7 @@ app.get(["/api/payments", "/api/user/payments"], requireAuth, async (req, res) =
     res.status(500).json({ success: false, error: err.message });
   }
 });
-app.get("/api/payments/:id", requireAuth, async (req, res) => {
+app.get(["/api/payments/:id", "/payments/:id"], requireAuth, async (req, res) => {
   try {
     const db = await getDb();
     const paymentsColl = db.collection("payments");
@@ -5963,7 +6081,7 @@ app.get("/api/payments/:id", requireAuth, async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-app.get("/api/admin/payments", requireAdmin, async (req, res) => {
+app.get(["/api/admin/payments", "/admin/payments"], requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
     const paymentsColl = db.collection("payments");
@@ -6049,7 +6167,7 @@ app.get("/api/admin/payments", requireAdmin, async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-app.post(["/api/admin/payments/:id/verify", "/api/admin/payments/:id/approve", "/api/admin/payments/:id/reject"], requireAdmin, async (req, res) => {
+app.post(["/api/admin/payments/:id/verify", "/api/admin/payments/:id/approve", "/api/admin/payments/:id/reject", "/admin/payments/:id/verify", "/admin/payments/:id/approve", "/admin/payments/:id/reject"], requireAdmin, async (req, res) => {
   try {
     const paymentId = req.params.id;
     let targetStatus = req.body.status;
@@ -6073,15 +6191,16 @@ app.post(["/api/admin/payments/:id/verify", "/api/admin/payments/:id/approve", "
     const lettersColl = db.collection("letters");
     const auditColl = db.collection("auditLogs");
     const eventsColl = db.collection("deliveryEvents");
+    const usersColl = db.collection("users");
     let payment = null;
     try {
-      payment = await paymentsColl.findOne({
-        $or: [
-          { _id: ObjectId.isValid(paymentId) ? new ObjectId(paymentId) : paymentId },
-          { paymentId },
-          { upiReference: paymentId }
-        ]
-      });
+      const payConds = [{ paymentId }, { upiReference: paymentId }];
+      if (ObjectId.isValid(paymentId)) {
+        payConds.unshift({ _id: new ObjectId(paymentId) });
+      } else {
+        payConds.unshift({ _id: paymentId });
+      }
+      payment = await paymentsColl.findOne({ $or: payConds });
     } catch {
       payment = await paymentsColl.findOne({ upiReference: paymentId });
     }
@@ -6163,6 +6282,37 @@ app.post(["/api/admin/payments/:id/verify", "/api/admin/payments/:id/approve", "
           createdAt: now
         });
       } catch {
+      }
+    }
+    const senderEmail = payment.userEmail || (payment.userId ? (await usersColl.findOne({ $or: [{ _id: ObjectId.isValid(payment.userId) ? new ObjectId(payment.userId) : payment.userId }, { email: payment.userEmail }] }))?.email : null);
+    if (senderEmail) {
+      if (status === "REJECTED") {
+        try {
+          await sendPaymentIssueEmail({
+            userEmail: senderEmail,
+            orderReference: payment.paymentId || `PAY-${payment._id.toString().slice(-8).toUpperCase()}`,
+            amount: payment.amount || (payment.mediaType === "VIDEO" ? 149 : 99),
+            currency: payment.currency || "INR",
+            adminNote: adminNote || "Payment transaction details could not be verified. Your correspondence will continue without the personal voice/video enclosure.",
+            contactUrl: `${process.env.APP_URL || "https://oldletters.in"}/contact`
+          });
+        } catch (emailErr) {
+          console.warn("[OLD-LETTERS Email Notice] Non-fatal rejection email issue:", emailErr);
+        }
+      } else if (status === "APPROVED") {
+        try {
+          await sendPaymentApprovedEmail({
+            userEmail: senderEmail,
+            orderReference: payment.paymentId || `PAY-${payment._id.toString().slice(-8).toUpperCase()}`,
+            amount: payment.amount || (payment.mediaType === "VIDEO" ? 149 : 99),
+            currency: payment.currency || "INR",
+            featureName: payment.mediaType === "VIDEO" ? "Video Message Enclosure" : "Voice Message Enclosure",
+            adminNote: adminNote || void 0,
+            statusUrl: `${process.env.APP_URL || "https://oldletters.in"}/bureau`
+          });
+        } catch (emailErr) {
+          console.warn("[OLD-LETTERS Email Notice] Non-fatal approval email issue:", emailErr);
+        }
       }
     }
     const updatedPayment = await paymentsColl.findOne({ _id: payment._id });

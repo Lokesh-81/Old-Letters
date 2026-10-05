@@ -9,7 +9,6 @@ import { PostingCeremony } from './PostingCeremony';
 import { postLetter, submitUpiPayment, fetchPaymentConfig } from '../../lib/api';
 import { PaymentRecord } from '../../types/backend';
 import { RecordingStudio } from './RecordingStudio';
-import { UpiPaymentModal } from '../payment/UpiPaymentModal';
 
 interface ComposerFlowProps {
   initialType?: LetterType;
@@ -80,7 +79,6 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   const [generatedDeliveryToken, setGeneratedDeliveryToken] = useState<string | undefined>(undefined);
-  const [activePaymentFeature, setActivePaymentFeature] = useState<'VOICE_NOTE' | 'VIDEO_NOTE' | 'LIVE_MEETING' | null>(null);
   const [mobileView, setMobileView] = useState<'desk' | 'paper'>('desk');
   const [saveIndicator, setSaveIndicator] = useState<'saved' | 'typing'>('saved');
   const [showPhotoModal, setShowPhotoModal] = useState(false);
@@ -123,6 +121,14 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
       return;
     }
 
+    if (!currentUser) {
+      if (onRequestAuth) {
+        onRequestAuth('post');
+      }
+      setPaymentSubmitError('Please sign in or create an account to record personal enclosures.');
+      return;
+    }
+
     try {
       setIsSubmittingPayment(true);
       setPaymentSubmitError(null);
@@ -130,14 +136,22 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
       const price = personalMessageChoice === 'VIDEO' ? 149 : 99;
       const res = await submitUpiPayment({
         letterId: draft.id,
-        featureCode: personalMessageChoice,
-        mediaType: personalMessageChoice,
+        recipientEmail: draft.recipientEmail,
+        recipientName: draft.recipientName,
+        senderName: currentUser.fullName || draft.senderName,
+        featureCode: personalMessageChoice === 'VIDEO' ? 'VIDEO_NOTE' : 'VOICE_NOTE',
+        featureType: personalMessageChoice === 'VIDEO' ? 'VIDEO_MESSAGE' : 'VOICE_MESSAGE',
+        mediaType: personalMessageChoice === 'VIDEO' ? 'VIDEO' : 'VOICE',
         amount: price,
         currency: 'INR',
         upiReference: cleanUpi,
       });
 
-      setConfirmedPayment(res.payment);
+      const p = res.payment;
+      if (!p.paymentId && res.paymentId) {
+        p.paymentId = res.paymentId;
+      }
+      setConfirmedPayment(p);
       // Immediately launch recording studio
       setIsRecordingStudioOpen(true);
     } catch (err: any) {
@@ -789,19 +803,25 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                     </button>
                     <button
                       type="button"
-                      onClick={() => setActivePaymentFeature('VOICE_NOTE')}
+                      onClick={() => {
+                        setPersonalMessageChoice('VOICE');
+                        goToStep('personal-message');
+                      }}
                       className="px-3.5 py-2 bg-white hover:bg-stone-50 border border-stone-300 text-xs font-sans text-stone-700 rounded-xs transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
                     >
                       <span>🎙</span>
-                      <span>Voice Note</span>
+                      <span>Voice Note (₹99)</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => setActivePaymentFeature('VIDEO_NOTE')}
+                      onClick={() => {
+                        setPersonalMessageChoice('VIDEO');
+                        goToStep('personal-message');
+                      }}
                       className="px-3.5 py-2 bg-white hover:bg-stone-50 border border-stone-300 text-xs font-sans text-stone-700 rounded-xs transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
                     >
                       <span>🎞</span>
-                      <span>Video Note</span>
+                      <span>Video Note (₹149)</span>
                     </button>
                   </div>
 
@@ -1214,107 +1234,162 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                       </div>
                     </div>
 
-                    {/* If Voice or Video is selected, show UPI Payment Box immediately */}
+                    {/* If Voice or Video is selected, show UPI Payment Box or Confirmed State */}
                     {personalMessageChoice !== 'LETTER_ONLY' && (
-                      <div className="p-6 bg-white border border-[#eae4da] rounded-xs shadow-paper space-y-5 animate-fade-in">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-stone-100 gap-3">
-                          <div>
-                            <span className="text-[10px] font-mono tracking-widest uppercase text-stone-500">
-                              MANUAL UPI PAYMENT · STRICTLY PENDING UNTIL VERIFIED
-                            </span>
-                            <h4 className="font-serif text-xl text-teal-950">
-                              Scan & Transfer ₹{personalMessageChoice === 'VIDEO' ? '149' : '99'} to Unlock Recording Studio
-                            </h4>
-                          </div>
-                          <div className="text-right font-mono text-xs text-stone-500">
-                            FEE: <strong className="text-teal-900 text-lg">₹{personalMessageChoice === 'VIDEO' ? '149' : '99'}</strong> INR
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                          {/* QR and UPI ID */}
-                          <div className="flex flex-col items-center justify-center p-4 bg-[#faf9f7] border border-[#eae4da] rounded-xs space-y-3 text-center">
-                            <div className="w-36 h-36 bg-white border border-stone-200 p-2 rounded-xs flex items-center justify-center shadow-2xs">
-                              <svg className="w-full h-full text-stone-900" viewBox="0 0 100 100" fill="currentColor">
-                                <rect x="0" y="0" width="30" height="30" />
-                                <rect x="4" y="4" width="22" height="22" fill="#fff" />
-                                <rect x="8" y="8" width="14" height="14" />
-                                <rect x="70" y="0" width="30" height="30" />
-                                <rect x="74" y="4" width="22" height="22" fill="#fff" />
-                                <rect x="78" y="8" width="14" height="14" />
-                                <rect x="0" y="70" width="30" height="30" />
-                                <rect x="4" y="74" width="22" height="22" fill="#fff" />
-                                <rect x="8" y="78" width="14" height="14" />
-                                <rect x="36" y="8" width="6" height="18" />
-                                <rect x="46" y="4" width="16" height="6" />
-                                <rect x="52" y="16" width="10" height="10" />
-                                <rect x="36" y="36" width="12" height="12" />
-                                <rect x="56" y="36" width="14" height="6" />
-                                <rect x="36" y="56" width="8" height="18" />
-                                <rect x="52" y="52" width="18" height="12" />
-                              </svg>
-                            </div>
+                      confirmedPayment ? (
+                        <div className="p-6 bg-white border border-[#eae4da] rounded-xs shadow-paper space-y-5 animate-fade-in">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-stone-100 gap-3">
                             <div>
-                              <span className="text-[10px] font-mono text-stone-400 uppercase block">UPI VPA</span>
-                              <div className="flex items-center gap-1.5 justify-center">
-                                <code className="font-mono text-xs text-stone-800 font-semibold">{paymentConfig.upiId}</code>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    navigator.clipboard?.writeText(paymentConfig.upiId);
-                                    setCopiedUpi(true);
-                                    setTimeout(() => setCopiedUpi(false), 2000);
-                                  }}
-                                  className="text-[10px] font-mono text-teal-800 hover:underline cursor-pointer"
-                                >
-                                  {copiedUpi ? 'Copied!' : 'Copy'}
-                                </button>
-                              </div>
+                              <span className="text-[10px] font-mono tracking-widest uppercase text-emerald-800 font-semibold flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                                UPI PAYMENT REGISTERED · STATUS: {confirmedPayment.status || 'PENDING'}
+                              </span>
+                              <h4 className="font-serif text-xl text-teal-950 mt-1">
+                                Recording Studio Unlocked ({confirmedPayment.paymentId})
+                              </h4>
+                            </div>
+                            <div className="text-right font-mono text-xs text-stone-500">
+                              UTR: <code className="text-teal-900 font-semibold">{confirmedPayment.upiReference}</code>
                             </div>
                           </div>
 
-                          {/* UTR Input Form */}
-                          <div className="space-y-4">
-                            <div>
-                              <label className="block text-[11px] font-mono uppercase tracking-wider text-stone-600 mb-1.5">
-                                UPI Transaction ID / UTR Number (12 Digits)
-                              </label>
-                              <input
-                                type="text"
-                                value={upiReferenceInput}
-                                onChange={(e) => {
-                                  setUpiReferenceInput(e.target.value);
-                                  setPaymentSubmitError(null);
-                                }}
-                                placeholder="e.g. 427189034512"
-                                className="w-full bg-[#faf9f7] border border-stone-300 focus:border-teal-900 px-4 py-3 font-mono text-sm tracking-wider text-stone-900 rounded-xs focus:outline-none shadow-2xs"
-                              />
-                              <span className="text-[10px] font-mono text-stone-400 block mt-1">
-                                Found in your UPI app payment receipt (Google Pay, PhonePe, Paytm, etc.)
+                          <div className="bg-[#faf9f7] border border-[#eae4da] p-4 rounded-xs text-xs font-mono space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-stone-500">PAYMENT REFERENCE:</span>
+                              <span className="font-semibold text-teal-900">{confirmedPayment.paymentId}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-stone-500">ENCLOSURE TYPE:</span>
+                              <span className="font-semibold uppercase">{personalMessageChoice} MESSAGE (₹{personalMessageChoice === 'VIDEO' ? '149' : '99'} INR)</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-stone-500">RECORDING ATTACHMENT:</span>
+                              <span className={personalMessageEnclosure?.mediaStorageKey ? 'text-emerald-700 font-semibold' : 'text-amber-800'}>
+                                {personalMessageEnclosure?.mediaStorageKey ? `Attached (${personalMessageEnclosure.durationSeconds || 0}s duration)` : 'Awaiting Recording Studio'}
                               </span>
                             </div>
+                          </div>
 
-                            {paymentSubmitError && (
-                              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-mono rounded-xs">
-                                {paymentSubmitError}
-                              </div>
-                            )}
-
+                          <div className="flex flex-col sm:flex-row gap-3 pt-2">
                             <button
                               type="button"
-                              disabled={isSubmittingPayment || !upiReferenceInput.trim()}
-                              onClick={handleSubmitUpiPayment}
-                              className="w-full py-3.5 bg-teal-900 hover:bg-teal-800 disabled:bg-stone-300 text-white font-sans text-xs tracking-wider uppercase font-semibold rounded-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                              onClick={() => setIsRecordingStudioOpen(true)}
+                              className="flex-1 py-3.5 bg-teal-900 hover:bg-teal-800 text-white font-sans text-xs tracking-wider uppercase font-semibold rounded-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
                             >
-                              {isSubmittingPayment ? (
-                                <span>CREATING PAYMENT & OPENING STUDIO...</span>
-                              ) : (
-                                <span>SUBMIT PAYMENT & OPEN RECORDING STUDIO →</span>
-                              )}
+                              <span>{personalMessageEnclosure?.mediaStorageKey ? 'OPEN STUDIO TO RE-RECORD →' : 'OPEN RECORDING STUDIO →'}</span>
                             </button>
+                            {personalMessageEnclosure?.mediaStorageKey && (
+                              <button
+                                type="button"
+                                onClick={() => goToStep('review')}
+                                className="px-6 py-3.5 bg-white border border-teal-900 text-teal-900 hover:bg-stone-50 text-xs font-sans tracking-wider uppercase font-semibold rounded-xs cursor-pointer shadow-xs"
+                              >
+                                PROCEED TO REVIEW →
+                              </button>
+                            )}
                           </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="p-6 bg-white border border-[#eae4da] rounded-xs shadow-paper space-y-5 animate-fade-in">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-stone-100 gap-3">
+                            <div>
+                              <span className="text-[10px] font-mono tracking-widest uppercase text-stone-500">
+                                MANUAL UPI PAYMENT · STRICTLY PENDING UNTIL VERIFIED
+                              </span>
+                              <h4 className="font-serif text-xl text-teal-950">
+                                Scan & Transfer ₹{personalMessageChoice === 'VIDEO' ? '149' : '99'} to Unlock Recording Studio
+                              </h4>
+                            </div>
+                            <div className="text-right font-mono text-xs text-stone-500">
+                              FEE: <strong className="text-teal-900 text-lg">₹{personalMessageChoice === 'VIDEO' ? '149' : '99'}</strong> INR
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                            {/* QR and UPI ID */}
+                            <div className="flex flex-col items-center justify-center p-4 bg-[#faf9f7] border border-[#eae4da] rounded-xs space-y-3 text-center">
+                              <div className="w-36 h-36 bg-white border border-stone-200 p-2 rounded-xs flex items-center justify-center shadow-2xs">
+                                <svg className="w-full h-full text-stone-900" viewBox="0 0 100 100" fill="currentColor">
+                                  <rect x="0" y="0" width="30" height="30" />
+                                  <rect x="4" y="4" width="22" height="22" fill="#fff" />
+                                  <rect x="8" y="8" width="14" height="14" />
+                                  <rect x="70" y="0" width="30" height="30" />
+                                  <rect x="74" y="4" width="22" height="22" fill="#fff" />
+                                  <rect x="78" y="8" width="14" height="14" />
+                                  <rect x="0" y="70" width="30" height="30" />
+                                  <rect x="4" y="74" width="22" height="22" fill="#fff" />
+                                  <rect x="8" y="78" width="14" height="14" />
+                                  <rect x="36" y="8" width="6" height="18" />
+                                  <rect x="46" y="4" width="16" height="6" />
+                                  <rect x="52" y="16" width="10" height="10" />
+                                  <rect x="36" y="36" width="12" height="12" />
+                                  <rect x="56" y="36" width="14" height="6" />
+                                  <rect x="36" y="56" width="8" height="18" />
+                                  <rect x="52" y="52" width="18" height="12" />
+                                </svg>
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-mono text-stone-400 uppercase block">UPI VPA</span>
+                                <div className="flex items-center gap-1.5 justify-center">
+                                  <code className="font-mono text-xs text-stone-800 font-semibold">{paymentConfig.upiId}</code>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard?.writeText(paymentConfig.upiId);
+                                      setCopiedUpi(true);
+                                      setTimeout(() => setCopiedUpi(false), 2000);
+                                    }}
+                                    className="text-[10px] font-mono text-teal-800 hover:underline cursor-pointer"
+                                  >
+                                    {copiedUpi ? 'Copied!' : 'Copy'}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* UTR Input Form */}
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-[11px] font-mono uppercase tracking-wider text-stone-600 mb-1.5">
+                                  UPI Transaction ID / UTR Number (12 Digits)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={upiReferenceInput}
+                                  onChange={(e) => {
+                                    setUpiReferenceInput(e.target.value);
+                                    setPaymentSubmitError(null);
+                                  }}
+                                  placeholder="e.g. 427189034512"
+                                  className="w-full bg-[#faf9f7] border border-stone-300 focus:border-teal-900 px-4 py-3 font-mono text-sm tracking-wider text-stone-900 rounded-xs focus:outline-none shadow-2xs"
+                                />
+                                <span className="text-[10px] font-mono text-stone-400 block mt-1">
+                                  Found in your UPI app payment receipt (Google Pay, PhonePe, Paytm, etc.)
+                                </span>
+                              </div>
+
+                              {paymentSubmitError && (
+                                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-mono rounded-xs">
+                                  {paymentSubmitError}
+                                </div>
+                              )}
+
+                              <button
+                                type="button"
+                                disabled={isSubmittingPayment || !upiReferenceInput.trim()}
+                                onClick={handleSubmitUpiPayment}
+                                className="w-full py-3.5 bg-teal-900 hover:bg-teal-800 disabled:bg-stone-300 text-white font-sans text-xs tracking-wider uppercase font-semibold rounded-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                              >
+                                {isSubmittingPayment ? (
+                                  <span>CREATING PAYMENT & OPENING STUDIO...</span>
+                                ) : (
+                                  <span>SUBMIT PAYMENT & OPEN RECORDING STUDIO →</span>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )
                     )}
 
                     {/* Step Navigation Bar */}
@@ -1327,7 +1402,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                         ← Back to Delivery
                       </button>
 
-                      {personalMessageChoice === 'LETTER_ONLY' && (
+                      {personalMessageChoice === 'LETTER_ONLY' ? (
                         <button
                           type="button"
                           onClick={() => {
@@ -1338,6 +1413,16 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                         >
                           Continue to Review Letter →
                         </button>
+                      ) : (
+                        personalMessageEnclosure?.mediaStorageKey && (
+                          <button
+                            type="button"
+                            onClick={() => goToStep('review')}
+                            className="px-6 py-3 bg-teal-900 hover:bg-teal-800 text-white text-xs font-sans font-medium uppercase tracking-wider rounded-xs cursor-pointer shadow-md active:scale-[0.96]"
+                          >
+                            Continue to Review Letter →
+                          </button>
+                        )
                       )}
                     </div>
                   </>
@@ -1471,17 +1556,6 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
           </AnimatePresence>
         </div>
       </div>
-
-      {/* Manual UPI Payment Modal */}
-      {activePaymentFeature && (
-        <UpiPaymentModal
-          isOpen={true}
-          featureCode={activePaymentFeature}
-          letterId={draft.id}
-          onClose={() => setActivePaymentFeature(null)}
-          onPaymentSubmitted={() => {}}
-        />
-      )}
 
       {/* Photo Enclosure Modal */}
       {showPhotoModal && (

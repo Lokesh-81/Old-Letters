@@ -1,6 +1,8 @@
 {
-  "name": "OLD-LETTERS",
+  "name": "Remix Remix Remix OLD-LETTERS",
   "description": "Modern luxury digital correspondence. Some things are worth waiting for.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

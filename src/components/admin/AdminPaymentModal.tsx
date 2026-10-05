@@ -160,7 +160,7 @@ export const AdminPaymentModal: React.FC<AdminPaymentModalProps> = ({
                       ₹{item.amount}
                     </span>
                     <span className="text-[11px] font-mono uppercase bg-[#faf9f7] px-2 py-0.5 border border-stone-200 text-stone-700 rounded-xs">
-                      {item.featureCode.replace('_', ' ')}
+                      {item.featureCode ? item.featureCode.replace('_', ' ') : (item.mediaType || 'ENCLOSURE')}
                     </span>
                     <span
                       className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded-xs ${

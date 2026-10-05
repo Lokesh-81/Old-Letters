@@ -282,8 +282,8 @@ export const RecordingStudio: React.FC<RecordingStudioProps> = ({
             {mediaType === 'VOICE' ? 'VOICE RECORDING STUDIO' : 'VIDEO RECORDING STUDIO'}
           </span>
           <span className="text-stone-300">·</span>
-          <span className="text-[11px] font-mono text-teal-900 bg-teal-50 px-2 py-0.5 rounded-xs border border-teal-200">
-            PAYMENT CONFIRMED: ₹{mediaType === 'VOICE' ? '99' : '149'}
+          <span className="text-[11px] font-mono text-amber-900 bg-amber-50 px-2.5 py-0.5 rounded-xs border border-amber-300 font-medium">
+            Payment submitted — awaiting verification (₹{mediaType === 'VOICE' ? '99' : '149'})
           </span>
         </div>
 
@@ -437,12 +437,14 @@ export const RecordingStudio: React.FC<RecordingStudioProps> = ({
         <div className="flex items-center justify-between text-xs font-mono text-stone-600 bg-[#faf9f7] p-3 rounded-xs border border-stone-200">
           <div>
             STATUS:{' '}
-            <strong className="text-teal-900 uppercase">
-              {recordingState === 'idle'
-                ? 'READY TO INSCRIBE'
+            <strong className="text-teal-900">
+              {isUploading
+                ? 'Saving your personal message...'
+                : recordingState === 'idle'
+                ? 'Ready to record your personal message'
                 : recordingState === 'recording'
-                ? 'INSCRIBING MEDIA...'
-                : 'RECORDING COMPLETE'}
+                ? 'Recording your personal message...'
+                : 'Preview your message'}
             </strong>
           </div>
           <div>

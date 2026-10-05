@@ -356,7 +356,9 @@ class MemoryCollection<T extends { _id?: any }> {
     for (const [k, v] of Object.entries(query)) {
       if (k === '$or' || k === '$and') continue;
 
-      if (v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date) && !(v instanceof ObjectId)) {
+      if (v instanceof RegExp) {
+        if (!v.test(String(doc[k] ?? ''))) return false;
+      } else if (v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date) && !(v instanceof ObjectId)) {
         if ('$lte' in v && !(doc[k] <= (v as any).$lte)) return false;
         if ('$gte' in v && !(doc[k] >= (v as any).$gte)) return false;
         if ('$eq' in v && doc[k] !== (v as any).$eq) return false;
@@ -463,22 +465,16 @@ let clientPromise: Promise<MongoClient> | null = null;
 let isRealMongo = false;
 
 if (uri && (uri.startsWith('mongodb://') || uri.startsWith('mongodb+srv://'))) {
-  if (process.env.NODE_ENV === 'development') {
-    if (!global._mongoClientPromise) {
-      const client = new MongoClient(uri, {
-        maxPoolSize: 10,
-        serverSelectionTimeoutMS: 5000,
-      });
-      global._mongoClientPromise = client.connect();
-    }
-    clientPromise = global._mongoClientPromise;
-  } else {
+  if (!globalThis._mongoClientPromise) {
     const client = new MongoClient(uri, {
       maxPoolSize: 10,
-      serverSelectionTimeoutMS: 5000,
+      minPoolSize: 1,
+      connectTimeoutMS: 10000,
+      serverSelectionTimeoutMS: 10000,
     });
-    clientPromise = client.connect();
+    globalThis._mongoClientPromise = client.connect();
   }
+  clientPromise = globalThis._mongoClientPromise;
   isRealMongo = true;
 }
 

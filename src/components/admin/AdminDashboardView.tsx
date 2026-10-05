@@ -387,7 +387,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           ₹{item.amount}
                         </span>
                         <span className="text-xs font-mono uppercase bg-stone-100 px-2.5 py-1 border border-stone-200 text-stone-800 rounded-xs">
-                          {item.featureCode.replace('_', ' ')}
+                          {item.featureCode ? item.featureCode.replace('_', ' ') : (item.mediaType || 'ENCLOSURE')}
                         </span>
                         <span
                           className={`text-xs font-mono uppercase px-2.5 py-1 rounded-xs font-semibold ${

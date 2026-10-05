@@ -571,31 +571,31 @@ export async function sendPaymentIssueEmail(params: {
   adminNote?: string;
   contactUrl: string;
 }) {
-  const subject = 'Action required — payment verification issue';
+  const subject = 'Your OLD-LETTERS payment requires attention';
   const html = emailWrapper(
-    'Action Required — Payment Verification Issue',
+    'Your OLD-LETTERS payment requires attention',
     `PAYMENT REF: ${params.orderReference}`,
     `
       <p style="margin-top: 0;">Greetings,</p>
       <p>
-        The bureau administrator was unable to verify the UPI payment submitted for reference <strong>${params.orderReference}</strong> (₹${params.amount} ${params.currency}).
+        Your payment could not be verified.
       </p>
       <div style="background-color: #fef2f2; border-left: 3px solid #dc2626; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; font-size: 13px; color: #991b1b;">
-        <strong style="display: block; margin-bottom: 4px;">Reason for Verification Hold:</strong>
-        ${params.adminNote || 'Transaction reference number (UTR) could not be matched with bank statements.'}
+        <strong style="display: block; margin-bottom: 4px;">Bureau Notice:</strong>
+        Your OLD-LETTERS payment could not be fully verified because the transaction details provided could not be confirmed.
+        ${params.adminNote ? `<br/><br/><strong>Administrator Note:</strong> ${params.adminNote}` : ''}
       </div>
       <p style="font-size: 13px; color: #44403c;">
-        To assist us in confirming your transaction, please reply to this email or submit your actual payment proof with the following details:
+        Your letter will continue without the personal voice/video enclosure.
       </p>
-      <ul style="font-size: 13px; color: #57534e; line-height: 1.8;">
-        <li>A clear screenshot of your bank/UPI payment debit screen</li>
-        <li>The 12-digit UPI Transaction ID / UTR reference number</li>
-        <li>Exact date and time of payment</li>
-        <li>Amount paid (₹${params.amount})</li>
-      </ul>
-      <p style="font-size: 12px; color: #78716c; font-style: italic;">
-        Please do not submit fabricated receipts. Once authentic proof is verified, your order will be activated immediately.
+      <p style="font-size: 13px; color: #57534e;">
+        If you believe this was an error, please contact the Correspondence Office.
       </p>
+      <div style="text-align: center; margin: 28px 0 10px 0;">
+        <a href="${params.contactUrl}" style="background-color: #134e4a; color: #ffffff; padding: 12px 26px; font-size: 11px; text-decoration: none; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
+          CONTACT CORRESPONDENCE OFFICE →
+        </a>
+      </div>
     `
   );
 
@@ -603,6 +603,6 @@ export async function sendPaymentIssueEmail(params: {
     to: params.userEmail,
     subject,
     html,
-    text: `Action required for payment reference ${params.orderReference}. Reason: ${params.adminNote || 'Payment could not be verified'}. Please provide payment proof screenshot, UTR number, date/time, and amount paid.`,
+    text: `Your OLD-LETTERS payment requires attention.\n\nYour payment could not be verified.\n\nYour OLD-LETTERS payment could not be fully verified because the transaction details provided could not be confirmed.\n\nYour letter will continue without the personal voice/video enclosure.\n\nIf you believe this was an error, please contact the Correspondence Office.`,
   });
 }

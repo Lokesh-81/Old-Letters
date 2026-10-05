@@ -20,6 +20,8 @@ import {
   sendHalfwayRecipientEmail,
   sendPreArrivalOtpRecipientEmail,
   sendArrivalRecipientEmail,
+  sendPaymentApprovedEmail,
+  sendPaymentIssueEmail,
 } from './src/lib/email';
 import {
   CreateLetterSchema,
@@ -90,6 +92,16 @@ app.use((req, res, next) => {
   const forwardedUri = (req.headers['x-forwarded-uri'] || req.headers['x-matched-path'] || req.headers['x-invoke-path']) as string | undefined;
   if (forwardedUri && forwardedUri.startsWith('/api') && !req.url.startsWith('/api')) {
     req.url = forwardedUri;
+  } else if (!req.url.startsWith('/api') && (
+    req.url.startsWith('/payments') ||
+    req.url.startsWith('/letters') ||
+    req.url.startsWith('/auth') ||
+    req.url.startsWith('/admin') ||
+    req.url.startsWith('/delivery') ||
+    req.url.startsWith('/user') ||
+    req.url.startsWith('/scheduler')
+  )) {
+    req.url = `/api${req.url}`;
   }
 
   next();
@@ -1976,19 +1988,19 @@ app.post(['/api/letters/draft', '/api/letters/save-draft'], requireAuth, async (
           },
         }
       );
-      const updated = await lettersColl.findOne({ _id: letter._id });
+      const updated: any = (await lettersColl.findOne({ _id: letter._id })) || letter;
       return res.json({
         success: true,
         letter: {
-          id: updated._id.toString(),
-          trackingCode: updated.trackingCode,
-          type: updated.letterType,
-          templateId: updated.templateId,
-          recipientName: updated.recipientName,
-          recipientEmail: updated.recipientEmail,
-          status: updated.status,
-          scheduledDeliveryAt: updated.scheduledDeliveryAt?.toISOString(),
-          waitingHours: updated.waitingHours,
+          id: (updated._id || letter._id).toString(),
+          trackingCode: updated.trackingCode || letter.trackingCode,
+          type: updated.letterType || letter.letterType,
+          templateId: updated.templateId || letter.templateId,
+          recipientName: updated.recipientName || letter.recipientName,
+          recipientEmail: updated.recipientEmail || letter.recipientEmail,
+          status: updated.status || letter.status,
+          scheduledDeliveryAt: updated.scheduledDeliveryAt?.toISOString ? updated.scheduledDeliveryAt.toISOString() : updated.scheduledDeliveryAt,
+          waitingHours: updated.waitingHours || letter.waitingHours,
         },
       });
     }
@@ -3764,7 +3776,7 @@ app.post(['/api/testing/advance-delivery', '/api/delivery/advance'], async (req,
 // ====================================================================
 
 // 1. Submit UTR Payment (Strictly authenticated, letter ownership verified, duplicate protected)
-app.post(['/api/payments', '/api/payments/create'], requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post(['/api/payments', '/api/payments/create', '/payments', '/payments/create'], requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const parseResult = SubmitPaymentSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -3785,12 +3797,13 @@ app.post(['/api/payments', '/api/payments/create'], requireAuth, async (req: Aut
     // Verify Letter Ownership if letterId is supplied
     let letter: any = null;
     if (input.letterId) {
-      letter = await lettersColl.findOne({
-        $or: [
-          { _id: ObjectId.isValid(input.letterId) ? new ObjectId(input.letterId) : input.letterId },
-          { trackingCode: input.letterId },
-        ],
-      });
+      const letterConds: any[] = [{ trackingCode: input.letterId }];
+      if (ObjectId.isValid(input.letterId)) {
+        letterConds.unshift({ _id: new ObjectId(input.letterId) });
+      } else {
+        letterConds.unshift({ _id: input.letterId as any });
+      }
+      letter = await lettersColl.findOne({ $or: letterConds });
 
       if (letter) {
         const isOwner =
@@ -3947,9 +3960,9 @@ app.post(['/api/payments', '/api/payments/create'], requireAuth, async (req: Aut
 });
 
 // 2. Upload Recorded Audio/Video Media to Private GridFS Vault
-app.post(['/api/payments/:id/media', '/api/letters/:id/media'], requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post(['/api/payments/:id/media', '/api/letters/:id/media', '/payments/:id/media', '/letters/:id/media'], requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const rawId = req.params.id;
+    const rawId = (req.params.id || req.body?.paymentId || '').trim();
     const db = await getDb();
     const paymentsColl = db.collection('payments');
     const lettersColl = db.collection('letters');
@@ -3957,17 +3970,60 @@ app.post(['/api/payments/:id/media', '/api/letters/:id/media'], requireAuth, asy
     const userId = req.user!.id;
     const now = new Date();
 
-    // Find target payment record
-    let payment: any = await paymentsColl.findOne({
-      $or: [
-        { _id: ObjectId.isValid(rawId) ? new ObjectId(rawId) : rawId },
-        { paymentId: rawId },
-        { letterId: rawId },
-      ],
-    });
+    if (!rawId || rawId === 'undefined' || rawId === 'null') {
+      return res.status(400).json({
+        success: false,
+        error: 'A valid payment reference ID is required to link media enclosures.',
+      });
+    }
+
+    // Find target payment record by any valid identifier
+    const lookupConditions: any[] = [
+      { paymentId: rawId },
+      { paymentId: rawId.toUpperCase() },
+      { letterId: rawId },
+      { upiReference: rawId },
+      { _id: rawId },
+    ];
+    if (ObjectId.isValid(rawId)) {
+      try {
+        lookupConditions.unshift({ _id: new ObjectId(rawId) });
+      } catch {}
+    }
+
+    if (req.body?.paymentId && req.body.paymentId !== rawId) {
+      const altId = req.body.paymentId.trim();
+      lookupConditions.push({ paymentId: altId });
+      lookupConditions.push({ paymentId: altId.toUpperCase() });
+      if (ObjectId.isValid(altId)) {
+        try {
+          lookupConditions.push({ _id: new ObjectId(altId) });
+        } catch {}
+      }
+    }
+
+    let payment: any = await paymentsColl.findOne({ $or: lookupConditions });
+
+    // Fallback: If not matched directly, find the user's latest PENDING payment created in the last 2 hours
+    if (!payment) {
+      payment = await paymentsColl.findOne(
+        {
+          $or: [
+            { userId: userId.toString() },
+            ...(ObjectId.isValid(userId) ? [{ userId: new ObjectId(userId) }] : []),
+            ...(req.user?.email ? [{ userEmail: req.user.email.toLowerCase() }] : []),
+          ],
+          status: 'PENDING',
+        },
+        { sort: { createdAt: -1 } }
+      );
+    }
 
     if (!payment) {
-      return res.status(404).json({ success: false, error: 'Associated payment record not found.' });
+      return res.status(404).json({
+        success: false,
+        error: `Associated payment record not found. Please ensure payment is submitted before uploading media.`,
+      });
     }
 
     const isOwner =
@@ -4073,6 +4129,8 @@ app.post(['/api/payments/:id/media', '/api/letters/:id/media'], requireAuth, asy
       mediaType,
       mediaStatus: 'PENDING',
       fileSize: buffer.length,
+      durationSeconds,
+      paymentId: payment.paymentId || payment._id.toString(),
       message: 'Media recording successfully stored in private GridFS vault and linked to payment.',
     });
   } catch (err: any) {
@@ -4081,7 +4139,7 @@ app.post(['/api/payments/:id/media', '/api/letters/:id/media'], requireAuth, asy
 });
 
 // 3. Admin: Stream Private Media for Verification Preview
-app.get('/api/admin/media/:storageKey', requireAdmin, async (req: AuthenticatedRequest, res) => {
+app.get(['/api/admin/media/:storageKey', '/admin/media/:storageKey', '/api/media/:storageKey', '/media/:storageKey'], requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const storageKey = req.params.storageKey;
     const db = await getDb();
@@ -4108,7 +4166,7 @@ app.get('/api/admin/media/:storageKey', requireAdmin, async (req: AuthenticatedR
 });
 
 // 4. Recipient: Stream Private Media (Strictly upon arrival & after admin verification approval)
-app.get(['/api/delivery/media/:token', '/api/delivery/media/:token/:storageKey'], async (req, res) => {
+app.get(['/api/delivery/media/:token', '/api/delivery/media/:token/:storageKey', '/delivery/media/:token', '/delivery/media/:token/:storageKey'], async (req, res) => {
   try {
     const token = req.params.token;
     const db = await getDb();
@@ -4228,7 +4286,7 @@ app.get('/api/user/media/:storageKey', requireAuth, async (req: AuthenticatedReq
 });
 
 // 6. List User's Payments (All statuses: PENDING, APPROVED, REJECTED)
-app.get(['/api/payments', '/api/user/payments'], requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get(['/api/payments', '/api/user/payments', '/payments', '/user/payments'], requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const db = await getDb();
     const paymentsColl = db.collection('payments');
@@ -4315,7 +4373,7 @@ app.get(['/api/payments', '/api/user/payments'], requireAuth, async (req: Authen
 });
 
 // 7. Single Payment Lookup (Protected: user or admin only)
-app.get('/api/payments/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get(['/api/payments/:id', '/payments/:id'], requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const db = await getDb();
     const paymentsColl = db.collection('payments');
@@ -4405,7 +4463,7 @@ app.get('/api/payments/:id', requireAuth, async (req: AuthenticatedRequest, res)
 // ====================================================================
 
 // 8. Admin: List Payments for Review (Exact same MongoDB payment document)
-app.get('/api/admin/payments', requireAdmin, async (req: AuthenticatedRequest, res) => {
+app.get(['/api/admin/payments', '/admin/payments'], requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const db = await getDb();
     const paymentsColl = db.collection('payments');
@@ -4498,7 +4556,7 @@ app.get('/api/admin/payments', requireAdmin, async (req: AuthenticatedRequest, r
 });
 
 // 9. Admin: Verify Payment (Approve or Reject)
-app.post(['/api/admin/payments/:id/verify', '/api/admin/payments/:id/approve', '/api/admin/payments/:id/reject'], requireAdmin, async (req: AuthenticatedRequest, res) => {
+app.post(['/api/admin/payments/:id/verify', '/api/admin/payments/:id/approve', '/api/admin/payments/:id/reject', '/admin/payments/:id/verify', '/admin/payments/:id/approve', '/admin/payments/:id/reject'], requireAdmin, async (req: AuthenticatedRequest, res) => {
   try {
     const paymentId = req.params.id;
     let targetStatus: 'APPROVED' | 'REJECTED' = req.body.status;
@@ -4525,16 +4583,17 @@ app.post(['/api/admin/payments/:id/verify', '/api/admin/payments/:id/approve', '
     const lettersColl = db.collection('letters');
     const auditColl = db.collection('auditLogs');
     const eventsColl = db.collection('deliveryEvents');
+    const usersColl = db.collection('users');
 
     let payment = null;
     try {
-      payment = await paymentsColl.findOne({
-        $or: [
-          { _id: ObjectId.isValid(paymentId) ? new ObjectId(paymentId) : paymentId },
-          { paymentId },
-          { upiReference: paymentId },
-        ],
-      });
+      const payConds: any[] = [{ paymentId }, { upiReference: paymentId }];
+      if (ObjectId.isValid(paymentId)) {
+        payConds.unshift({ _id: new ObjectId(paymentId) });
+      } else {
+        payConds.unshift({ _id: paymentId as any });
+      }
+      payment = await paymentsColl.findOne({ $or: payConds });
     } catch {
       payment = await paymentsColl.findOne({ upiReference: paymentId });
     }
@@ -4627,6 +4686,39 @@ app.post(['/api/admin/payments/:id/verify', '/api/admin/payments/:id/approve', '
           createdAt: now,
         });
       } catch {}
+    }
+
+    // 6. Send Email Notifications (Strictly non-blocking)
+    const senderEmail = payment.userEmail || (payment.userId ? (await usersColl.findOne({ $or: [{ _id: ObjectId.isValid(payment.userId) ? new ObjectId(payment.userId) : payment.userId }, { email: payment.userEmail }] }))?.email : null);
+    if (senderEmail) {
+      if (status === 'REJECTED') {
+        try {
+          await sendPaymentIssueEmail({
+            userEmail: senderEmail,
+            orderReference: payment.paymentId || `PAY-${payment._id.toString().slice(-8).toUpperCase()}`,
+            amount: payment.amount || (payment.mediaType === 'VIDEO' ? 149 : 99),
+            currency: payment.currency || 'INR',
+            adminNote: adminNote || 'Payment transaction details could not be verified. Your correspondence will continue without the personal voice/video enclosure.',
+            contactUrl: `${process.env.APP_URL || 'https://oldletters.in'}/contact`,
+          });
+        } catch (emailErr) {
+          console.warn('[OLD-LETTERS Email Notice] Non-fatal rejection email issue:', emailErr);
+        }
+      } else if (status === 'APPROVED') {
+        try {
+          await sendPaymentApprovedEmail({
+            userEmail: senderEmail,
+            orderReference: payment.paymentId || `PAY-${payment._id.toString().slice(-8).toUpperCase()}`,
+            amount: payment.amount || (payment.mediaType === 'VIDEO' ? 149 : 99),
+            currency: payment.currency || 'INR',
+            featureName: payment.mediaType === 'VIDEO' ? 'Video Message Enclosure' : 'Voice Message Enclosure',
+            adminNote: adminNote || undefined,
+            statusUrl: `${process.env.APP_URL || 'https://oldletters.in'}/bureau`,
+          });
+        } catch (emailErr) {
+          console.warn('[OLD-LETTERS Email Notice] Non-fatal approval email issue:', emailErr);
+        }
+      }
     }
 
     const updatedPayment = await paymentsColl.findOne({ _id: payment._id });

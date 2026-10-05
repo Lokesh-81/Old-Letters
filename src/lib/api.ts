@@ -398,9 +398,10 @@ export async function fetchPaymentConfig(): Promise<{
 
 export async function submitUpiPayment(payload: SubmitPaymentInput): Promise<{
   payment: PaymentRecord;
+  paymentId: string;
   message: string;
 }> {
-  const res = await apiFetch('/payments/create', {
+  const res = await apiFetch('/payments', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -422,15 +423,17 @@ export async function submitUpiPayment(payload: SubmitPaymentInput): Promise<{
   }
 
   const p = data.payment;
-  if (data.paymentId && !p.paymentId) {
-    p.paymentId = data.paymentId;
+  const canonicalId = data.paymentId || p.paymentId || data.id || p.id;
+  if (!p.paymentId && canonicalId) {
+    p.paymentId = canonicalId;
   }
-  if (data.id && !p.id) {
-    p.id = data.id;
+  if (!p.id && (data.id || data.paymentId)) {
+    p.id = data.id || data.paymentId!;
   }
 
   return {
     payment: p,
+    paymentId: canonicalId,
     message: data.message || 'Payment reference submitted.',
   };
 }
@@ -444,14 +447,20 @@ export async function uploadMediaAttachment(
   mediaType: 'VOICE' | 'VIDEO';
   mediaStatus: string;
   fileSize: number;
+  durationSeconds?: number;
+  paymentId?: string;
   message: string;
 }> {
-  const res = await apiFetch(`/payments/${paymentIdOrLetterId}/media`, {
+  const cleanId = (paymentIdOrLetterId || '').trim();
+  const res = await apiFetch(`/payments/${cleanId}/media`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      paymentId: cleanId,
+    }),
   });
 
   const data = await safeParseJson<{
@@ -460,6 +469,8 @@ export async function uploadMediaAttachment(
     mediaType: 'VOICE' | 'VIDEO';
     mediaStatus: string;
     fileSize: number;
+    durationSeconds?: number;
+    paymentId?: string;
     message: string;
     error?: string;
   }>(res, 'Failed to upload media enclosure.');
