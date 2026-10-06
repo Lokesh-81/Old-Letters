@@ -89,7 +89,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
             </span>
           </motion.div>
 
-          {/* Animated Handwritten Signature for "Old-Letters" */}
+          {/* Animated Handwritten Signature for "OLD-LETTERS" */}
           <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -97,7 +97,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
             className="flex items-center justify-center px-4"
           >
             <Signature
-              text="Old-Letters"
+              text="OLD-LETTERS"
               color="#134e4a"
               fontSize={54}
               duration={0.65}

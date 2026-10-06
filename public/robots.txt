@@ -1,19 +1,92 @@
 # robots.txt for OLD-LETTERS (https://oldletters.vercel.app)
 User-agent: *
-Allow: /$
+Allow: /
 Allow: /how-it-works
 Allow: /cookies
 Allow: /privacy
 Allow: /terms
+Allow: /logo.png
+Allow: /favicon.png
+Allow: /sitemap.xml
 
-# Disallow private, authenticated, administrative, and tokenized letter routes
+# Disallow private, authenticated, administrative, payment, and tokenized recipient routes
 Disallow: /api/
-Disallow: /letter/
+Disallow: /admin
+Disallow: /admin/
+Disallow: /studio
+Disallow: /dashboard
+Disallow: /bureau
+Disallow: /profile
+Disallow: /account
 Disallow: /composer
 Disallow: /archive
+Disallow: /letter/
 Disallow: /recipient
-Disallow: /admin
-Disallow: /bureau
+Disallow: /login
+Disallow: /signup
+Disallow: /payment
+Disallow: /payments/
 
-# Sitemap declaration
+# AI Crawlers: Allow public knowledge & AEO discovery, disallow private correspondence
+User-agent: GPTBot
+Allow: /
+Allow: /how-it-works
+Allow: /cookies
+Allow: /privacy
+Allow: /terms
+Disallow: /api/
+Disallow: /admin/
+Disallow: /bureau/
+Disallow: /profile/
+Disallow: /account/
+Disallow: /composer/
+Disallow: /archive/
+Disallow: /letter/
+Disallow: /recipient/
+Disallow: /payments/
+
+User-agent: ClaudeBot
+Allow: /
+Allow: /how-it-works
+Allow: /cookies
+Allow: /privacy
+Allow: /terms
+Disallow: /api/
+Disallow: /admin/
+Disallow: /bureau/
+Disallow: /profile/
+Disallow: /account/
+Disallow: /composer/
+Disallow: /archive/
+Disallow: /letter/
+Disallow: /recipient/
+Disallow: /payments/
+
+User-agent: PerplexityBot
+Allow: /
+Allow: /how-it-works
+Allow: /cookies
+Allow: /privacy
+Allow: /terms
+Disallow: /api/
+Disallow: /admin/
+Disallow: /bureau/
+Disallow: /profile/
+Disallow: /account/
+Disallow: /composer/
+Disallow: /archive/
+Disallow: /letter/
+Disallow: /recipient/
+Disallow: /payments/
+
+User-agent: Applebot-Extended
+Allow: /
+Allow: /how-it-works
+Disallow: /api/
+Disallow: /letter/
+Disallow: /recipient/
+Disallow: /profile/
+
+# Production Sitemap Declaration
 Sitemap: https://oldletters.vercel.app/sitemap.xml
+

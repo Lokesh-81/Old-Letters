@@ -1,5 +1,6 @@
 // server.ts
 import express from "express";
+import fs from "fs";
 import crypto2 from "crypto";
 import dotenv2 from "dotenv";
 import path from "path";
@@ -2313,6 +2314,10 @@ app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  const reqPathLower = (req.path || "").toLowerCase();
+  if (reqPathLower.startsWith("/api") || reqPathLower.startsWith("/letter/") || reqPathLower.startsWith("/admin") || reqPathLower.startsWith("/bureau") || reqPathLower.startsWith("/profile") || reqPathLower.startsWith("/account") || reqPathLower.startsWith("/composer") || reqPathLower.startsWith("/archive") || reqPathLower.startsWith("/payment")) {
+    res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+  }
   const forwardedUri = req.headers["x-forwarded-uri"] || req.headers["x-matched-path"] || req.headers["x-invoke-path"];
   if (forwardedUri && forwardedUri.startsWith("/api") && !req.url.startsWith("/api")) {
     req.url = forwardedUri;
@@ -6392,6 +6397,32 @@ async function startServer() {
   } else {
     console.log("[OLD-LETTERS] MONGODB_URI not configured. Database initialization deferred until MONGODB_URI is set.");
   }
+  app.get("/robots.txt", (req, res) => {
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    const pubFile = path.resolve(__dirname, "public", "robots.txt");
+    const distFile = path.resolve(__dirname, "dist", "robots.txt");
+    if (fs.existsSync(pubFile)) {
+      return res.sendFile(pubFile);
+    }
+    if (fs.existsSync(distFile)) {
+      return res.sendFile(distFile);
+    }
+    return res.status(404).send("User-agent: *\nAllow: /\n");
+  });
+  app.get("/sitemap.xml", (req, res) => {
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    const pubFile = path.resolve(__dirname, "public", "sitemap.xml");
+    const distFile = path.resolve(__dirname, "dist", "sitemap.xml");
+    if (fs.existsSync(pubFile)) {
+      return res.sendFile(pubFile);
+    }
+    if (fs.existsSync(distFile)) {
+      return res.sendFile(distFile);
+    }
+    return res.status(404).send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');
+  });
   if (!isProd) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
@@ -6401,8 +6432,32 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     app.use(express.static(path.resolve(__dirname, "dist")));
+    const KNOWN_CLIENT_ROUTES = /* @__PURE__ */ new Set([
+      "/",
+      "/how-it-works",
+      "/cookies",
+      "/privacy",
+      "/terms",
+      "/profile",
+      "/account",
+      "/bureau",
+      "/admin",
+      "/admin/dashboard",
+      "/composer",
+      "/archive",
+      "/recipient",
+      "/login",
+      "/signup"
+    ]);
     app.get("*", (req, res) => {
-      res.sendFile(path.resolve(__dirname, "dist", "index.html"));
+      const cleanPath = req.path.toLowerCase().replace(/\/+$/, "") || "/";
+      const isKnownRoute = KNOWN_CLIENT_ROUTES.has(cleanPath) || cleanPath.startsWith("/letter/");
+      if (isKnownRoute) {
+        res.status(200).sendFile(path.resolve(__dirname, "dist", "index.html"));
+      } else {
+        res.setHeader("X-Robots-Tag", "noindex, nofollow");
+        res.status(404).sendFile(path.resolve(__dirname, "dist", "index.html"));
+      }
     });
   }
   app.listen(PORT, "0.0.0.0", () => {

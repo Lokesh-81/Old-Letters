@@ -425,6 +425,8 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
             <img
               src="https://images.unsplash.com/photo-1596178065887-1198b6148b2b?auto=format&fit=crop&q=80&w=1000"
               alt="Archival Historical Heritage"
+              loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover filter sepia-[0.35] brightness-95"
             />
             <div className="absolute bottom-3 left-4 text-white font-serif text-lg drop-shadow-md tracking-wider">
@@ -587,6 +589,8 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
                         : 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&q=80&w=800'
                     }
                     alt="Archival Photograph"
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover filter sepia-[0.3] brightness-95 contrast-105"
                   />
                 </div>
@@ -739,6 +743,8 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
                         src={att.url}
                         alt={att.caption || 'Attached photo'}
                         referrerPolicy="no-referrer"
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover"
                       />
                       {/* Archival corner mounts */}

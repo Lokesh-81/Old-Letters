@@ -236,6 +236,8 @@ export default function Footer23({
         <img
           src={heroImage}
           alt={heroAlt}
+          loading="lazy"
+          decoding="async"
           className="h-[220px] w-full object-cover object-bottom sm:h-[280px] md:h-[320px] lg:h-[360px]"
         />
       </motion.div>

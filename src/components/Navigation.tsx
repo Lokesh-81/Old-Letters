@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { isAdminEmail, isUserAdminRole } from '../lib/admin';
 
-export type AppView = 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient' | 'cookies' | 'privacy' | 'terms' | 'profile' | 'admin';
+export type AppView = 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient' | 'cookies' | 'privacy' | 'terms' | 'profile' | 'admin' | 'not-found';
 
 interface NavigationProps {
   currentView: AppView;
@@ -66,7 +66,9 @@ export const Navigation: React.FC<NavigationProps> = ({
         >
           <img
             src="/logo.png"
-            alt="OLD-LETTERS"
+            alt="OLD-LETTERS — Digital Correspondence Desk"
+            width={2172}
+            height={724}
             className="h-9 sm:h-11 w-auto max-w-[200px] sm:max-w-[240px] object-contain"
           />
         </button>

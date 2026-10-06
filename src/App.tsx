@@ -19,6 +19,8 @@ import { PrivacyPolicyView } from './components/legal/PrivacyPolicyView';
 import { TermsOfServiceView } from './components/legal/TermsOfServiceView';
 import { CookieConsentBanner } from './components/legal/CookieConsentBanner';
 import { CookiePreferencesModal } from './components/legal/CookiePreferencesModal';
+import { NotFoundView } from './components/common/NotFoundView';
+import { applySEO } from './lib/seo';
 import { fetchLetters, getDeliveryMeta, getCurrentUser, logoutUser } from './lib/api';
 import { AdminPaymentModal } from './components/admin/AdminPaymentModal';
 import { AdminDashboardView } from './components/admin/AdminDashboardView';
@@ -121,12 +123,18 @@ export default function App() {
   const handleNavigate = (view: AppView) => {
     if (view === 'landing') {
       window.history.pushState(null, '', '/');
+    } else if (view === 'how-it-works') {
+      window.history.pushState(null, '', '/how-it-works');
     } else if (view === 'cookies' || view === 'privacy' || view === 'terms') {
       window.history.pushState(null, '', `/${view}`);
     } else if (view === 'profile') {
       window.history.pushState(null, '', '/profile');
     } else if (view === 'admin') {
       window.history.pushState(null, '', '/admin');
+    } else if (view === 'composer') {
+      window.history.pushState(null, '', '/composer');
+    } else if (view === 'archive') {
+      window.history.pushState(null, '', '/archive');
     }
     setCurrentView(view);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -153,8 +161,12 @@ export default function App() {
       const searchParams = new URLSearchParams(window.location.search);
       const authParam = searchParams.get('auth');
 
-      // Legal & Profile Pages
-      if (path === '/cookies') {
+      // Canonical Public & Administrative Route Resolution
+      if (path === '/' || path === '') {
+        setCurrentView('landing');
+      } else if (path === '/how-it-works') {
+        setCurrentView('how-it-works');
+      } else if (path === '/cookies') {
         setCurrentView('cookies');
       } else if (path === '/privacy') {
         setCurrentView('privacy');
@@ -164,6 +176,17 @@ export default function App() {
         setCurrentView('profile');
       } else if (path === '/admin' || path === '/admin/dashboard') {
         setCurrentView('admin');
+      } else if (path === '/composer') {
+        setCurrentView('composer');
+      } else if (path === '/archive') {
+        setCurrentView('archive');
+      } else if (path.startsWith('/letter/')) {
+        // Token will be resolved below
+      } else if (path === '/login' || path === '/signup') {
+        setCurrentView('landing');
+      } else {
+        // Unknown route -> 404
+        setCurrentView('not-found');
       }
 
       // Google OAuth redirection feedback
@@ -291,6 +314,11 @@ export default function App() {
 
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
+
+  // Synchronize document metadata, canonical URLs, robots, and JSON-LD
+  useEffect(() => {
+    applySEO(currentView);
+  }, [currentView]);
 
   // Helper to save posted letter to archive
   const handleLetterPosted = (newLetter: Letter) => {
@@ -632,7 +660,15 @@ export default function App() {
         {currentView === 'how-it-works' && (
           <HowItWorksView
             onStartWriting={() => handleStartWriting('LOVE')}
-            onBack={() => setCurrentView('landing')}
+            onBack={() => handleNavigate('landing')}
+            onNavigate={handleNavigate}
+          />
+        )}
+
+        {currentView === 'not-found' && (
+          <NotFoundView
+            onBackToHome={() => handleNavigate('landing')}
+            onNavigate={handleNavigate}
           />
         )}
 

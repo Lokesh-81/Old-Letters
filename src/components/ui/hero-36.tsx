@@ -80,7 +80,10 @@ export default function Hero36({
       >
         <img
           src="https://assets.watermelon.sh/bg-hero-36.avif"
-          alt="Wildflower meadow with colorful flowers"
+          alt="Wildflower meadow representing intentional digital correspondence"
+          loading="eager"
+          decoding="async"
+          fetchPriority="high"
           className="h-full w-full object-cover object-bottom outline -outline-offset-1 outline-black/[0.06]"
         />
       </motion.div>
@@ -92,6 +95,7 @@ export default function Hero36({
             animate="show"
             className="max-w-5xl text-4xl leading-[1.07] font-extralight tracking-[-0.01em] text-balance text-teal-900 lg:text-[4.75rem] xl:text-[5.5rem] 2xl:text-[6rem]"
           >
+            <span className="sr-only">OLD-LETTERS — </span>
             <motion.span
               variants={titleLineVariants}
               className="block will-change-transform"
