@@ -1,6 +1,5 @@
 import React from 'react';
-import { OldLettersIcon } from './OldLettersIcon';
 
 export default function LogoIcon({ className = 'size-8' }: { className?: string }) {
-  return <OldLettersIcon className={className} size="100%" />;
+  return <img src="/favicon.png" alt="OLD-LETTERS" className={`${className} object-contain`} />;
 }

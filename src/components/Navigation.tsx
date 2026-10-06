@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { isAdminEmail, isUserAdminRole } from '../lib/admin';
-import { OldLettersHorizontalLogo } from '../assets/OldLettersHorizontalLogo';
 
 export type AppView = 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient' | 'cookies' | 'privacy' | 'terms' | 'profile' | 'admin';
 
@@ -62,10 +61,14 @@ export const Navigation: React.FC<NavigationProps> = ({
         <button
           type="button"
           onClick={() => onNavigate('landing')}
-          className="transition-opacity hover:opacity-90 cursor-pointer select-none text-left py-0.5"
+          className="transition-opacity hover:opacity-90 cursor-pointer select-none text-left py-1 flex items-center"
           aria-label="OLD-LETTERS Home"
         >
-          <OldLettersHorizontalLogo height={38} />
+          <img
+            src="/logo.png"
+            alt="OLD-LETTERS"
+            className="h-9 sm:h-11 w-auto max-w-[200px] sm:max-w-[240px] object-contain"
+          />
         </button>
 
         {/* Clean nav links */}
