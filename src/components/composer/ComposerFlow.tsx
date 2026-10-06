@@ -474,16 +474,19 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
     if (tempoId === '48h') {
       updateDraft({
         waitingHours: 48,
-        scheduledDeliveryAt: new Date(now + 48 * 3600 * 1000).toISOString(),
+        selectedTempoId: '48h',
+        scheduledDeliveryAt: undefined, // Enforces canonical server calculation: deliveryAt = createdAt + 48 hours
       });
     } else if (tempoId === '7d') {
       updateDraft({
         waitingHours: 168,
+        selectedTempoId: '7d',
         scheduledDeliveryAt: new Date(now + 168 * 3600 * 1000).toISOString(),
       });
     } else if (tempoId === '30d') {
       updateDraft({
         waitingHours: 720,
+        selectedTempoId: '30d',
         scheduledDeliveryAt: new Date(now + 720 * 3600 * 1000).toISOString(),
       });
     }
@@ -501,18 +504,24 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
 
     updateDraft({
       waitingHours: diffHours,
+      selectedTempoId: 'custom',
       scheduledDeliveryAt: finalDate,
     });
   };
 
-  // Formatting exact arrival date
-  const arrivalDateObj = new Date(draft.scheduledDeliveryAt);
+  // Canonical arrival calculation (createdAt + waitingHours)
+  const canonicalArrivalTimestamp = (draft.waitingHours === 48 || draft.selectedTempoId === '48h' || !draft.scheduledDeliveryAt)
+    ? (draft.createdAt ? new Date(draft.createdAt).getTime() : Date.now()) + (draft.waitingHours || 48) * 3600 * 1000
+    : new Date(draft.scheduledDeliveryAt).getTime();
+  const arrivalDateObj = new Date(canonicalArrivalTimestamp);
   const formattedArrivalDate = isNaN(arrivalDateObj.getTime())
-    ? 'October 1, 2026'
-    : arrivalDateObj.toLocaleDateString('en-US', {
+    ? 'In 48 Hours'
+    : arrivalDateObj.toLocaleString('en-US', {
         month: 'long',
         day: 'numeric',
         year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
       });
 
   // Human-readable, restrained transit language
@@ -583,8 +592,9 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
         signoff: draft.signoff,
         verificationMethod: draft.verificationMethod,
         passphrase: draft.passphrase,
-        scheduledDeliveryAt: draft.scheduledDeliveryAt,
-        waitingHours: draft.waitingHours,
+        scheduledDeliveryAt: draft.selectedTempoId === '48h' || draft.waitingHours === 48 ? undefined : draft.scheduledDeliveryAt,
+        waitingHours: draft.waitingHours || 48,
+        selectedTempoId: draft.selectedTempoId || '48h',
         postmarkCity: draft.postmarkCity || 'Hyderabad Bureau',
         status: 'SCHEDULED',
         paymentId: draft.paymentId || personalMessageEnclosure?.paymentId,
@@ -939,7 +949,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                     type="text"
                     value={draft.greeting}
                     onChange={(e) => updateDraft({ greeting: e.target.value })}
-                    placeholder="Dear Vasantha,"
+                    placeholder="Dear Recipient,"
                     className="w-full bg-white border border-[#eae4da] focus:border-teal-900 px-4 py-3 text-teal-950 font-serif text-xl focus:outline-none rounded-xs transition-colors shadow-2xs"
                   />
                 </div>
@@ -978,7 +988,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                       type="text"
                       value={draft.senderName}
                       onChange={(e) => updateDraft({ senderName: e.target.value })}
-                      placeholder="Lokesh"
+                      placeholder="Your Name"
                       className="w-full bg-white border border-[#eae4da] focus:border-teal-900 px-4 py-2.5 text-stone-900 font-serif text-base focus:outline-none rounded-xs shadow-2xs"
                     />
                   </div>
@@ -1073,7 +1083,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                       type="text"
                       value={draft.recipientName}
                       onChange={(e) => updateDraft({ recipientName: e.target.value })}
-                      placeholder="e.g. Vasantha Rao"
+                      placeholder="Recipient Name"
                       className="w-full bg-white border border-[#eae4da] focus:border-teal-900 px-4 py-3 text-stone-900 font-serif text-lg focus:outline-none rounded-xs shadow-2xs"
                     />
                   </div>
@@ -1086,7 +1096,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                       type="email"
                       value={draft.recipientEmail}
                       onChange={(e) => updateDraft({ recipientEmail: e.target.value })}
-                      placeholder="e.g. vasantha@correspondence.in"
+                      placeholder="Recipient Email"
                       className="w-full bg-white border border-[#eae4da] focus:border-teal-900 px-4 py-3 text-stone-900 text-sm focus:outline-none rounded-xs shadow-2xs"
                     />
                   </div>

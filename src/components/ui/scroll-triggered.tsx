@@ -21,8 +21,8 @@ export const CORRESPONDENCE_PAGES: LetterScrollItem[] = [
   {
     id: 'love-letter',
     type: 'LOVE',
-    recipient: 'Vasantha',
-    sender: 'Lokesh',
+    recipient: 'Recipient Name',
+    sender: 'Your Name',
     date: '29 September 2026',
     excerpt: 'I wanted to tell you how much I admire the way you pay attention to the quietest things in a crowded room.',
     paperColor: '#faf7f2',

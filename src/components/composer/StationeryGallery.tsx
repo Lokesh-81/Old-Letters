@@ -401,11 +401,11 @@ export const StationeryGallery: React.FC<StationeryGalleryProps> = ({
               <PaperSheet
                 template={activeTemplate}
                 date="12 October 2026"
-                greeting="Dear Vasantha,"
+                greeting="Dear Recipient,"
                 content={`I am writing this on the balcony as the evening cools down over the city.\n\nI wanted to tell you something I rarely say properly: how much I value your presence in my life.\n\nSome thoughts are too quiet for telephone calls, and too sacred for instant messages. I wanted you to hold these words in your hands, knowing they were written with stillness and patient care.`}
                 signoff="With affection,"
-                senderName="Lokesh"
-                recipientName="Vasantha"
+                senderName="Your Name"
+                recipientName="Recipient Name"
                 isEditing={false}
                 showReverseSide={showReverseSide}
               />
@@ -555,11 +555,11 @@ export const StationeryGallery: React.FC<StationeryGalleryProps> = ({
                 <PaperSheet
                   template={activeTemplate}
                   date="12 October 2026"
-                  greeting="Dear Vasantha,"
+                  greeting="Dear Recipient,"
                   content={`I am writing this on the balcony as the evening cools down over the city.\n\nI wanted to tell you something I rarely say properly: how much I value your presence in my life.\n\nSome thoughts are too quiet for telephone calls, and too sacred for instant messages. I wanted you to hold these words in your hands, knowing they were written with stillness and patient care.`}
                   signoff="With affection,"
-                  senderName="Lokesh"
-                  recipientName="Vasantha"
+                  senderName="Your Name"
+                  recipientName="Recipient Name"
                   isEditing={false}
                   showReverseSide={showReverseSide}
                 />

@@ -34,14 +34,8 @@ export const CreateLetterSchema = z.object({
   signoff: z.string().trim().min(1, 'Signoff is required'),
   verificationMethod: z.enum(['otp', 'passphrase', 'open']).default('open'),
   passphrase: z.string().optional(),
-  scheduledDeliveryAt: z.string().optional().refine((val) => {
-    if (!val) return true;
-    const deliveryDate = new Date(val).getTime();
-    const minTime = Date.now() + (MIN_DELIVERY_HOURS * 3600 * 1000 - 60000); // 60-second network skew tolerance
-    return !isNaN(deliveryDate) && deliveryDate >= minTime;
-  }, {
-    message: `Delivery date must be at least ${MIN_DELIVERY_HOURS} hours in the future`,
-  }),
+  scheduledDeliveryAt: z.string().optional().nullable(),
+  selectedTempoId: z.string().optional(),
   waitingHours: z.number().min(48, 'Minimum 48 hours required').default(48),
   postmarkCity: z.string().optional().default('Hyderabad Bureau'),
   status: z.enum(['DRAFT', 'SCHEDULED']).default('SCHEDULED'),

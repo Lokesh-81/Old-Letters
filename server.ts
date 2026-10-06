@@ -20,6 +20,7 @@ import {
   sendHalfwayRecipientEmail,
   sendPreArrivalOtpRecipientEmail,
   sendArrivalRecipientEmail,
+  sendPaymentSubmittedSenderEmail,
   sendPaymentApprovedEmail,
   sendPaymentIssueEmail,
 } from './src/lib/email';
@@ -593,7 +594,7 @@ app.get(['/api/auth/me', '/api/me', '/auth/me'], async (req: AuthenticatedReques
           email: req.user.email.toLowerCase(),
           fullName: req.user.fullName || req.user.email.split('@')[0] || 'Correspondent',
           avatarUrl: req.user.avatarUrl,
-          role: req.user.role || (req.user.email === adminEmail || req.user.email === 'lokesh@oldletters.in' ? 'ADMIN' : 'USER'),
+          role: req.user.role || (isAdminEmail(req.user.email) ? 'ADMIN' : 'USER'),
           authProvider: req.user.authProvider || 'GOOGLE',
           emailVerified: req.user.emailVerified ?? true,
           termsAccepted: true,
@@ -1944,9 +1945,9 @@ app.post(['/api/letters/draft', '/api/letters/save-draft'], requireAuth, async (
       letterId: requestedId,
       type = 'LOVE',
       templateId = 'ivory',
-      recipientName = 'Recipient',
+      recipientName = '',
       recipientEmail = '',
-      greeting = 'Dear Recipient,',
+      greeting = 'Dear Friend,',
       content = '',
       signoff = 'Yours,',
       verificationMethod = 'open',
@@ -1957,7 +1958,7 @@ app.post(['/api/letters/draft', '/api/letters/save-draft'], requireAuth, async (
     } = req.body;
 
     const now = new Date();
-    const deliveryDate = scheduledDeliveryAt ? new Date(scheduledDeliveryAt) : new Date(now.getTime() + 48 * 3600 * 1000);
+    const deliveryDate = scheduledDeliveryAt ? new Date(scheduledDeliveryAt) : new Date(now.getTime() + (Number(waitingHours) || 48) * 3600 * 1000);
 
     let letter: any = null;
     if (requestedId && ObjectId.isValid(requestedId)) {
@@ -2086,7 +2087,22 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
 
     const letterId = new ObjectId();
     const now = new Date();
-    const deliveryDate = new Date(input.scheduledDeliveryAt || (Date.now() + (input.waitingHours || 48) * 3600 * 1000));
+    const createdAt = now;
+
+    // ONE CANONICAL SERVER-SIDE CALCULATION:
+    // deliveryAt = createdAt + 48 hours (when 48-hour option is selected)
+    let deliveryDate: Date;
+    if (input.waitingHours === 48 || input.selectedTempoId === '48h' || !input.scheduledDeliveryAt) {
+      deliveryDate = new Date(createdAt.getTime() + 48 * 3600 * 1000);
+    } else {
+      const parsed = new Date(input.scheduledDeliveryAt);
+      const minDeliveryTime = createdAt.getTime() + (input.waitingHours || 48) * 3600 * 1000;
+      if (!isNaN(parsed.getTime()) && parsed.getTime() >= createdAt.getTime() + 48 * 3600 * 1000 - (15 * 60 * 1000)) {
+        deliveryDate = parsed;
+      } else {
+        deliveryDate = new Date(minDeliveryTime);
+      }
+    }
 
     // CRITICAL: Always use req.user.id as senderId (never trust client body senderId)
     const senderId = req.user!.id;
@@ -2253,9 +2269,11 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
         type: 'SENDER_DISPATCH',
         to: senderEmail,
         letterId: letterId.toString(),
+        paymentId: linkedPaymentId || undefined,
         dispatchRef: trackingCode,
         status: senderMailRes.success ? 'SENT' : 'FAILED',
         error: senderMailRes.error,
+        timestamp: new Date().toISOString(),
       });
 
       await eventsColl.insertOne({
@@ -2270,9 +2288,11 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
         type: 'SENDER_DISPATCH',
         to: senderEmail,
         letterId: letterId.toString(),
+        paymentId: linkedPaymentId || undefined,
         dispatchRef: trackingCode,
         status: 'FAILED',
         error: err.message,
+        timestamp: new Date().toISOString(),
       });
     }
 
@@ -2294,9 +2314,11 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
         type: 'RECIPIENT_DISPATCH',
         to: recipientEmail,
         letterId: letterId.toString(),
+        paymentId: linkedPaymentId || undefined,
         dispatchRef: trackingCode,
         status: recipientMailRes.success ? 'SENT' : 'FAILED',
         error: recipientMailRes.error,
+        timestamp: new Date().toISOString(),
       });
 
       await eventsColl.insertOne({
@@ -2311,9 +2333,11 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
         type: 'RECIPIENT_DISPATCH',
         to: recipientEmail,
         letterId: letterId.toString(),
+        paymentId: linkedPaymentId || undefined,
         dispatchRef: trackingCode,
         status: 'FAILED',
         error: err.message,
+        timestamp: new Date().toISOString(),
       });
     }
 
@@ -3559,6 +3583,12 @@ export async function runDeliveryScheduler(db: any) {
         }
       }
 
+      const hasApprovedMedia = Boolean(
+        letter.hasMediaAttachment &&
+        (letter.mediaStatus === 'APPROVED' || letter.personalMessage?.mediaStatus === 'APPROVED')
+      );
+      const enclosureMediaType = letter.mediaType || letter.personalMessage?.type || (letter.personalMessage?.mediaType);
+
       try {
         const arrivalRes = await sendArrivalRecipientEmail({
           recipientEmail,
@@ -3567,32 +3597,38 @@ export async function runDeliveryScheduler(db: any) {
           arrivalFormatted,
           recipientUrl: deliveryUrl,
           requiresOtp: letter.recipientVerificationMethod === 'otp',
+          hasApprovedMedia,
+          mediaType: enclosureMediaType === 'VIDEO' ? 'VIDEO' : enclosureMediaType === 'VOICE' ? 'VOICE' : undefined,
         });
 
         logEmailDispatch({
-          type: 'RECIPIENT_ARRIVAL',
+          type: 'LETTER_ARRIVED',
           to: recipientEmail,
           letterId: letter._id.toString(),
+          paymentId: letter.mediaPaymentId || undefined,
           dispatchRef: letter.trackingCode,
           status: arrivalRes.success ? 'SENT' : 'FAILED',
           error: arrivalRes.error,
+          timestamp: new Date().toISOString(),
         });
 
         await eventsColl.insertOne({
           _id: new ObjectId(),
           letterId: letter._id,
           eventType: 'RECIPIENT_ARRIVAL_EMAIL_SENT',
-          metadata: { recipientEmail },
+          metadata: { recipientEmail, hasApprovedMedia },
           createdAt: now,
         });
       } catch (err: any) {
         logEmailDispatch({
-          type: 'RECIPIENT_ARRIVAL',
+          type: 'LETTER_ARRIVED',
           to: recipientEmail,
           letterId: letter._id.toString(),
+          paymentId: letter.mediaPaymentId || undefined,
           dispatchRef: letter.trackingCode,
           status: 'FAILED',
           error: err.message,
+          timestamp: new Date().toISOString(),
         });
       }
     }
@@ -3933,6 +3969,43 @@ app.post(['/api/payments', '/api/payments/create', '/payments', '/payments/creat
           createdAt: now,
         });
       } catch {}
+    }
+
+    // EMAIL A: Payment Submitted for Verification (To Sender)
+    try {
+      const payMailRes = await sendPaymentSubmittedSenderEmail({
+        senderEmail: userEmail,
+        senderName,
+        paymentId: paymentIdStr,
+        upiReference: cleanUpi,
+        amount: input.amount,
+        currency: 'INR',
+        mediaType: normalizedMediaType,
+        recipientName: recipientName || undefined,
+        letterReference: letter?.trackingCode || input.letterId || undefined,
+      });
+
+      logEmailDispatch({
+        type: 'PAYMENT_SUBMITTED',
+        to: userEmail,
+        letterId: paymentRecord.letterId || '',
+        paymentId: paymentIdStr,
+        dispatchRef: paymentIdStr,
+        status: payMailRes.success ? 'SENT' : 'FAILED',
+        error: payMailRes.error,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (emailErr: any) {
+      logEmailDispatch({
+        type: 'PAYMENT_SUBMITTED',
+        to: userEmail,
+        letterId: paymentRecord.letterId || '',
+        paymentId: paymentIdStr,
+        dispatchRef: paymentIdStr,
+        status: 'FAILED',
+        error: emailErr.message,
+        timestamp: new Date().toISOString(),
+      });
     }
 
     res.status(201).json({
@@ -4753,30 +4826,72 @@ app.post(['/api/admin/payments/:id/verify', '/api/admin/payments/:id/approve', '
     if (senderEmail) {
       if (status === 'REJECTED') {
         try {
-          await sendPaymentIssueEmail({
+          const rejectMailRes = await sendPaymentIssueEmail({
             userEmail: senderEmail,
             orderReference: payment.paymentId || `PAY-${payment._id.toString().slice(-8).toUpperCase()}`,
             amount: payment.amount || (payment.mediaType === 'VIDEO' ? 149 : 99),
             currency: payment.currency || 'INR',
+            upiReference: payment.upiReference,
             adminNote: adminNote || 'Payment transaction details could not be verified. Your correspondence will continue without the personal voice/video enclosure.',
             contactUrl: `${process.env.APP_URL || 'https://oldletters.in'}/contact`,
           });
-        } catch (emailErr) {
-          console.warn('[OLD-LETTERS Email Notice] Non-fatal rejection email issue:', emailErr);
+
+          logEmailDispatch({
+            type: 'PAYMENT_REJECTED',
+            to: senderEmail,
+            letterId: payment.letterId || '',
+            paymentId: payment.paymentId || payment._id.toString(),
+            dispatchRef: payment.paymentId || payment._id.toString(),
+            status: rejectMailRes.success ? 'SENT' : 'FAILED',
+            error: rejectMailRes.error,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (emailErr: any) {
+          logEmailDispatch({
+            type: 'PAYMENT_REJECTED',
+            to: senderEmail,
+            letterId: payment.letterId || '',
+            paymentId: payment.paymentId || payment._id.toString(),
+            dispatchRef: payment.paymentId || payment._id.toString(),
+            status: 'FAILED',
+            error: emailErr.message,
+            timestamp: new Date().toISOString(),
+          });
         }
       } else if (status === 'APPROVED') {
         try {
-          await sendPaymentApprovedEmail({
+          const approveMailRes = await sendPaymentApprovedEmail({
             userEmail: senderEmail,
             orderReference: payment.paymentId || `PAY-${payment._id.toString().slice(-8).toUpperCase()}`,
             amount: payment.amount || (payment.mediaType === 'VIDEO' ? 149 : 99),
             currency: payment.currency || 'INR',
+            upiReference: payment.upiReference,
             featureName: payment.mediaType === 'VIDEO' ? 'Video Message Enclosure' : 'Voice Message Enclosure',
             adminNote: adminNote || undefined,
             statusUrl: `${process.env.APP_URL || 'https://oldletters.in'}/bureau`,
           });
-        } catch (emailErr) {
-          console.warn('[OLD-LETTERS Email Notice] Non-fatal approval email issue:', emailErr);
+
+          logEmailDispatch({
+            type: 'PAYMENT_APPROVED',
+            to: senderEmail,
+            letterId: payment.letterId || '',
+            paymentId: payment.paymentId || payment._id.toString(),
+            dispatchRef: payment.paymentId || payment._id.toString(),
+            status: approveMailRes.success ? 'SENT' : 'FAILED',
+            error: approveMailRes.error,
+            timestamp: new Date().toISOString(),
+          });
+        } catch (emailErr: any) {
+          logEmailDispatch({
+            type: 'PAYMENT_APPROVED',
+            to: senderEmail,
+            letterId: payment.letterId || '',
+            paymentId: payment.paymentId || payment._id.toString(),
+            dispatchRef: payment.paymentId || payment._id.toString(),
+            status: 'FAILED',
+            error: emailErr.message,
+            timestamp: new Date().toISOString(),
+          });
         }
       }
     }

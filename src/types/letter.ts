@@ -201,6 +201,7 @@ export interface Letter {
   deliveredAt?: string;
   createdAt?: string;
   waitingHours: number;
+  selectedTempoId?: '48h' | '7d' | '30d' | 'custom' | string;
   status: 'DRAFT' | 'SCHEDULED' | 'IN TRANSIT' | 'DELIVERED' | 'OPENED' | 'COMPLETED' | 'CANCELLED';
   openedAt?: string;
   postmarkCity?: string;

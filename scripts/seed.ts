@@ -71,7 +71,7 @@ export async function seedDatabase() {
   const usersColl = db.collection('users');
   const sampleUsers = [
     { fullName: 'Lokesh', email: 'lokesh@oldletters.in', avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120' },
-    { fullName: 'Vasantha', email: 'vasantha@correspondence.in', avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=120' },
+    { fullName: 'Test Recipient', email: 'recipient@example.com', avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=120' },
     { fullName: 'Vijay', email: 'vijay.k@techpark.in', avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120' },
     { fullName: 'Satya', email: 'satya.dev@craft.org', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120' },
     { fullName: 'Sravani', email: 'sravani.rao@letterpost.in', avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120' },
@@ -131,7 +131,7 @@ export async function seedDatabase() {
       senderId: lokeshId,
       letterType: 'LOVE',
       templateId: 'ivory',
-      salutation: 'Dearest Vasantha,',
+      salutation: 'Dearest Recipient,',
       body: 'I am writing this on the quiet veranda in Hyderabad as dusk descends. I chose the 48-hour post because some words deserve the quiet patience of waiting.',
       signoff: 'Yours in patience,',
       status: 'DELIVERED',
@@ -149,8 +149,8 @@ export async function seedDatabase() {
 
     await recipientsColl.insertOne({
       letterId: letterId,
-      email: 'vasantha@correspondence.in',
-      displayName: 'Vasantha',
+      email: 'recipient@example.com',
+      displayName: 'Test Recipient',
       verificationMethod: 'open',
       verifiedAt: past1Hour,
       createdAt: past49Hours,
@@ -173,7 +173,7 @@ export async function seedDatabase() {
     await deliveryEventsColl.insertOne({
       letterId: letterId,
       eventType: 'LETTER_DELIVERED',
-      metadata: { recipient: 'vasantha@correspondence.in' },
+      metadata: { recipient: 'recipient@example.com' },
       createdAt: past1Hour,
     });
 

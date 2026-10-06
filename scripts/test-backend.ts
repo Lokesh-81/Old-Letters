@@ -35,11 +35,11 @@ async function runTests() {
 
   // TEST 2: Signup with email + password (and Legal Consent enforcement)
   console.log('\n[TEST 2] Signup without Legal Consent (must fail with 400)...');
-  const testEmail = `vasantha.${Date.now()}@correspondence.in`;
+  const testEmail = `testsender.${Date.now()}@correspondence.in`;
   const unconsentedSignup = await request('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify({
-      fullName: 'Vasantha Rao',
+      fullName: 'Test Sender',
       email: testEmail,
       password: 'secretCorrespondence1892',
       termsAccepted: false,
@@ -55,7 +55,7 @@ async function runTests() {
   const signupRes = await request('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify({
-      fullName: 'Vasantha Rao',
+      fullName: 'Test Sender',
       email: testEmail,
       password: 'secretCorrespondence1892',
       termsAccepted: true,
@@ -78,7 +78,7 @@ async function runTests() {
   const dupRes = await request('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify({
-      fullName: 'Vasantha Duplicate',
+      fullName: 'Test Duplicate',
       email: testEmail,
       password: 'anotherPassword123',
     }),
@@ -164,7 +164,7 @@ async function runTests() {
       senderId: 'hacker-tampered-sender-id', // MUST BE OVERRIDDEN BY SERVER
       type: 'LOVE',
       templateId: 'ivory',
-      senderName: 'Vasantha Rao',
+      senderName: 'Test Sender',
       senderEmail: testEmail,
       recipientName: 'Harshitha',
       recipientEmail: 'harshitha@hyderabad.in',
@@ -237,7 +237,7 @@ async function runTests() {
     body: JSON.stringify({
       email: testEmail,
       googleId: 'google-oauth2-id-998877',
-      fullName: 'Vasantha Rao Google',
+      fullName: 'Test Sender Google',
       avatarUrl: 'https://images.unsplash.com/photo-1534528741775?w=100',
       termsAccepted: true,
       privacyAccepted: true,
@@ -619,8 +619,8 @@ async function runTests() {
     body: JSON.stringify({
       type: 'LOVE',
       templateId: 'ivory',
-      senderName: 'Vasantha Rao',
-      senderEmail: 'vasantha.1791041148472@correspondence.in',
+      senderName: 'Test Sender',
+      senderEmail: 'testsender.1791041148472@correspondence.in',
       recipientName: 'Harshitha',
       recipientEmail: 'harshitha@hyderabad.in',
       greeting: 'Dearest Harshitha,',
@@ -781,10 +781,10 @@ async function runTests() {
   const updateProfileRes = await request('/api/user/profile', {
     method: 'PUT',
     headers: { Authorization: `Bearer ${validToken}` },
-    body: JSON.stringify({ fullName: 'Vasantha Rao (Senior Correspondent)' }),
+    body: JSON.stringify({ fullName: 'Test Sender (Senior Correspondent)' }),
   });
   console.log('Profile update status (expect 200):', updateProfileRes.status);
-  if (!updateProfileRes.ok || updateProfileRes.data.user?.fullName !== 'Vasantha Rao (Senior Correspondent)') {
+  if (!updateProfileRes.ok || updateProfileRes.data.user?.fullName !== 'Test Sender (Senior Correspondent)') {
     throw new Error('PUT /api/user/profile failed to update name');
   }
 

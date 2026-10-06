@@ -16,13 +16,20 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
 }) => {
   const template = TEMPLATES.find((t) => t.id === draft.templateId) || TEMPLATES[0];
 
-  const arrivalDate = draft.scheduledDeliveryAt
-    ? new Date(draft.scheduledDeliveryAt).toLocaleDateString('en-US', {
+  const baseTime = draft.createdAt ? new Date(draft.createdAt).getTime() : Date.now();
+  const arrivalDateObj = (draft.waitingHours === 48 || draft.selectedTempoId === '48h' || !draft.scheduledDeliveryAt)
+    ? new Date(baseTime + (draft.waitingHours || 48) * 3600 * 1000)
+    : new Date(draft.scheduledDeliveryAt);
+
+  const arrivalDate = isNaN(arrivalDateObj.getTime())
+    ? 'In 48 Hours'
+    : arrivalDateObj.toLocaleString('en-US', {
         month: 'long',
         day: 'numeric',
         year: 'numeric',
-      })
-    : 'October 1, 2026';
+        hour: '2-digit',
+        minute: '2-digit',
+      });
 
   return (
     <div className="max-w-4xl mx-auto space-y-10 py-6">

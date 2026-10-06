@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx scripts/test-backend.ts",
+    "test": "tsx scripts/test-audit-fixes.ts",
     "test:backend": "tsx scripts/test-backend.ts"
   },
   "dependencies": {

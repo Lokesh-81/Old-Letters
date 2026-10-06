@@ -23,8 +23,8 @@ interface EnvelopeObjectProps {
 export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
   templateId = 'ivory',
   template: customTemplate,
-  recipientName = 'Vasantha',
-  senderName = 'Lokesh',
+  recipientName = 'Recipient Name',
+  senderName = 'Your Name',
   date = '29 SEP 2026',
   isOpen = false,
   isSealed = true,

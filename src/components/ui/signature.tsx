@@ -3,7 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import { motion } from "framer-motion";
 import * as opentype from "opentype.js";
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 
 interface SignatureProps {
   /** Text to generate signature for */

@@ -54,13 +54,15 @@ function getTransporter() {
   }
 }
 function logEmailDispatch(entry) {
-  console.log(`[OLD-LETTERS EMAIL]
-type: ${entry.type}
-to: ${entry.to}
-letterId: ${entry.letterId}
-dispatchRef: ${entry.dispatchRef}
+  const ts = entry.timestamp || (/* @__PURE__ */ new Date()).toISOString();
+  console.log(`[OLD-LETTERS EMAIL DISPATCH]
+event: ${entry.type}
+recipient: ${entry.to}
+paymentId: ${entry.paymentId || entry.dispatchRef || "N/A"}
+letterId: ${entry.letterId || "N/A"}
+timestamp: ${ts}
 status: ${entry.status}${entry.error ? `
-error: ${entry.error}` : ""}`);
+provider error: ${entry.error}` : ""}`);
 }
 async function sendMail(options) {
   const transporter = getTransporter();
@@ -397,6 +399,47 @@ async function sendArrivalRecipientEmail(params) {
 Unseal and read your letter now: ${params.recipientUrl}`
   });
 }
+async function sendPaymentSubmittedSenderEmail(params) {
+  const subject = "OLD-LETTERS \u2014 Payment Submitted for Verification";
+  const currency = params.currency || "INR";
+  const mediaLabel = params.mediaType === "VIDEO" ? "Video Message Enclosure" : "Voice Message Enclosure";
+  const html = emailWrapper(
+    "Payment Submitted for Verification \xB7 OLD-LETTERS",
+    `PAYMENT REF: ${params.paymentId}`,
+    `
+      <p style="margin-top: 0;">Dear ${params.senderName || "Correspondent"},</p>
+      <p>
+        Your payment reference has been submitted to the Central Correspondence Bureau and is currently awaiting administrative verification.
+      </p>
+      <div style="background-color: #f7f6f2; border-left: 3px solid #0d9488; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; font-family: monospace; font-size: 12px;">
+        <div style="margin-bottom: 4px;"><strong>PAYMENT ID:</strong> ${params.paymentId}</div>
+        <div style="margin-bottom: 4px;"><strong>UPI UTR REF:</strong> ${params.upiReference}</div>
+        <div style="margin-bottom: 4px;"><strong>AMOUNT:</strong> \u20B9${params.amount} ${currency}</div>
+        <div style="margin-bottom: 4px;"><strong>SELECTION:</strong> ${mediaLabel}</div>
+        ${params.recipientName ? `<div style="margin-bottom: 4px;"><strong>RECIPIENT:</strong> ${params.recipientName}</div>` : ""}
+        ${params.letterReference ? `<div style="margin-bottom: 4px;"><strong>LETTER REF:</strong> ${params.letterReference}</div>` : ""}
+        <div><strong>STATUS:</strong> <span style="color: #d97706; font-weight: bold;">PENDING VERIFICATION</span></div>
+      </div>
+      <p style="font-size: 13px; color: #57534e;">
+        Our bureau staff verifies each UPI reference against our postal bank statement. Once verified, your ${mediaLabel.toLowerCase()} will be approved to accompany your sealed correspondence upon arrival.
+      </p>
+    `
+  );
+  return sendMail({
+    to: params.senderEmail,
+    subject,
+    html,
+    text: `OLD-LETTERS \u2014 Payment Submitted for Verification
+
+Payment ID: ${params.paymentId}
+UTR: ${params.upiReference}
+Amount: \u20B9${params.amount} ${currency}
+Selection: ${mediaLabel}
+Status: Pending Verification
+
+Our bureau staff will verify your payment against our postal bank records.`
+  });
+}
 async function sendPaymentApprovedEmail(params) {
   const subject = "OLD-LETTERS \u2014 Payment Verified";
   const currency = params.currency || "INR";
@@ -446,20 +489,20 @@ async function sendPaymentIssueEmail(params) {
     `
       <p style="margin-top: 0;">Greetings,</p>
       <p>
-        Your payment could not be fully verified. The UTR/payment details provided could not be confirmed.
+        Your payment reference could not be verified. The UPI / UTR transaction details provided could not be confirmed with our correspondence registry.
       </p>
       <div style="background-color: #fef2f2; border-left: 3px solid #dc2626; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; font-size: 13px; color: #991b1b; font-family: monospace;">
         <div style="margin-bottom: 4px;"><strong>PAYMENT ID:</strong> ${params.orderReference}</div>
         ${params.upiReference ? `<div style="margin-bottom: 4px;"><strong>UPI UTR:</strong> ${params.upiReference}</div>` : ""}
         <div style="margin-bottom: 4px;"><strong>AMOUNT:</strong> \u20B9${params.amount} ${currency}</div>
-        <div style="margin-bottom: 4px;"><strong>STATUS:</strong> <span style="font-weight: bold;">REJECTED</span></div>
+        <div style="margin-bottom: 4px;"><strong>STATUS:</strong> <span style="font-weight: bold;">VERIFICATION FAILED (REJECTED)</span></div>
         ${params.adminNote ? `<div style="margin-top: 6px;"><strong>ADMIN NOTE:</strong> ${params.adminNote}</div>` : ""}
       </div>
-      <p style="font-size: 13px; color: #44403c; font-weight: 500;">
-        The letter will continue without the personal voice/video enclosure.
+      <p style="font-size: 13px; color: #44403c; font-weight: 600;">
+        Important: Your letter will be dispatched and delivered as scheduled, but the personal voice/video enclosure will NOT accompany the letter upon arrival.
       </p>
       <p style="font-size: 13px; color: #57534e;">
-        If you believe this was an error, please contact the Correspondence Office.
+        If you believe this was an error, please contact the Correspondence Office with proof of transaction.
       </p>
     `
   );
@@ -469,7 +512,7 @@ async function sendPaymentIssueEmail(params) {
     html,
     text: `OLD-LETTERS \u2014 Payment Verification Failed
 
-Your payment could not be fully verified. The UTR/payment details provided could not be confirmed.
+Your payment reference could not be verified. The UPI / UTR transaction details provided could not be confirmed.
 
 Payment ID: ${params.orderReference}
 Amount: \u20B9${params.amount} ${currency}
@@ -477,13 +520,12 @@ ${params.upiReference ? `UTR: ${params.upiReference}
 ` : ""}Status: REJECTED
 ${params.adminNote ? `Reason: ${params.adminNote}
 ` : ""}
-The letter will continue without the personal voice/video enclosure.`
+Important: Your letter will continue and be delivered as scheduled, but the personal voice/video enclosure will NOT accompany the letter upon arrival.`
   });
 }
 
 // src/types/backend.ts
 import { z } from "zod";
-var MIN_DELIVERY_HOURS = 48;
 var CURRENT_TERMS_VERSION = "2026-10-01";
 var CURRENT_PRIVACY_VERSION = "2026-10-01";
 var LegalConsentSchema = z.object({
@@ -504,14 +546,8 @@ var CreateLetterSchema = z.object({
   signoff: z.string().trim().min(1, "Signoff is required"),
   verificationMethod: z.enum(["otp", "passphrase", "open"]).default("open"),
   passphrase: z.string().optional(),
-  scheduledDeliveryAt: z.string().optional().refine((val) => {
-    if (!val) return true;
-    const deliveryDate = new Date(val).getTime();
-    const minTime = Date.now() + (MIN_DELIVERY_HOURS * 3600 * 1e3 - 6e4);
-    return !isNaN(deliveryDate) && deliveryDate >= minTime;
-  }, {
-    message: `Delivery date must be at least ${MIN_DELIVERY_HOURS} hours in the future`
-  }),
+  scheduledDeliveryAt: z.string().optional().nullable(),
+  selectedTempoId: z.string().optional(),
   waitingHours: z.number().min(48, "Minimum 48 hours required").default(48),
   postmarkCity: z.string().optional().default("Hyderabad Bureau"),
   status: z.enum(["DRAFT", "SCHEDULED"]).default("SCHEDULED"),
@@ -810,11 +846,11 @@ var TEMPLATES = [
       stampIllustration: "\u{1F981}",
       cancellationDate: "12 OCT 2026"
     },
-    sampleSalutation: "Dear Vasantha,",
+    sampleSalutation: "Dear Recipient,",
     sampleBody: "I am writing this on the balcony as the evening cools down over the city.\n\nI wanted to tell you something I rarely say properly: how much I value your presence in my life.\n\nSome thoughts are too quiet for telephone calls, and too sacred for instant messages. I wanted you to hold these words in your hands, knowing they were written with stillness and patient care.",
     sampleSignoff: "With affection,",
-    sampleRecipient: "Vasantha",
-    sampleSender: "Lokesh",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "12 October 2026"
   },
@@ -870,11 +906,11 @@ var TEMPLATES = [
       stampIllustration: "\u{1F319}",
       cancellationDate: "14 OCT 2026"
     },
-    sampleSalutation: "Dear Vasantha,",
+    sampleSalutation: "Dear Recipient,",
     sampleBody: "The city lights below Banjara Hills have finally blinked out one by one.\n\nMidnight has a way of stripping away every pretence. I am writing to you because in the quietest silence of the day, your voice is still the one I hear most clearly.\n\nUnder this canopy of stars, take this letter as my promise to remain beside you through every season.",
     sampleSignoff: "Under the same stars,",
-    sampleRecipient: "Vasantha",
-    sampleSender: "Lokesh",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "02:14 AM \xB7 14 October 2026"
   },
@@ -933,7 +969,7 @@ var TEMPLATES = [
     sampleBody: "A milestone such as yours comes once in a generation.\n\nWatching you build your institute in Vizag with quiet dignity has been an inspiration to all of us. Please accept this formal testament of our highest esteem and pride.\n\nMay this document preserve our gratitude for your guidance through the years.",
     sampleSignoff: "With enduring respect,",
     sampleRecipient: "Satya",
-    sampleSender: "Vijay & Lokesh",
+    sampleSender: "Sender & Co.",
     sampleCity: "Vizag",
     sampleDate: "25 October 2026"
   },
@@ -989,11 +1025,11 @@ var TEMPLATES = [
       stampIllustration: "\u{1F54A}",
       cancellationDate: "04 DEC 2026"
     },
-    sampleSalutation: "My Beloved Vasantha,",
+    sampleSalutation: "My Beloved Recipient,",
     sampleBody: "In a world that hurries through every feeling, I wanted to build a sanctuary for ours.\n\nEvery time my train pulls into Secunderabad station, my eyes search for you in the crowd. Time has only deepened what I first saw in your eyes.\n\nI fold this letter with the certainty that whatever comes next, we face it together.",
     sampleSignoff: "Yours, always and wholly,",
-    sampleRecipient: "Vasantha",
-    sampleSender: "Lokesh",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "04 December 2026"
   },
@@ -1048,11 +1084,11 @@ var TEMPLATES = [
       stampIllustration: "\u{1F54A}",
       cancellationDate: "HEARTFELT"
     },
-    sampleSalutation: "Dear Vasantha,",
+    sampleSalutation: "Dear Recipient,",
     sampleBody: "I am writing this on the balcony as the evening cools down over the city.\n\nI wanted to tell you something I rarely say properly: how much I value your presence in my life.\n\nThere are feelings that defy casual conversation, emotions that only reveal themselves when given the quiet grace of a handwritten page. You have my heart, now and always.",
     sampleSignoff: "With affection,",
-    sampleRecipient: "Vasantha",
-    sampleSender: "Lokesh",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "12 October 2026"
   },
@@ -1107,11 +1143,11 @@ var TEMPLATES = [
       stampIllustration: "\u{1F54A}",
       cancellationDate: "12 OCT 2026"
     },
-    sampleSalutation: "Dear Vasantha,",
+    sampleSalutation: "Dear Recipient,",
     sampleBody: "I am writing this on the balcony as the evening cools down over the city.\n\nI wanted to tell you something I rarely say properly: how much I value your presence in my life, and how deeply I regret the moments when I failed to show it.\n\nPlease know that this letter comes from an honest heart, with the hope that we can mend whatever silence has grown between us.",
     sampleSignoff: "With sincerity and affection,",
-    sampleRecipient: "Vasantha",
-    sampleSender: "Lokesh",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "12 October 2026"
   },
@@ -1166,11 +1202,11 @@ var TEMPLATES = [
       stampIllustration: "\u{1F33F}",
       cancellationDate: "12 OCT 2026"
     },
-    sampleSalutation: "Dear Vasantha,",
+    sampleSalutation: "Dear Recipient,",
     sampleBody: "I am writing this on the balcony as the evening cools down over the city.\n\nI wanted to tell you something I rarely say properly: how much I value your presence in my life, and how grateful I am for every kindness you have shown me.\n\nYour generosity has made a quiet, lasting difference in my days. Thank you for being such an extraordinary friend.",
     sampleSignoff: "With deepest gratitude and affection,",
-    sampleRecipient: "Vasantha",
-    sampleSender: "Lokesh",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "12 October 2026"
   },
@@ -1225,11 +1261,11 @@ var TEMPLATES = [
       stampIllustration: "\u{1F382}",
       cancellationDate: "ANNIVERSARY POST"
     },
-    sampleSalutation: "Dear Vasantha,",
+    sampleSalutation: "Dear Recipient,",
     sampleBody: "I am writing this on the balcony as the evening cools down over the city.\n\nOn this wonderful day, I wanted to tell you how much I value your presence in my life, and celebrate everything that makes you who you are.\n\nMay the coming year bring you peace, deep joy, unexpected wonder, and good health. Wishing you the happiest of birthdays.",
     sampleSignoff: "With celebration and affection,",
-    sampleRecipient: "Vasantha",
-    sampleSender: "Lokesh",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "12 October 2026"
   },
@@ -1284,11 +1320,11 @@ var TEMPLATES = [
       stampIllustration: "\u{1F3C6}",
       cancellationDate: "12 OCT 2026"
     },
-    sampleSalutation: "Dear Vasantha,",
+    sampleSalutation: "Dear Recipient,",
     sampleBody: "I am writing this on the balcony as the evening cools down over the city.\n\nI wanted to celebrate this tremendous achievement with you and tell you how proud I am of all the quiet dedication that led to this moment.\n\nYou have earned this triumph through patience, resilience, and sheer resolve. Please accept my warmest and most admiring congratulations.",
     sampleSignoff: "With boundless pride and affection,",
-    sampleRecipient: "Vasantha",
-    sampleSender: "Lokesh",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "12 October 2026"
   },
@@ -1343,11 +1379,11 @@ var TEMPLATES = [
       stampIllustration: "\u{1F33F}",
       cancellationDate: "12 OCT 2026"
     },
-    sampleSalutation: "Dear Vasantha,",
+    sampleSalutation: "Dear Recipient,",
     sampleBody: "I am writing this on the balcony as the evening cools down over the city.\n\nI know that recent days have asked a great deal of your spirit. I wanted to remind you of the strength you carry, and how deeply I believe in your path forward.\n\nTake this moment one breath at a time. Whatever storms arrive, they will pass, and you will emerge stronger than before.",
     sampleSignoff: "Standing beside you with affection,",
-    sampleRecipient: "Vasantha",
-    sampleSender: "Lokesh",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "12 October 2026"
   },
@@ -1402,11 +1438,11 @@ var TEMPLATES = [
       stampIllustration: "\u{1F3EE}",
       cancellationDate: "DEPARTURE POST"
     },
-    sampleSalutation: "Dear Vasantha,",
+    sampleSalutation: "Dear Recipient,",
     sampleBody: "I am writing this on the balcony as the evening cools down over the city.\n\nAs our paths divide and new chapters call, I wanted to write down what your presence has meant to me before distance settles in.\n\nThough miles and time will separate our daily lives, the gratitude and affection I carry for you will never fade. Safe travels, wherever tomorrow leads.",
     sampleSignoff: "With fondest farewell and affection,",
-    sampleRecipient: "Vasantha",
-    sampleSender: "Lokesh",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "12 October 2026"
   },
@@ -1461,11 +1497,11 @@ var TEMPLATES = [
       stampIllustration: "\u2712",
       cancellationDate: "12 OCT 2026"
     },
-    sampleSalutation: "Dear Vasantha,",
+    sampleSalutation: "Dear Recipient,",
     sampleBody: "I am writing this on the balcony as the evening cools down over the city.\n\nI wanted to tell you something I rarely say properly: how much I value your presence in my life.\n\nSome thoughts are too quiet for telephone calls, and too sacred for instant messages. I wanted you to hold these words in your hands, knowing they were written with stillness and patient care.",
     sampleSignoff: "With affection,",
-    sampleRecipient: "Vasantha",
-    sampleSender: "Lokesh",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "12 October 2026"
   },
@@ -1703,7 +1739,7 @@ var TEMPLATES = [
     sampleBody: "Greetings from the hills of Ooty! The eucalyptus mist rolls right over the roof.\n\nThought of you as soon as the narrow-gauge train pulled into the station. Keep this card propped on your bookshelf until we catch up next month.",
     sampleSignoff: "Warmest regards,",
     sampleRecipient: "Vijay",
-    sampleSender: "Lokesh",
+    sampleSender: "Your Name",
     sampleCity: "Bengaluru",
     sampleDate: "09 November 2026"
   },
@@ -1880,7 +1916,7 @@ var TEMPLATES = [
     sampleBody: "If this envelope reaches your hands as scheduled ten years from today, you are now thirty-four.\n\nI hope you still laugh with your whole body, I hope you still love filter coffee in brass tumblers, and I hope you never forgot how fearless you were today.\n\nLook back gently on this younger version of you who loved you before you even existed.",
     sampleSignoff: "Penned from the past with endless love,",
     sampleRecipient: "Harshitha",
-    sampleSender: "Vasantha & Lokesh",
+    sampleSender: "Sender & Co.",
     sampleCity: "Hyderabad",
     sampleDate: "Scheduled Unsealing: 12 October 2036"
   },
@@ -1996,11 +2032,11 @@ var TEMPLATES = [
       stampIllustration: "\u{1F5DD}",
       cancellationDate: "01 NOV 2026"
     },
-    sampleSalutation: "Dearest Vasantha,",
+    sampleSalutation: "Dearest Recipient,",
     sampleBody: "Between you and me, locked beneath our private cipher.\n\nSome revelations belong strictly between two pairs of eyes and nowhere else in this noisy city.\n\nWhat is written here remains our sanctuary.",
     sampleSignoff: "In utmost secrecy,",
-    sampleRecipient: "Vasantha",
-    sampleSender: "Lokesh",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "01 November 2026"
   },
@@ -2060,7 +2096,7 @@ var TEMPLATES = [
     sampleBody: "By the time you break this seal, years will have reshaped our lives in ways we cannot now foresee.\n\nNever forget the courage with which you started, the dreams that kept you awake at night, and the people who stood beside you when the path was unclear.\n\nGreeting you from a yesterday that believed in you completely.",
     sampleSignoff: "With unwavering faith,",
     sampleRecipient: "Harshitha",
-    sampleSender: "Lokesh",
+    sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "Scheduled Arrival: 01 January 2030"
   }
@@ -2149,7 +2185,7 @@ async function seedDatabase() {
   const usersColl = db.collection("users");
   const sampleUsers = [
     { fullName: "Lokesh", email: "lokesh@oldletters.in", avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120" },
-    { fullName: "Vasantha", email: "vasantha@correspondence.in", avatarUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=120" },
+    { fullName: "Test Recipient", email: "recipient@example.com", avatarUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=120" },
     { fullName: "Vijay", email: "vijay.k@techpark.in", avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120" },
     { fullName: "Satya", email: "satya.dev@craft.org", avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120" },
     { fullName: "Sravani", email: "sravani.rao@letterpost.in", avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120" },
@@ -2201,7 +2237,7 @@ async function seedDatabase() {
       senderId: lokeshId,
       letterType: "LOVE",
       templateId: "ivory",
-      salutation: "Dearest Vasantha,",
+      salutation: "Dearest Recipient,",
       body: "I am writing this on the quiet veranda in Hyderabad as dusk descends. I chose the 48-hour post because some words deserve the quiet patience of waiting.",
       signoff: "Yours in patience,",
       status: "DELIVERED",
@@ -2218,8 +2254,8 @@ async function seedDatabase() {
     });
     await recipientsColl.insertOne({
       letterId,
-      email: "vasantha@correspondence.in",
-      displayName: "Vasantha",
+      email: "recipient@example.com",
+      displayName: "Test Recipient",
       verificationMethod: "open",
       verifiedAt: past1Hour,
       createdAt: past49Hours
@@ -2239,7 +2275,7 @@ async function seedDatabase() {
     await deliveryEventsColl.insertOne({
       letterId,
       eventType: "LETTER_DELIVERED",
-      metadata: { recipient: "vasantha@correspondence.in" },
+      metadata: { recipient: "recipient@example.com" },
       createdAt: past1Hour
     });
     console.log("[OLD-LETTERS Seed] Sample correspondence seeded successfully.");
@@ -2659,7 +2695,7 @@ app.get(["/api/auth/me", "/api/me", "/auth/me"], async (req, res) => {
           email: req.user.email.toLowerCase(),
           fullName: req.user.fullName || req.user.email.split("@")[0] || "Correspondent",
           avatarUrl: req.user.avatarUrl,
-          role: req.user.role || (req.user.email === adminEmail || req.user.email === "lokesh@oldletters.in" ? "ADMIN" : "USER"),
+          role: req.user.role || (isAdminEmail(req.user.email) ? "ADMIN" : "USER"),
           authProvider: req.user.authProvider || "GOOGLE",
           emailVerified: req.user.emailVerified ?? true,
           termsAccepted: true,
@@ -3807,9 +3843,9 @@ app.post(["/api/letters/draft", "/api/letters/save-draft"], requireAuth, async (
       letterId: requestedId,
       type = "LOVE",
       templateId = "ivory",
-      recipientName = "Recipient",
+      recipientName = "",
       recipientEmail = "",
-      greeting = "Dear Recipient,",
+      greeting = "Dear Friend,",
       content = "",
       signoff = "Yours,",
       verificationMethod = "open",
@@ -3819,7 +3855,7 @@ app.post(["/api/letters/draft", "/api/letters/save-draft"], requireAuth, async (
       attachments = []
     } = req.body;
     const now = /* @__PURE__ */ new Date();
-    const deliveryDate = scheduledDeliveryAt ? new Date(scheduledDeliveryAt) : new Date(now.getTime() + 48 * 3600 * 1e3);
+    const deliveryDate = scheduledDeliveryAt ? new Date(scheduledDeliveryAt) : new Date(now.getTime() + (Number(waitingHours) || 48) * 3600 * 1e3);
     let letter = null;
     if (requestedId && ObjectId.isValid(requestedId)) {
       letter = await lettersColl.findOne({
@@ -3935,7 +3971,19 @@ app.post("/api/letters", requireAuth, async (req, res) => {
     const mediaMetadataColl = db.collection("mediaMetadata");
     const letterId = new ObjectId();
     const now = /* @__PURE__ */ new Date();
-    const deliveryDate = new Date(input.scheduledDeliveryAt || Date.now() + (input.waitingHours || 48) * 3600 * 1e3);
+    const createdAt = now;
+    let deliveryDate;
+    if (input.waitingHours === 48 || input.selectedTempoId === "48h" || !input.scheduledDeliveryAt) {
+      deliveryDate = new Date(createdAt.getTime() + 48 * 3600 * 1e3);
+    } else {
+      const parsed = new Date(input.scheduledDeliveryAt);
+      const minDeliveryTime = createdAt.getTime() + (input.waitingHours || 48) * 3600 * 1e3;
+      if (!isNaN(parsed.getTime()) && parsed.getTime() >= createdAt.getTime() + 48 * 3600 * 1e3 - 15 * 60 * 1e3) {
+        deliveryDate = parsed;
+      } else {
+        deliveryDate = new Date(minDeliveryTime);
+      }
+    }
     const senderId = req.user.id;
     const senderEmail = (req.user?.email || input.senderEmail).toLowerCase();
     const senderName = input.senderName || req.user?.fullName || "Correspondent";
@@ -4079,9 +4127,11 @@ app.post("/api/letters", requireAuth, async (req, res) => {
         type: "SENDER_DISPATCH",
         to: senderEmail,
         letterId: letterId.toString(),
+        paymentId: linkedPaymentId || void 0,
         dispatchRef: trackingCode,
         status: senderMailRes.success ? "SENT" : "FAILED",
-        error: senderMailRes.error
+        error: senderMailRes.error,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
       });
       await eventsColl.insertOne({
         _id: new ObjectId(),
@@ -4095,9 +4145,11 @@ app.post("/api/letters", requireAuth, async (req, res) => {
         type: "SENDER_DISPATCH",
         to: senderEmail,
         letterId: letterId.toString(),
+        paymentId: linkedPaymentId || void 0,
         dispatchRef: trackingCode,
         status: "FAILED",
-        error: err.message
+        error: err.message,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
       });
     }
     try {
@@ -4114,9 +4166,11 @@ app.post("/api/letters", requireAuth, async (req, res) => {
         type: "RECIPIENT_DISPATCH",
         to: recipientEmail,
         letterId: letterId.toString(),
+        paymentId: linkedPaymentId || void 0,
         dispatchRef: trackingCode,
         status: recipientMailRes.success ? "SENT" : "FAILED",
-        error: recipientMailRes.error
+        error: recipientMailRes.error,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
       });
       await eventsColl.insertOne({
         _id: new ObjectId(),
@@ -4130,9 +4184,11 @@ app.post("/api/letters", requireAuth, async (req, res) => {
         type: "RECIPIENT_DISPATCH",
         to: recipientEmail,
         letterId: letterId.toString(),
+        paymentId: linkedPaymentId || void 0,
         dispatchRef: trackingCode,
         status: "FAILED",
-        error: err.message
+        error: err.message,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
       });
     }
     const responseLetter = {
@@ -5186,6 +5242,10 @@ async function runDeliveryScheduler(db) {
           });
         }
       }
+      const hasApprovedMedia = Boolean(
+        letter.hasMediaAttachment && (letter.mediaStatus === "APPROVED" || letter.personalMessage?.mediaStatus === "APPROVED")
+      );
+      const enclosureMediaType = letter.mediaType || letter.personalMessage?.type || letter.personalMessage?.mediaType;
       try {
         const arrivalRes = await sendArrivalRecipientEmail({
           recipientEmail,
@@ -5193,31 +5253,37 @@ async function runDeliveryScheduler(db) {
           trackingCode: letter.trackingCode,
           arrivalFormatted,
           recipientUrl: deliveryUrl,
-          requiresOtp: letter.recipientVerificationMethod === "otp"
+          requiresOtp: letter.recipientVerificationMethod === "otp",
+          hasApprovedMedia,
+          mediaType: enclosureMediaType === "VIDEO" ? "VIDEO" : enclosureMediaType === "VOICE" ? "VOICE" : void 0
         });
         logEmailDispatch({
-          type: "RECIPIENT_ARRIVAL",
+          type: "LETTER_ARRIVED",
           to: recipientEmail,
           letterId: letter._id.toString(),
+          paymentId: letter.mediaPaymentId || void 0,
           dispatchRef: letter.trackingCode,
           status: arrivalRes.success ? "SENT" : "FAILED",
-          error: arrivalRes.error
+          error: arrivalRes.error,
+          timestamp: (/* @__PURE__ */ new Date()).toISOString()
         });
         await eventsColl.insertOne({
           _id: new ObjectId(),
           letterId: letter._id,
           eventType: "RECIPIENT_ARRIVAL_EMAIL_SENT",
-          metadata: { recipientEmail },
+          metadata: { recipientEmail, hasApprovedMedia },
           createdAt: now
         });
       } catch (err) {
         logEmailDispatch({
-          type: "RECIPIENT_ARRIVAL",
+          type: "LETTER_ARRIVED",
           to: recipientEmail,
           letterId: letter._id.toString(),
+          paymentId: letter.mediaPaymentId || void 0,
           dispatchRef: letter.trackingCode,
           status: "FAILED",
-          error: err.message
+          error: err.message,
+          timestamp: (/* @__PURE__ */ new Date()).toISOString()
         });
       }
     }
@@ -5500,6 +5566,40 @@ app.post(["/api/payments", "/api/payments/create", "/payments", "/payments/creat
         });
       } catch {
       }
+    }
+    try {
+      const payMailRes = await sendPaymentSubmittedSenderEmail({
+        senderEmail: userEmail,
+        senderName,
+        paymentId: paymentIdStr,
+        upiReference: cleanUpi,
+        amount: input.amount,
+        currency: "INR",
+        mediaType: normalizedMediaType,
+        recipientName: recipientName || void 0,
+        letterReference: letter?.trackingCode || input.letterId || void 0
+      });
+      logEmailDispatch({
+        type: "PAYMENT_SUBMITTED",
+        to: userEmail,
+        letterId: paymentRecord.letterId || "",
+        paymentId: paymentIdStr,
+        dispatchRef: paymentIdStr,
+        status: payMailRes.success ? "SENT" : "FAILED",
+        error: payMailRes.error,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    } catch (emailErr) {
+      logEmailDispatch({
+        type: "PAYMENT_SUBMITTED",
+        to: userEmail,
+        letterId: paymentRecord.letterId || "",
+        paymentId: paymentIdStr,
+        dispatchRef: paymentIdStr,
+        status: "FAILED",
+        error: emailErr.message,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      });
     }
     res.status(201).json({
       success: true,
@@ -6175,30 +6275,70 @@ app.post(["/api/admin/payments/:id/verify", "/api/admin/payments/:id/approve", "
     if (senderEmail) {
       if (status === "REJECTED") {
         try {
-          await sendPaymentIssueEmail({
+          const rejectMailRes = await sendPaymentIssueEmail({
             userEmail: senderEmail,
             orderReference: payment.paymentId || `PAY-${payment._id.toString().slice(-8).toUpperCase()}`,
             amount: payment.amount || (payment.mediaType === "VIDEO" ? 149 : 99),
             currency: payment.currency || "INR",
+            upiReference: payment.upiReference,
             adminNote: adminNote || "Payment transaction details could not be verified. Your correspondence will continue without the personal voice/video enclosure.",
             contactUrl: `${process.env.APP_URL || "https://oldletters.in"}/contact`
           });
+          logEmailDispatch({
+            type: "PAYMENT_REJECTED",
+            to: senderEmail,
+            letterId: payment.letterId || "",
+            paymentId: payment.paymentId || payment._id.toString(),
+            dispatchRef: payment.paymentId || payment._id.toString(),
+            status: rejectMailRes.success ? "SENT" : "FAILED",
+            error: rejectMailRes.error,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString()
+          });
         } catch (emailErr) {
-          console.warn("[OLD-LETTERS Email Notice] Non-fatal rejection email issue:", emailErr);
+          logEmailDispatch({
+            type: "PAYMENT_REJECTED",
+            to: senderEmail,
+            letterId: payment.letterId || "",
+            paymentId: payment.paymentId || payment._id.toString(),
+            dispatchRef: payment.paymentId || payment._id.toString(),
+            status: "FAILED",
+            error: emailErr.message,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString()
+          });
         }
       } else if (status === "APPROVED") {
         try {
-          await sendPaymentApprovedEmail({
+          const approveMailRes = await sendPaymentApprovedEmail({
             userEmail: senderEmail,
             orderReference: payment.paymentId || `PAY-${payment._id.toString().slice(-8).toUpperCase()}`,
             amount: payment.amount || (payment.mediaType === "VIDEO" ? 149 : 99),
             currency: payment.currency || "INR",
+            upiReference: payment.upiReference,
             featureName: payment.mediaType === "VIDEO" ? "Video Message Enclosure" : "Voice Message Enclosure",
             adminNote: adminNote || void 0,
             statusUrl: `${process.env.APP_URL || "https://oldletters.in"}/bureau`
           });
+          logEmailDispatch({
+            type: "PAYMENT_APPROVED",
+            to: senderEmail,
+            letterId: payment.letterId || "",
+            paymentId: payment.paymentId || payment._id.toString(),
+            dispatchRef: payment.paymentId || payment._id.toString(),
+            status: approveMailRes.success ? "SENT" : "FAILED",
+            error: approveMailRes.error,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString()
+          });
         } catch (emailErr) {
-          console.warn("[OLD-LETTERS Email Notice] Non-fatal approval email issue:", emailErr);
+          logEmailDispatch({
+            type: "PAYMENT_APPROVED",
+            to: senderEmail,
+            letterId: payment.letterId || "",
+            paymentId: payment.paymentId || payment._id.toString(),
+            dispatchRef: payment.paymentId || payment._id.toString(),
+            status: "FAILED",
+            error: emailErr.message,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString()
+          });
         }
       }
     }

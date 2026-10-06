@@ -384,10 +384,10 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
                 <PaperSheet
                   template={currentTemplate}
                   date="12 October 2026"
-                  greeting="Dear Vasantha,"
+                  greeting="Dear Recipient,"
                   content="I am writing this on the balcony as the evening cools down over the city. I wanted to tell you something I rarely say properly: how much I value your presence in my life."
                   signoff="With affection,"
-                  senderName="Lokesh"
+                  senderName="Your Name"
                   isEditing={false}
                 />
               </div>

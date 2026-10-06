@@ -315,7 +315,7 @@ export const RadialCarousel: React.FC<RadialCarouselProps> = ({
                 {/* Letter Body Preview (Crisp High-Contrast Text) */}
                 <div className="space-y-2 py-3 flex-1 flex flex-col justify-center">
                   <div className="text-sm sm:text-base font-serif font-medium" style={{ color: fg }}>
-                    Dear Vasantha,
+                    Dear Recipient,
                   </div>
                   <p
                     className="text-xs sm:text-sm font-serif italic leading-relaxed line-clamp-3"
@@ -324,7 +324,7 @@ export const RadialCarousel: React.FC<RadialCarouselProps> = ({
                     &ldquo;I am writing this on the balcony as the evening cools down over the city. I wanted to tell you how much I value your presence in my life.&rdquo;
                   </p>
                   <div className="text-[11px] font-serif italic" style={{ color: fg, opacity: 0.85 }}>
-                    With affection, Lokesh
+                    With affection, Your Name
                   </div>
                 </div>
 
@@ -393,12 +393,12 @@ export const RadialCarousel: React.FC<RadialCarouselProps> = ({
                 </div>
 
                 <div className="space-y-4 py-6">
-                  <div className="text-lg font-serif">Dear Vasantha,</div>
+                  <div className="text-lg font-serif">Dear Recipient,</div>
                   <p className="text-base font-serif italic leading-relaxed" style={{ color: fg, opacity: 0.9 }}>
                     &ldquo;I am writing this on the balcony as the evening cools down over the city. I wanted to tell you how much I value your presence in my life.&rdquo;
                   </p>
                   <div className="text-sm font-serif italic" style={{ color: fg, opacity: 0.85 }}>
-                    With affection, Lokesh
+                    With affection, Your Name
                   </div>
                 </div>
 

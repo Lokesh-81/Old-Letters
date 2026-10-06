@@ -75,23 +75,27 @@ export interface SendMailOptions {
 export interface EmailLogEntry {
   type: string;
   to: string;
-  letterId: string;
-  dispatchRef: string;
+  letterId?: string;
+  paymentId?: string;
+  dispatchRef?: string;
   status: 'SENT' | 'FAILED';
   error?: string;
+  timestamp?: string;
 }
 
 /**
  * Structured logger for OLD-LETTERS transactional mailings.
- * Never logs letter body, OTP plaintext, passwords, or private content.
+ * Never logs letter body, OTP plaintext, passwords, API keys, or private secrets.
  */
 export function logEmailDispatch(entry: EmailLogEntry): void {
-  console.log(`[OLD-LETTERS EMAIL]
-type: ${entry.type}
-to: ${entry.to}
-letterId: ${entry.letterId}
-dispatchRef: ${entry.dispatchRef}
-status: ${entry.status}${entry.error ? `\nerror: ${entry.error}` : ''}`);
+  const ts = entry.timestamp || new Date().toISOString();
+  console.log(`[OLD-LETTERS EMAIL DISPATCH]
+event: ${entry.type}
+recipient: ${entry.to}
+paymentId: ${entry.paymentId || entry.dispatchRef || 'N/A'}
+letterId: ${entry.letterId || 'N/A'}
+timestamp: ${ts}
+status: ${entry.status}${entry.error ? `\nprovider error: ${entry.error}` : ''}`);
 }
 
 /**
@@ -643,20 +647,20 @@ export async function sendPaymentIssueEmail(params: {
     `
       <p style="margin-top: 0;">Greetings,</p>
       <p>
-        Your payment could not be fully verified. The UTR/payment details provided could not be confirmed.
+        Your payment reference could not be verified. The UPI / UTR transaction details provided could not be confirmed with our correspondence registry.
       </p>
       <div style="background-color: #fef2f2; border-left: 3px solid #dc2626; padding: 14px 18px; margin: 20px 0; border-radius: 0 4px 4px 0; font-size: 13px; color: #991b1b; font-family: monospace;">
         <div style="margin-bottom: 4px;"><strong>PAYMENT ID:</strong> ${params.orderReference}</div>
         ${params.upiReference ? `<div style="margin-bottom: 4px;"><strong>UPI UTR:</strong> ${params.upiReference}</div>` : ''}
         <div style="margin-bottom: 4px;"><strong>AMOUNT:</strong> ₹${params.amount} ${currency}</div>
-        <div style="margin-bottom: 4px;"><strong>STATUS:</strong> <span style="font-weight: bold;">REJECTED</span></div>
+        <div style="margin-bottom: 4px;"><strong>STATUS:</strong> <span style="font-weight: bold;">VERIFICATION FAILED (REJECTED)</span></div>
         ${params.adminNote ? `<div style="margin-top: 6px;"><strong>ADMIN NOTE:</strong> ${params.adminNote}</div>` : ''}
       </div>
-      <p style="font-size: 13px; color: #44403c; font-weight: 500;">
-        The letter will continue without the personal voice/video enclosure.
+      <p style="font-size: 13px; color: #44403c; font-weight: 600;">
+        Important: Your letter will be dispatched and delivered as scheduled, but the personal voice/video enclosure will NOT accompany the letter upon arrival.
       </p>
       <p style="font-size: 13px; color: #57534e;">
-        If you believe this was an error, please contact the Correspondence Office.
+        If you believe this was an error, please contact the Correspondence Office with proof of transaction.
       </p>
     `
   );
@@ -665,6 +669,6 @@ export async function sendPaymentIssueEmail(params: {
     to: params.userEmail,
     subject,
     html,
-    text: `OLD-LETTERS — Payment Verification Failed\n\nYour payment could not be fully verified. The UTR/payment details provided could not be confirmed.\n\nPayment ID: ${params.orderReference}\nAmount: ₹${params.amount} ${currency}\n${params.upiReference ? `UTR: ${params.upiReference}\n` : ''}Status: REJECTED\n${params.adminNote ? `Reason: ${params.adminNote}\n` : ''}\nThe letter will continue without the personal voice/video enclosure.`,
+    text: `OLD-LETTERS — Payment Verification Failed\n\nYour payment reference could not be verified. The UPI / UTR transaction details provided could not be confirmed.\n\nPayment ID: ${params.orderReference}\nAmount: ₹${params.amount} ${currency}\n${params.upiReference ? `UTR: ${params.upiReference}\n` : ''}Status: REJECTED\n${params.adminNote ? `Reason: ${params.adminNote}\n` : ''}\nImportant: Your letter will continue and be delivered as scheduled, but the personal voice/video enclosure will NOT accompany the letter upon arrival.`,
   });
 }
