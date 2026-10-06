@@ -134,7 +134,7 @@ export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
                 DISPATCHED FROM
               </div>
               <div className="font-serif text-sm text-stone-900 font-medium truncate">
-                {senderName}
+                {senderName && senderName.trim() ? senderName : 'Your Name'}
               </div>
             </div>
 
@@ -154,7 +154,7 @@ export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
               FOR THE EYES OF
             </div>
             <div className="font-serif text-2xl sm:text-3xl text-stone-950 font-normal tracking-tight">
-              {recipientName || 'Recipient'}
+              {recipientName && recipientName.trim() ? recipientName : 'Recipient Name'}
             </div>
             <div className="text-xs font-sans text-stone-500 mt-1">
               Private correspondence · Hand delivered

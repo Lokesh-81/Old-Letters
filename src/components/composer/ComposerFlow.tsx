@@ -122,8 +122,8 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
       // Safe fallback
     }
 
-    const defaultSender = currentUser?.fullName || 'Correspondent';
-    const defaultEmail = currentUser?.email || 'correspondent@oldletters.in';
+    const defaultSender = currentUser?.fullName || '';
+    const defaultEmail = currentUser?.email || '';
 
     return {
       id: `ol-${Date.now()}`,
@@ -135,7 +135,7 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
       recipientName: '', // PART 3: Recipient MUST be entered; do not silently default
       recipientEmail: '', // PART 3: Recipient email MUST be entered; do not silently default
       letterDate: todayFormatted,
-      greeting: 'Dear Friend,',
+      greeting: '',
       content: `I am writing this on the balcony as the evening cools down over the city.
 
 I wanted to tell you something I rarely say properly: how much I value your presence in my life. In a world where everyone is perpetually rushing to the next appointment, your calm presence is a gift.
@@ -577,8 +577,8 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
       setIsSubmittingPost(true);
       setPostError(null);
 
-      const senderName = currentUser.fullName || draft.senderName || 'Correspondent';
-      const senderEmail = currentUser.email || draft.senderEmail || 'correspondent@oldletters.in';
+      const senderName = currentUser?.fullName || draft.senderName || 'Your Name';
+      const senderEmail = currentUser?.email || draft.senderEmail || 'correspondent@oldletters.in';
 
       const result = await postLetter({
         type: draft.type,
@@ -587,7 +587,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
         senderEmail,
         recipientName: draft.recipientName.trim(),
         recipientEmail: draft.recipientEmail.trim().toLowerCase(),
-        greeting: draft.greeting,
+        greeting: draft.greeting || (draft.recipientName?.trim() ? `Dear ${draft.recipientName.trim()},` : 'Dear Recipient,'),
         content: draft.content,
         signoff: draft.signoff,
         verificationMethod: draft.verificationMethod,
@@ -783,8 +783,8 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                 }}
               >
                 <EnvelopeObject
-                  recipientName={draft.recipientName}
-                  senderName={draft.senderName}
+                  recipientName={draft.recipientName || 'Recipient Name'}
+                  senderName={draft.senderName || 'Your Name'}
                   date={draft.letterDate}
                   sealColor={activeTemplate.waxSealStyle?.color || (activeTemplate as any).sealColor}
                   sealEmblem={activeTemplate.waxSealStyle?.emblem || (activeTemplate as any).sealEmblem}
@@ -812,11 +812,17 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                 <PaperSheet
                   template={activeTemplate}
                   date={draft.letterDate}
-                  greeting={draft.greeting}
+                  greeting={
+                    draft.greeting && draft.greeting.trim()
+                      ? draft.greeting
+                      : draft.recipientName?.trim()
+                      ? `Dear ${draft.recipientName.trim()},`
+                      : 'Dear Recipient,'
+                  }
                   content={draft.content}
                   signoff={draft.signoff}
-                  senderName={draft.senderName}
-                  recipientName={draft.recipientName}
+                  senderName={draft.senderName || 'Your Name'}
+                  recipientName={draft.recipientName || 'Recipient Name'}
                   attachments={draft.attachments}
                   isEditing={false}
                 />
@@ -949,7 +955,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                     type="text"
                     value={draft.greeting}
                     onChange={(e) => updateDraft({ greeting: e.target.value })}
-                    placeholder="Dear Recipient,"
+                    placeholder={draft.recipientName?.trim() ? `Dear ${draft.recipientName.trim()},` : 'Dear Recipient,'}
                     className="w-full bg-white border border-[#eae4da] focus:border-teal-900 px-4 py-3 text-teal-950 font-serif text-xl focus:outline-none rounded-xs transition-colors shadow-2xs"
                   />
                 </div>
@@ -982,7 +988,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
                   </div>
                   <div className="space-y-2">
                     <label className="block text-[11px] font-mono text-stone-500 uppercase tracking-wider">
-                      Your Name
+                      Your Name / Sender Name
                     </label>
                     <input
                       type="text"

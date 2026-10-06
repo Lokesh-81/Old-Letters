@@ -36,8 +36,8 @@ export const CORRESPONDENCE_PAGES: LetterScrollItem[] = [
   {
     id: 'gratitude-letter',
     type: 'GRATITUDE',
-    recipient: 'Ananya',
-    sender: 'Arjun',
+    recipient: 'Recipient Name',
+    sender: 'Your Name',
     date: '14 October 2026',
     excerpt: 'Your patience during that winter changed everything for me. Thank you for never demanding that I explain myself.',
     paperColor: '#f7f4ed',
@@ -51,8 +51,8 @@ export const CORRESPONDENCE_PAGES: LetterScrollItem[] = [
   {
     id: 'airmail-letter',
     type: 'FRIENDSHIP',
-    recipient: 'Kavya',
-    sender: 'Rohit',
+    recipient: 'Recipient Name',
+    sender: 'Your Name',
     date: '02 November 2026',
     excerpt: 'I am posting this from the ferry station at dawn. The morning light on the water made me wish you were here with a notebook.',
     paperColor: '#f4f6f8',
@@ -66,8 +66,8 @@ export const CORRESPONDENCE_PAGES: LetterScrollItem[] = [
   {
     id: 'apology-letter',
     type: 'APOLOGY',
-    recipient: 'Pooja',
-    sender: 'Aditya',
+    recipient: 'Recipient Name',
+    sender: 'Your Name',
     date: '18 November 2026',
     excerpt: 'I spoke before thinking. I value our companionship far too deeply to let careless words stand between us.',
     paperColor: '#fbfaf8',
@@ -81,8 +81,8 @@ export const CORRESPONDENCE_PAGES: LetterScrollItem[] = [
   {
     id: 'midnight-archive',
     type: 'SOLACE',
-    recipient: 'Sravani',
-    sender: 'Siddharth',
+    recipient: 'Recipient Name',
+    sender: 'Your Name',
     date: '01 December 2026',
     excerpt: 'When the world is too loud, take comfort in knowing that not everything requires an immediate answer.',
     paperColor: '#131e1c',
@@ -191,7 +191,9 @@ function Card({ item, i, onSelect }: CardProps) {
           {/* Salutation & Letter Prose */}
           <div className="space-y-3 py-3">
             <div className="text-xl font-medium tracking-tight font-serif">
-              Dear {item.recipient},
+              {item.recipient === 'Recipient Name' || item.recipient === 'Recipient'
+                ? 'Dear Recipient,'
+                : `Dear ${item.recipient},`}
             </div>
             <p className="text-sm font-serif italic leading-relaxed opacity-85 line-clamp-4">
               "{item.excerpt}"
@@ -201,7 +203,7 @@ function Card({ item, i, onSelect }: CardProps) {
           {/* Bottom Signoff & CTA */}
           <div className="pt-3 border-t border-black/10 flex items-center justify-between">
             <div className="text-xs font-serif italic opacity-75">
-              Yours, <span className="font-semibold">{item.sender}</span>
+              Yours, <span className="font-semibold">{item.sender || 'Your Name'}</span>
             </div>
             <span className="text-[11px] font-mono uppercase tracking-wider px-3 py-1 rounded-sm bg-black/5 hover:bg-black/10 transition-colors font-medium">
               Write this →

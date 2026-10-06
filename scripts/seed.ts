@@ -67,17 +67,11 @@ export async function seedDatabase() {
     }
   }
 
-  // 3. Seed Sample Indian Users
+  // 3. Seed Users
   const usersColl = db.collection('users');
   const sampleUsers = [
-    { fullName: 'Lokesh', email: 'lokesh@oldletters.in', avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120' },
-    { fullName: 'Test Recipient', email: 'recipient@example.com', avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=120' },
-    { fullName: 'Vijay', email: 'vijay.k@techpark.in', avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120' },
-    { fullName: 'Satya', email: 'satya.dev@craft.org', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120' },
-    { fullName: 'Sravani', email: 'sravani.rao@letterpost.in', avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120' },
-    { fullName: 'Harshitha', email: 'harshitha.v@hyderabad.in', avatarUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=120' },
-    { fullName: 'Sathwik', email: 'sathwik.b@bengaluru.in', avatarUrl: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=120' },
-    { fullName: 'Karthik', email: 'karthik.m@chennai.in', avatarUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=120' },
+    { fullName: 'Sender Name', email: 'sender@oldletters.in', avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120' },
+    { fullName: 'Recipient Name', email: 'recipient@example.com', avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=120' },
   ];
 
   const defaultPasswordHash = await bcrypt.hash('letters1892', 10);
@@ -113,8 +107,8 @@ export async function seedDatabase() {
   const deliveryTokensColl = db.collection('deliveryTokens');
   const deliveryEventsColl = db.collection('deliveryEvents');
 
-  const lokeshUser = userMap.get('lokesh@oldletters.in');
-  const lokeshId = lokeshUser ? lokeshUser._id : new ObjectId();
+  const senderUser = userMap.get('sender@oldletters.in');
+  const senderId = senderUser ? senderUser._id : new ObjectId();
 
   const count = await lettersColl.countDocuments();
   if (count === 0) {
@@ -128,7 +122,7 @@ export async function seedDatabase() {
 
     await lettersColl.insertOne({
       _id: letterId,
-      senderId: lokeshId,
+      senderId: senderId,
       letterType: 'LOVE',
       templateId: 'ivory',
       salutation: 'Dearest Recipient,',
@@ -150,7 +144,7 @@ export async function seedDatabase() {
     await recipientsColl.insertOne({
       letterId: letterId,
       email: 'recipient@example.com',
-      displayName: 'Test Recipient',
+      displayName: 'Recipient Name',
       verificationMethod: 'open',
       verifiedAt: past1Hour,
       createdAt: past49Hours,

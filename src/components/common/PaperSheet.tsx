@@ -59,6 +59,16 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
 
   const t = customTemplate || TEMPLATES.find((tpl) => tpl.id === normalizedId) || TEMPLATES[0];
 
+  // Data-driven fallback values for greeting, recipient, and sender
+  const effectiveRecipient = recipientName && recipientName.trim() ? recipientName.trim() : 'Recipient Name';
+  const effectiveSender = senderName && senderName.trim() ? senderName.trim() : 'Your Name';
+  const effectiveGreeting =
+    greeting && greeting.trim()
+      ? greeting
+      : recipientName && recipientName.trim()
+      ? `Dear ${recipientName.trim()},`
+      : 'Dear Recipient,';
+
   // Contrast-safe theme tokens
   const bg = t.paperBackground || t.paperColor || '#FAF6EE';
   const fg = t.paperForeground || t.inkColor || '#3A2520';
@@ -543,13 +553,13 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
                 type="text"
                 value={greeting}
                 onChange={(e) => onGreetingChange?.(e.target.value)}
-                placeholder="Dear [Recipient],"
+                placeholder="Dear Recipient,"
                 className="w-full text-xl sm:text-2xl font-medium bg-transparent border-b border-transparent hover:border-current/20 focus:border-current/40 focus:outline-none transition-colors"
                 style={{ color: fg }}
               />
             ) : (
               <h2 className="text-xl sm:text-2xl font-medium tracking-tight" style={{ color: fg }}>
-                {greeting}
+                {effectiveGreeting}
               </h2>
             )}
           </div>
@@ -591,7 +601,7 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
                   <div className="text-[10px] font-mono uppercase tracking-widest" style={{ color: muted }}>
                     ADDRESSED TO:
                   </div>
-                  <div className="border-b pb-1 text-sm font-serif" style={{ borderColor: border, color: fg }}>{recipientName}</div>
+                  <div className="border-b pb-1 text-sm font-serif" style={{ borderColor: border, color: fg }}>{effectiveRecipient}</div>
                   <div className="border-b pb-1 text-xs font-mono" style={{ borderColor: border, color: muted }}>
                     Poste Restante · {t.sampleCity || 'Hyderabad'}
                   </div>
@@ -684,16 +694,16 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
                   type="text"
                   value={senderName}
                   onChange={(e) => onSenderChange?.(e.target.value)}
-                  placeholder="Your name"
+                  placeholder="Your Name"
                   className="w-full text-right text-lg sm:text-xl font-medium bg-transparent border-b border-dashed focus:outline-none"
                   style={{ color: fg, borderColor: border }}
                 />
               </div>
             ) : (
               <div className="space-y-1">
-                <div className="text-base sm:text-lg italic" style={{ color: fg }}>{signoff}</div>
+                <div className="text-base sm:text-lg italic" style={{ color: fg }}>{signoff || 'With affection,'}</div>
                 <div className="text-lg sm:text-xl font-medium tracking-tight" style={{ color: fg }}>
-                  {senderName || 'Anonymous'}
+                  {effectiveSender}
                 </div>
               </div>
             )}

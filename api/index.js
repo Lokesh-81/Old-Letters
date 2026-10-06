@@ -965,11 +965,11 @@ var TEMPLATES = [
       stampIllustration: "\u269C",
       cancellationDate: "25 OCT 2026"
     },
-    sampleSalutation: "Respected Satya,",
+    sampleSalutation: "Respected Recipient,",
     sampleBody: "A milestone such as yours comes once in a generation.\n\nWatching you build your institute in Vizag with quiet dignity has been an inspiration to all of us. Please accept this formal testament of our highest esteem and pride.\n\nMay this document preserve our gratitude for your guidance through the years.",
     sampleSignoff: "With enduring respect,",
-    sampleRecipient: "Satya",
-    sampleSender: "Sender & Co.",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Vizag",
     sampleDate: "25 October 2026"
   },
@@ -1558,11 +1558,11 @@ var TEMPLATES = [
       stampIllustration: "\u2708",
       cancellationDate: "15 NOV 2026"
     },
-    sampleSalutation: "Dearest Sravani,",
+    sampleSalutation: "Dearest Recipient,",
     sampleBody: "The rains in Bengaluru are relentless this week, tapping against the glass just like the monsoon evenings we spent near Cubbon Park.\n\nEven across the miles between here and Vizag, this envelope carries my unwavering affection to your doorstep.\n\nWrite back as soon as this reaches your desk.",
     sampleSignoff: "Sent across the skies,",
-    sampleRecipient: "Sravani",
-    sampleSender: "Vijay",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Bengaluru",
     sampleDate: "15 November 2026"
   },
@@ -1617,11 +1617,11 @@ var TEMPLATES = [
       stampIllustration: "\u26A1",
       cancellationDate: "18 OCT 2026"
     },
-    sampleSalutation: "Dear Satya,",
+    sampleSalutation: "Dear Recipient,",
     sampleBody: "The clatter of this typewriter keys has kept me company through midnight.\n\nThere is an honesty to letters written on steel hammers\u2014you cannot backspace, you cannot hide your thoughts. I am writing to remind you that your grit through these exams is something we all look up to.\n\nKeep your head high; the summit is near.",
     sampleSignoff: "Typed in fellowship,",
-    sampleRecipient: "Satya",
-    sampleSender: "Karthik",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Vizag",
     sampleDate: "18 October 2026"
   },
@@ -1676,11 +1676,11 @@ var TEMPLATES = [
       stampIllustration: "\u2712",
       cancellationDate: "22 SEP 2026"
     },
-    sampleSalutation: "Dear Harshitha,",
+    sampleSalutation: "Dear Recipient,",
     sampleBody: "Sitting by the veranda at dawn. The morning filter coffee is steaming, and the parrots are in the guava tree outside.\n\nI wrote this entry with you in mind, thinking of the promises we made to never let distance turn our memories into strangers.\n\nMay this quiet page carry the morning calm directly into your hands.",
     sampleSignoff: "From my journal to yours,",
-    sampleRecipient: "Harshitha",
-    sampleSender: "Sravani",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Chennai",
     sampleDate: "22 September 2026"
   },
@@ -1735,10 +1735,10 @@ var TEMPLATES = [
       stampIllustration: "\u{1F418}",
       cancellationDate: "09 NOV 2026"
     },
-    sampleSalutation: "Namaste Vijay,",
+    sampleSalutation: "Dear Recipient,",
     sampleBody: "Greetings from the hills of Ooty! The eucalyptus mist rolls right over the roof.\n\nThought of you as soon as the narrow-gauge train pulled into the station. Keep this card propped on your bookshelf until we catch up next month.",
     sampleSignoff: "Warmest regards,",
-    sampleRecipient: "Vijay",
+    sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
     sampleCity: "Bengaluru",
     sampleDate: "09 November 2026"
@@ -1794,11 +1794,11 @@ var TEMPLATES = [
       stampIllustration: "\u{1F4F7}",
       cancellationDate: "30 OCT 2026"
     },
-    sampleSalutation: "Dearest Sravani,",
+    sampleSalutation: "Dearest Recipient,",
     sampleBody: "I found this old print tucked inside an encyclopaedia at the British Council Library.\n\nIt made me smile all morning\u2014it captures the exact unforced laughter of that monsoon afternoon on Marine Drive. Some moments refuse to fade.\n\nMounted here so it remains safe for decades to come.",
     sampleSignoff: "Preserved with tenderness,",
-    sampleRecipient: "Sravani",
-    sampleSender: "Vijay",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Mumbai",
     sampleDate: "30 October 2026"
   },
@@ -1853,11 +1853,11 @@ var TEMPLATES = [
       stampIllustration: "\u{1F33F}",
       cancellationDate: "05 NOV 2026"
     },
-    sampleSalutation: "Dear Karthik,",
+    sampleSalutation: "Dear Recipient,",
     sampleBody: "Specimen: Nelumbo nucifera \xB7 Dal Lake Collection.\n\nLike the lotus that roots in still waters and blooms immaculate toward the sun, your patience over these five arduous years has culminated in something rare and honorable.\n\nCatalogued here in lasting fellowship.",
     sampleSignoff: "Catalogued in friendship,",
-    sampleRecipient: "Karthik",
-    sampleSender: "Sathwik",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Bengaluru",
     sampleDate: "05 November 2026"
   },
@@ -1912,11 +1912,11 @@ var TEMPLATES = [
       stampIllustration: "\u23F3",
       cancellationDate: "12 OCT 2036"
     },
-    sampleSalutation: "To Harshitha of 2036,",
+    sampleSalutation: "To the Recipient of 2036,",
     sampleBody: "If this envelope reaches your hands as scheduled ten years from today, you are now thirty-four.\n\nI hope you still laugh with your whole body, I hope you still love filter coffee in brass tumblers, and I hope you never forgot how fearless you were today.\n\nLook back gently on this younger version of you who loved you before you even existed.",
     sampleSignoff: "Penned from the past with endless love,",
-    sampleRecipient: "Harshitha",
-    sampleSender: "Sender & Co.",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "Scheduled Unsealing: 12 October 2036"
   },
@@ -1972,11 +1972,11 @@ var TEMPLATES = [
       stampIllustration: "\u{1F338}",
       cancellationDate: "28 OCT 2026"
     },
-    sampleSalutation: "My Harshitha,",
+    sampleSalutation: "Dearest Recipient,",
     sampleBody: "I pressed a fresh jasmine blossom into the folds of this letter, gathered this morning from the courtyard garden.\n\nMay its memory greet you when you unfold the paper. Every petal reminds me of the gentle patience with which you listen.\n\nKeep this blossom between the pages of your favorite book.",
     sampleSignoff: "With quiet devotion,",
-    sampleRecipient: "Harshitha",
-    sampleSender: "Sathwik",
+    sampleRecipient: "Recipient Name",
+    sampleSender: "Your Name",
     sampleCity: "Chennai",
     sampleDate: "28 October 2026"
   },
@@ -2095,7 +2095,7 @@ var TEMPLATES = [
     sampleSalutation: "To My Future Companion,",
     sampleBody: "By the time you break this seal, years will have reshaped our lives in ways we cannot now foresee.\n\nNever forget the courage with which you started, the dreams that kept you awake at night, and the people who stood beside you when the path was unclear.\n\nGreeting you from a yesterday that believed in you completely.",
     sampleSignoff: "With unwavering faith,",
-    sampleRecipient: "Harshitha",
+    sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
     sampleCity: "Hyderabad",
     sampleDate: "Scheduled Arrival: 01 January 2030"
@@ -2184,14 +2184,8 @@ async function seedDatabase() {
   }
   const usersColl = db.collection("users");
   const sampleUsers = [
-    { fullName: "Lokesh", email: "lokesh@oldletters.in", avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120" },
-    { fullName: "Test Recipient", email: "recipient@example.com", avatarUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=120" },
-    { fullName: "Vijay", email: "vijay.k@techpark.in", avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120" },
-    { fullName: "Satya", email: "satya.dev@craft.org", avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120" },
-    { fullName: "Sravani", email: "sravani.rao@letterpost.in", avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120" },
-    { fullName: "Harshitha", email: "harshitha.v@hyderabad.in", avatarUrl: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=120" },
-    { fullName: "Sathwik", email: "sathwik.b@bengaluru.in", avatarUrl: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=120" },
-    { fullName: "Karthik", email: "karthik.m@chennai.in", avatarUrl: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=120" }
+    { fullName: "Sender Name", email: "sender@oldletters.in", avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120" },
+    { fullName: "Recipient Name", email: "recipient@example.com", avatarUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=120" }
   ];
   const defaultPasswordHash = await bcrypt.hash("letters1892", 10);
   const userMap = /* @__PURE__ */ new Map();
@@ -2222,8 +2216,8 @@ async function seedDatabase() {
   const recipientsColl = db.collection("letterRecipients");
   const deliveryTokensColl = db.collection("deliveryTokens");
   const deliveryEventsColl = db.collection("deliveryEvents");
-  const lokeshUser = userMap.get("lokesh@oldletters.in");
-  const lokeshId = lokeshUser ? lokeshUser._id : new ObjectId();
+  const senderUser = userMap.get("sender@oldletters.in");
+  const senderId = senderUser ? senderUser._id : new ObjectId();
   const count = await lettersColl.countDocuments();
   if (count === 0) {
     const rawToken = "48hourstowaitforloveceremony001";
@@ -2234,7 +2228,7 @@ async function seedDatabase() {
     const past1Hour = new Date(now.getTime() - 1 * 3600 * 1e3);
     await lettersColl.insertOne({
       _id: letterId,
-      senderId: lokeshId,
+      senderId,
       letterType: "LOVE",
       templateId: "ivory",
       salutation: "Dearest Recipient,",
@@ -2255,7 +2249,7 @@ async function seedDatabase() {
     await recipientsColl.insertOne({
       letterId,
       email: "recipient@example.com",
-      displayName: "Test Recipient",
+      displayName: "Recipient Name",
       verificationMethod: "open",
       verifiedAt: past1Hour,
       createdAt: past49Hours

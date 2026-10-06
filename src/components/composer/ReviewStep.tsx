@@ -63,8 +63,8 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
             <div className="flex items-start justify-between">
               <div>
                 <span className="text-[11px] font-mono text-stone-500 uppercase block">FROM</span>
-                <span className="font-serif text-lg text-stone-200">{draft.senderName}</span>
-                <span className="text-xs text-stone-400 block">{draft.senderEmail}</span>
+                <span className="font-serif text-lg text-stone-200">{draft.senderName || 'Your Name'}</span>
+                <span className="text-xs text-stone-400 block">{draft.senderEmail || 'No email provided'}</span>
               </div>
               <button
                 type="button"
@@ -79,8 +79,8 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
             <div className="flex items-start justify-between border-t border-stone-800/60 pt-4">
               <div>
                 <span className="text-[11px] font-mono text-stone-500 uppercase block">TO</span>
-                <span className="font-serif text-lg text-stone-200">{draft.recipientName}</span>
-                <span className="text-xs text-stone-400 block">{draft.recipientEmail}</span>
+                <span className="font-serif text-lg text-stone-200">{draft.recipientName || 'Recipient Name'}</span>
+                <span className="text-xs text-stone-400 block">{draft.recipientEmail || 'No email provided'}</span>
               </div>
               <button
                 type="button"
@@ -186,8 +186,8 @@ export const ReviewStep: React.FC<ReviewStepProps> = ({
             <div className="transform scale-95 sm:scale-100 transition-transform">
               <EnvelopeObject
                 templateId={draft.templateId}
-                recipientName={draft.recipientName}
-                senderName={draft.senderName}
+                recipientName={draft.recipientName || 'Recipient Name'}
+                senderName={draft.senderName || 'Your Name'}
                 date={draft.letterDate}
                 isSealed={true}
                 isOpen={false}
