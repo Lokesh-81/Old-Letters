@@ -111,12 +111,25 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
       const savedLocal = localStorage.getItem('old_letters_working_draft');
       const raw = savedSession || savedLocal;
       if (raw) {
-        const parsed = JSON.parse(raw);
-        if (currentUser) {
-          parsed.senderName = currentUser.fullName || parsed.senderName;
-          parsed.senderEmail = currentUser.email || parsed.senderEmail;
+        const rawLower = raw.toLowerCase();
+        // Discard any draft containing legacy demo/personal data
+        if (
+          rawLower.includes('vasantha') ||
+          rawLower.includes('correspondence.in') ||
+          rawLower.includes('lokesh') ||
+          rawLower.includes('hyderabad') ||
+          rawLower.includes('mumbai')
+        ) {
+          localStorage.removeItem('old_letters_working_draft');
+          sessionStorage.removeItem('old_letters_working_draft');
+        } else {
+          const parsed = JSON.parse(raw);
+          if (currentUser) {
+            parsed.senderName = currentUser.fullName || parsed.senderName;
+            parsed.senderEmail = currentUser.email || parsed.senderEmail;
+          }
+          return parsed;
         }
-        return parsed;
       }
     } catch {
       // Safe fallback
@@ -129,19 +142,15 @@ export const ComposerFlow: React.FC<ComposerFlowProps> = ({
       id: `ol-${Date.now()}`,
       trackingCode: `OL-${Math.floor(1000 + Math.random() * 9000)}-${String.fromCharCode(65 + Math.floor(Math.random() * 26))}`,
       type: initialType,
-      templateId: '', // PART 2: Stationery MUST be selected; do not silently default to ivory
+      templateId: '', // Stationery MUST be selected
       senderName: defaultSender,
       senderEmail: defaultEmail,
-      recipientName: '', // PART 3: Recipient MUST be entered; do not silently default
-      recipientEmail: '', // PART 3: Recipient email MUST be entered; do not silently default
+      recipientName: '', // Recipient name starts empty (placeholder only)
+      recipientEmail: '', // Recipient email starts empty (placeholder only)
       letterDate: todayFormatted,
-      greeting: '',
-      content: `I am writing this on the balcony as the evening cools down over the city.
-
-I wanted to tell you something I rarely say properly: how much I value your presence in my life. In a world where everyone is perpetually rushing to the next appointment, your calm presence is a gift.
-
-I chose the 48-hour post because some words deserve to be waited for. Take your time with this.`,
-      signoff: 'Yours in correspondence,',
+      greeting: '', // Greeting starts empty (placeholder only)
+      content: '', // Composer starts empty
+      signoff: '',
       attachments: [],
       verificationMethod: 'open',
       postedAt: new Date().toISOString(),
@@ -150,7 +159,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
       selectedTempoId: '48h',
       personalMessageType: 'LETTER_ONLY',
       status: 'IN TRANSIT',
-      postmarkCity: 'Hyderabad Bureau',
+      postmarkCity: 'Central Postal Archive',
     };
   });
 
@@ -595,7 +604,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
         scheduledDeliveryAt: draft.selectedTempoId === '48h' || draft.waitingHours === 48 ? undefined : draft.scheduledDeliveryAt,
         waitingHours: draft.waitingHours || 48,
         selectedTempoId: draft.selectedTempoId || '48h',
-        postmarkCity: draft.postmarkCity || 'Hyderabad Bureau',
+        postmarkCity: draft.postmarkCity || 'Central Postal Archive',
         status: 'SCHEDULED',
         paymentId: draft.paymentId || personalMessageEnclosure?.paymentId,
         hasMediaAttachment: Boolean(draft.mediaStorageKey || personalMessageEnclosure?.mediaStorageKey),
@@ -769,7 +778,7 @@ I chose the 48-hour post because some words deserve to be waited for. Take your 
             <div className="flex items-center justify-between text-[10px] font-mono text-stone-500 border-b border-[#e5dcd1] pb-3 mb-6">
               <span>PHYSICAL WRITING SURFACE</span>
               <span className="font-semibold text-stone-700 tracking-wider">
-                {activeTemplate.name.toUpperCase()} · HYDERABAD BUREAU
+                {activeTemplate.name.toUpperCase()} · PRIVATE CORRESPONDENCE
               </span>
             </div>
 

@@ -126,13 +126,13 @@ export async function seedDatabase() {
       letterType: 'LOVE',
       templateId: 'ivory',
       salutation: 'Dearest Recipient,',
-      body: 'I am writing this on the quiet veranda in Hyderabad as dusk descends. I chose the 48-hour post because some words deserve the quiet patience of waiting.',
+      body: 'I am writing this on the quiet veranda as dusk descends. I chose the 48-hour post because some words deserve the quiet patience of waiting.',
       signoff: 'Yours in patience,',
       status: 'DELIVERED',
       deliveryDate: past1Hour,
       trackingCode: 'OL-1892-A',
       recipientVerificationMethod: 'open',
-      postmarkCity: 'Hyderabad Bureau',
+      postmarkCity: 'Central Postal Archive',
       waitingHours: 48,
       attachments: [],
       postedAt: past49Hours,
@@ -160,7 +160,7 @@ export async function seedDatabase() {
     await deliveryEventsColl.insertOne({
       letterId: letterId,
       eventType: 'LETTER_POSTED',
-      metadata: { city: 'Hyderabad Bureau' },
+      metadata: { city: 'Central Postal Archive' },
       createdAt: past49Hours,
     });
 

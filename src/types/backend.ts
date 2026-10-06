@@ -37,7 +37,7 @@ export const CreateLetterSchema = z.object({
   scheduledDeliveryAt: z.string().optional().nullable(),
   selectedTempoId: z.string().optional(),
   waitingHours: z.number().min(48, 'Minimum 48 hours required').default(48),
-  postmarkCity: z.string().optional().default('Hyderabad Bureau'),
+  postmarkCity: z.string().optional().default('Central Postal Archive'),
   status: z.enum(['DRAFT', 'SCHEDULED']).default('SCHEDULED'),
   paymentId: z.string().optional().nullable(),
   hasMediaAttachment: z.boolean().optional(),

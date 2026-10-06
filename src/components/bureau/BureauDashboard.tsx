@@ -928,7 +928,7 @@ export const BureauDashboard: React.FC<BureauDashboardProps> = ({
 
                           <div className="flex items-center justify-between text-[10px] text-stone-400 font-mono pt-2 border-t border-stone-100">
                             <span>Dispatched: {rcv.letterDate}</span>
-                            <span>{rcv.postmarkCity || 'Hyderabad Bureau'}</span>
+                            <span>{rcv.postmarkCity || 'Central Postal Archive'}</span>
                           </div>
                         </div>
                       );
@@ -1278,7 +1278,7 @@ export const BureauDashboard: React.FC<BureauDashboardProps> = ({
                     </h3>
                   </div>
                   <p className="text-xs text-stone-600 leading-relaxed font-serif italic">
-                    Under Indian Digital Personal Data Protection laws and correspondence privacy standards, you may download a complete, cryptographic export of your sent correspondence records, received letters registry, legal consent timestamp, and payment transactions in standard JSON format.
+                    Under global digital correspondence privacy and archival data protection standards, you may download a complete, cryptographic export of your sent correspondence records, received letters registry, legal consent timestamp, and payment transactions in standard JSON format.
                   </p>
                   <button
                     type="button"
@@ -1376,7 +1376,7 @@ export const BureauDashboard: React.FC<BureauDashboardProps> = ({
                       Cryptographic Consent Audit
                     </span>
                     <p className="text-stone-700 leading-relaxed font-serif italic">
-                      Consent was recorded on <strong>{consentDateStr}</strong> under IP registry reference and account authorization. Legal consent cannot be revoked retroactively via frontend toggle, maintaining compliance with Indian and international privacy statutes.
+                      Consent was recorded on <strong>{consentDateStr}</strong> under IP registry reference and account authorization. Legal consent cannot be revoked retroactively via frontend toggle, maintaining compliance with international privacy and archival statutes.
                     </p>
                   </div>
 

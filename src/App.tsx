@@ -92,6 +92,16 @@ export default function App() {
     try {
       const saved = localStorage.getItem('old_letters_archive');
       if (saved) {
+        const lower = saved.toLowerCase();
+        if (
+          lower.includes('vasantha') ||
+          lower.includes('correspondence.in') ||
+          lower.includes('lokesh') ||
+          lower.includes('hyderabad')
+        ) {
+          localStorage.removeItem('old_letters_archive');
+          return INITIAL_ARCHIVE_LETTERS;
+        }
         return JSON.parse(saved);
       }
     } catch {
@@ -124,6 +134,20 @@ export default function App() {
 
   // On mount & popstate: check for routes, tokens, and sessions
   useEffect(() => {
+    // Purge any legacy demo or test drafts from storage
+    try {
+      ['old_letters_working_draft', 'old_letters_enclosure', 'old_letters_archive'].forEach((key) => {
+        const val = localStorage.getItem(key) || sessionStorage.getItem(key);
+        if (val) {
+          const l = val.toLowerCase();
+          if (l.includes('vasantha') || l.includes('correspondence.in') || l.includes('lokesh') || l.includes('hyderabad') || l.includes('mumbai')) {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+          }
+        }
+      });
+    } catch {}
+
     const handleLocationChange = () => {
       const path = window.location.pathname;
       const searchParams = new URLSearchParams(window.location.search);
@@ -303,7 +327,7 @@ export default function App() {
         remainingSeconds: 0,
         remainingHours: 0,
         templateId: target.templateId,
-        postmarkCity: target.postmarkCity || 'Hyderabad Bureau',
+        postmarkCity: target.postmarkCity || 'Central Postal Archive',
       });
     } else {
       setActiveRecipientLetter(null);

@@ -92,7 +92,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
   const trackingCode = activeLetter?.trackingCode || metadata?.trackingCode || 'OL-DISPATCH';
   const verificationMethod = metadata?.verificationMethod || activeLetter?.verificationMethod || 'open';
   const waitingHours = metadata?.waitingHours || activeLetter?.waitingHours || 48;
-  const postmarkCity = metadata?.postmarkCity || activeLetter?.postmarkCity || 'Hyderabad Bureau';
+  const postmarkCity = metadata?.postmarkCity || activeLetter?.postmarkCity || 'Central Postal Archive';
 
   const scheduledArrivalDateString = metadata?.deliveryDate
     ? new Date(metadata.deliveryDate).toLocaleString('en-US', {

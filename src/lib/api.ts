@@ -277,7 +277,7 @@ export async function postLetter(payload: CreateLetterInput): Promise<{
       scheduledDeliveryAt: payload.scheduledDeliveryAt || new Date(Date.now() + (payload.waitingHours || 48) * 3600 * 1000).toISOString(),
       waitingHours: payload.waitingHours,
       status: 'SCHEDULED',
-      postmarkCity: payload.postmarkCity || 'Hyderabad Bureau',
+      postmarkCity: payload.postmarkCity || 'Central Postal Archive',
     };
 
     return {

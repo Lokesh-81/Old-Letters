@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { isAdminEmail, isUserAdminRole } from '../lib/admin';
+import { OldLettersHorizontalLogo } from '../assets/OldLettersHorizontalLogo';
 
 export type AppView = 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient' | 'cookies' | 'privacy' | 'terms' | 'profile' | 'admin';
 
@@ -57,14 +58,14 @@ export const Navigation: React.FC<NavigationProps> = ({
   return (
     <header className="sticky top-0 z-40 w-full bg-[#faf9f7]/95 backdrop-blur-md border-b border-[#eae4da] transition-colors">
       <div className="max-w-6xl mx-auto px-6 sm:px-8 py-4 sm:py-5 flex items-center justify-between">
-        {/* Wordmark */}
+        {/* Official Brand Logo */}
         <button
           type="button"
           onClick={() => onNavigate('landing')}
-          className="text-lg font-normal tracking-[0.14em] text-teal-900 hover:text-teal-800 transition-colors cursor-pointer select-none text-left"
-          style={{ fontFamily: 'sans-serif', letterSpacing: '0.06em' }}
+          className="transition-opacity hover:opacity-90 cursor-pointer select-none text-left py-0.5"
+          aria-label="OLD-LETTERS Home"
         >
-          OLD-LETTERS
+          <OldLettersHorizontalLogo height={38} />
         </button>
 
         {/* Clean nav links */}

@@ -133,7 +133,7 @@ function emailWrapper(title, subtitle, contentHtml) {
             <td style="padding: 20px 32px; background-color: #faf9f7; border-top: 1px solid #eae4da; text-align: center; font-size: 11px; font-family: serif; font-style: italic; color: #78716c;">
               &ldquo;Some things are worth waiting for.&rdquo;<br>
               <span style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-style: normal; font-size: 10px; color: #a8a29e; margin-top: 4px; display: inline-block;">
-                Held in archival trust \xB7 Hyderabad Postal Registry
+                Held in archival trust \xB7 Central Postal Archive
               </span>
             </td>
           </tr>
@@ -549,7 +549,7 @@ var CreateLetterSchema = z.object({
   scheduledDeliveryAt: z.string().optional().nullable(),
   selectedTempoId: z.string().optional(),
   waitingHours: z.number().min(48, "Minimum 48 hours required").default(48),
-  postmarkCity: z.string().optional().default("Hyderabad Bureau"),
+  postmarkCity: z.string().optional().default("Central Postal Archive"),
   status: z.enum(["DRAFT", "SCHEDULED"]).default("SCHEDULED"),
   paymentId: z.string().optional().nullable(),
   hasMediaAttachment: z.boolean().optional(),
@@ -820,7 +820,7 @@ var TEMPLATES = [
     reverseSideDetails: {
       title: "Watermarked Mill Guarantee",
       description: "Handcrafted on slow-turning cylinder moulds. Contains 100% long-staple cotton fibers.",
-      markings: "CORRESPONDENCE BUREAU \xB7 DECCAN PAPERS \xB7 WATERMARK EST. 1926"
+      markings: "CORRESPONDENCE BUREAU \xB7 ARCHIVAL PAPERS \xB7 WATERMARK EST. 1926"
     },
     decorations: {
       cornerFlourish: true,
@@ -839,10 +839,10 @@ var TEMPLATES = [
       name: "Burgundy Quill Seal"
     },
     postalMarks: {
-      postmarkText: "HYDERABAD CENTRAL G.P.O.",
-      cachetCity: "Hyderabad Bureau",
+      postmarkText: "CENTRAL POSTAL ARCHIVE",
+      cachetCity: "Central Bureau",
       docketNumber: "EP-1892",
-      stampName: "Imperial Ashoka 25p",
+      stampName: "Archival Quill 25",
       stampIllustration: "\u{1F981}",
       cancellationDate: "12 OCT 2026"
     },
@@ -851,7 +851,7 @@ var TEMPLATES = [
     sampleSignoff: "With affection,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Hyderabad",
+    sampleCity: "Postal Archive",
     sampleDate: "12 October 2026"
   },
   {
@@ -879,7 +879,7 @@ var TEMPLATES = [
     textureDescription: "Matte midnight navy paper with metallic gold filigree borders and starlight celestial coordinates",
     reverseSideDetails: {
       title: "Celestial Meridian Chart",
-      description: "Deccan night sky map at 02:00 AM, mapping Orion, Ursa Major, and the southern horizon.",
+      description: "Celestial night sky chart at 02:00 AM, mapping Orion, Ursa Major, and the celestial meridian.",
       markings: "NOCTURNE OBSERVATORY \xB7 02:00 APPOINTMENT \xB7 LAT 17.3850 N"
     },
     decorations: {
@@ -899,19 +899,19 @@ var TEMPLATES = [
       name: "Celestial Gold Crescent Seal"
     },
     postalMarks: {
-      postmarkText: "HYDERABAD MIDNIGHT DISPATCH",
-      cachetCity: "Banjara Hills",
+      postmarkText: "MIDNIGHT OBSERVATORY DISPATCH",
+      cachetCity: "Observatory Chamber",
       docketNumber: "NC-0214",
       stampName: "Crescent Moon 50p",
       stampIllustration: "\u{1F319}",
       cancellationDate: "14 OCT 2026"
     },
     sampleSalutation: "Dear Recipient,",
-    sampleBody: "The city lights below Banjara Hills have finally blinked out one by one.\n\nMidnight has a way of stripping away every pretence. I am writing to you because in the quietest silence of the day, your voice is still the one I hear most clearly.\n\nUnder this canopy of stars, take this letter as my promise to remain beside you through every season.",
+    sampleBody: "The distant lanterns have finally blinked out one by one into the velvet silence.\n\nMidnight has a way of stripping away every pretence. I am writing to you because in the quietest silence of the day, your voice is still the one I hear most clearly.\n\nUnder this canopy of stars, take this letter as my promise to remain beside you through every season.",
     sampleSignoff: "Under the same stars,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Hyderabad",
+    sampleCity: "Postal Archive",
     sampleDate: "02:14 AM \xB7 14 October 2026"
   },
   {
@@ -958,19 +958,19 @@ var TEMPLATES = [
       name: "Honey Amber Heraldic Seal"
     },
     postalMarks: {
-      postmarkText: "VIZAG CEREMONIAL REGISTRY",
-      cachetCity: "Vizag Bureau",
+      postmarkText: "CEREMONIAL CHANCERY REGISTRY",
+      cachetCity: "Honorary Bureau",
       docketNumber: "VL-882",
       stampName: "Heraldic Fleur-de-lis 1R",
       stampIllustration: "\u269C",
       cancellationDate: "25 OCT 2026"
     },
     sampleSalutation: "Respected Recipient,",
-    sampleBody: "A milestone such as yours comes once in a generation.\n\nWatching you build your institute in Vizag with quiet dignity has been an inspiration to all of us. Please accept this formal testament of our highest esteem and pride.\n\nMay this document preserve our gratitude for your guidance through the years.",
+    sampleBody: "A milestone such as yours comes once in a generation.\n\nWatching you build your life work with quiet dignity has been an inspiration to all of us. Please accept this formal testament of our highest esteem and pride.\n\nMay this document preserve our gratitude for your guidance through the years.",
     sampleSignoff: "With enduring respect,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Vizag",
+    sampleCity: "Postal Archive",
     sampleDate: "25 October 2026"
   },
   {
@@ -1018,8 +1018,8 @@ var TEMPLATES = [
       name: "Royal Carmine Seal"
     },
     postalMarks: {
-      postmarkText: "HYDERABAD HEARTS DESPATCH",
-      cachetCity: "Hyderabad Bureau",
+      postmarkText: "PRIVATE HEARTS DESPATCH",
+      cachetCity: "Central Bureau",
       docketNumber: "LL-0921",
       stampName: "Crimson Dove 20p",
       stampIllustration: "\u{1F54A}",
@@ -1030,7 +1030,7 @@ var TEMPLATES = [
     sampleSignoff: "Yours, always and wholly,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Hyderabad",
+    sampleCity: "Postal Archive",
     sampleDate: "04 December 2026"
   },
   {
@@ -1089,7 +1089,7 @@ var TEMPLATES = [
     sampleSignoff: "With affection,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Hyderabad",
+    sampleCity: "Postal Archive",
     sampleDate: "12 October 2026"
   },
   {
@@ -1148,7 +1148,7 @@ var TEMPLATES = [
     sampleSignoff: "With sincerity and affection,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Hyderabad",
+    sampleCity: "Postal Archive",
     sampleDate: "12 October 2026"
   },
   {
@@ -1207,7 +1207,7 @@ var TEMPLATES = [
     sampleSignoff: "With deepest gratitude and affection,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Hyderabad",
+    sampleCity: "Postal Archive",
     sampleDate: "12 October 2026"
   },
   {
@@ -1266,7 +1266,7 @@ var TEMPLATES = [
     sampleSignoff: "With celebration and affection,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Hyderabad",
+    sampleCity: "Postal Archive",
     sampleDate: "12 October 2026"
   },
   {
@@ -1325,7 +1325,7 @@ var TEMPLATES = [
     sampleSignoff: "With boundless pride and affection,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Hyderabad",
+    sampleCity: "Postal Archive",
     sampleDate: "12 October 2026"
   },
   {
@@ -1384,7 +1384,7 @@ var TEMPLATES = [
     sampleSignoff: "Standing beside you with affection,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Hyderabad",
+    sampleCity: "Postal Archive",
     sampleDate: "12 October 2026"
   },
   {
@@ -1443,7 +1443,7 @@ var TEMPLATES = [
     sampleSignoff: "With fondest farewell and affection,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Hyderabad",
+    sampleCity: "Postal Archive",
     sampleDate: "12 October 2026"
   },
   {
@@ -1502,7 +1502,7 @@ var TEMPLATES = [
     sampleSignoff: "With affection,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Hyderabad",
+    sampleCity: "Postal Archive",
     sampleDate: "12 October 2026"
   },
   {
@@ -1550,8 +1550,8 @@ var TEMPLATES = [
       name: "Cobalt Aero Seal"
     },
     postalMarks: {
-      postmarkText: "BOMBAY AIR MAIL TRANSIT",
-      cachetCity: "Bombay G.P.O.",
+      postmarkText: "TRANSCONTINENTAL AIR MAIL",
+      cachetCity: "Overseas Terminal",
       airMailBadge: true,
       docketNumber: "AM-48H-IN",
       stampName: "Air Mail Constellation 50p",
@@ -1559,11 +1559,11 @@ var TEMPLATES = [
       cancellationDate: "15 NOV 2026"
     },
     sampleSalutation: "Dearest Recipient,",
-    sampleBody: "The rains in Bengaluru are relentless this week, tapping against the glass just like the monsoon evenings we spent near Cubbon Park.\n\nEven across the miles between here and Vizag, this envelope carries my unwavering affection to your doorstep.\n\nWrite back as soon as this reaches your desk.",
+    sampleBody: "The autumn rains are steady this week, tapping softly against the window glass.\n\nEven across the distance between our desks, this envelope carries my unwavering affection to your doorstep.\n\nWrite back as soon as this reaches your desk.",
     sampleSignoff: "Sent across the skies,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Bengaluru",
+    sampleCity: "Postal Archive",
     sampleDate: "15 November 2026"
   },
   {
@@ -1610,8 +1610,8 @@ var TEMPLATES = [
       name: "Cast Iron Monospace Seal"
     },
     postalMarks: {
-      postmarkText: "VIZAG POSTAL DESK \xB7 RECORDED",
-      cachetCity: "Vizag Port Division",
+      postmarkText: "TELEGRAPHIC DISPATCH DIVISION",
+      cachetCity: "Press Room",
       docketNumber: "TW-48-26",
       stampName: "Telegraphic Dispatch 10p",
       stampIllustration: "\u26A1",
@@ -1622,7 +1622,7 @@ var TEMPLATES = [
     sampleSignoff: "Typed in fellowship,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Vizag",
+    sampleCity: "Postal Archive",
     sampleDate: "18 October 2026"
   },
   {
@@ -1669,8 +1669,8 @@ var TEMPLATES = [
       name: "Antique Brass Chronicle Seal"
     },
     postalMarks: {
-      postmarkText: "MADRAS RESIDENCY DIARY",
-      cachetCity: "Chennai",
+      postmarkText: "PERSONAL DIARY ARCHIVE",
+      cachetCity: "Journal Division",
       docketNumber: "PD-1926",
       stampName: "Fountain Nib 5p",
       stampIllustration: "\u2712",
@@ -1681,7 +1681,7 @@ var TEMPLATES = [
     sampleSignoff: "From my journal to yours,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Chennai",
+    sampleCity: "Postal Archive",
     sampleDate: "22 September 2026"
   },
   {
@@ -1708,12 +1708,12 @@ var TEMPLATES = [
     paperWeight: "350 gsm Heavy Duplex Board",
     textureDescription: "Authentic postcard board with sepia pictorial front and divided correspondence back",
     reverseSideDetails: {
-      title: "Historical Deccan Photographic Plate",
-      description: "Archival monochrome plate of Charminar & Old Hyderabad. Central Postal Historical Series.",
+      title: "Archival Heritage Photographic Plate",
+      description: "Monochrome architectural plate from the historical postal preservation series.",
       markings: "POST CARD \xB7 CARTE POSTALE \xB7 SERIES 1892"
     },
     decorations: {
-      headerMark: "POST CARD \xB7 CARTE POSTALE \xB7 INDIA POSTAGE",
+      headerMark: "POST CARD \xB7 CARTE POSTALE \xB7 POSTAL SERVICE",
       stampType: "vintage-queen"
     },
     envelopeStyle: {
@@ -1728,19 +1728,19 @@ var TEMPLATES = [
       name: "Imperial Amber Seal"
     },
     postalMarks: {
-      postmarkText: "OOTACAMUND R.M.S. SORTING",
-      cachetCity: "Nilgiris Bureau",
+      postmarkText: "MOUNTAIN PASS POSTAL TRANSIT",
+      cachetCity: "Highland Station",
       docketNumber: "PC-784",
       stampName: "Royal Elephant 25p",
       stampIllustration: "\u{1F418}",
       cancellationDate: "09 NOV 2026"
     },
     sampleSalutation: "Dear Recipient,",
-    sampleBody: "Greetings from the hills of Ooty! The eucalyptus mist rolls right over the roof.\n\nThought of you as soon as the narrow-gauge train pulled into the station. Keep this card propped on your bookshelf until we catch up next month.",
+    sampleBody: "Greetings from the quiet mountain station! The morning mist rolls right over the pine ridge.\n\nThought of you as soon as the narrow-gauge train pulled into the platform. Keep this card propped on your bookshelf until we catch up next month.",
     sampleSignoff: "Warmest regards,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Bengaluru",
+    sampleCity: "Postal Archive",
     sampleDate: "09 November 2026"
   },
   {
@@ -1787,19 +1787,19 @@ var TEMPLATES = [
       name: "Sepia Halide Seal"
     },
     postalMarks: {
-      postmarkText: "MUMBAI ARCHIVAL REPOSITORY",
-      cachetCity: "Mumbai Fort",
+      postmarkText: "PHOTOGRAPHIC ARCHIVAL REPOSITORY",
+      cachetCity: "Curator Bureau",
       docketNumber: "PH-1948",
       stampName: "Silver Halide Camera 30p",
       stampIllustration: "\u{1F4F7}",
       cancellationDate: "30 OCT 2026"
     },
     sampleSalutation: "Dearest Recipient,",
-    sampleBody: "I found this old print tucked inside an encyclopaedia at the British Council Library.\n\nIt made me smile all morning\u2014it captures the exact unforced laughter of that monsoon afternoon on Marine Drive. Some moments refuse to fade.\n\nMounted here so it remains safe for decades to come.",
+    sampleBody: "I found this old print tucked inside an encyclopaedia at the British Council Library.\n\nIt made me smile all morning\u2014it captures the exact unforced laughter of that quiet afternoon beside the sea. Some moments refuse to fade.\n\nMounted here so it remains safe for decades to come.",
     sampleSignoff: "Preserved with tenderness,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Mumbai",
+    sampleCity: "Postal Archive",
     sampleDate: "30 October 2026"
   },
   {
@@ -1827,7 +1827,7 @@ var TEMPLATES = [
     textureDescription: "Pressed botanical specimen sheet with taxonomic classification borders and forest green ink",
     reverseSideDetails: {
       title: "Taxonomic Specimen Index",
-      description: "Lalbagh Botanical Gardens field classification. Preserved under archival linen binding.",
+      description: "Royal Botanical Herbarium field classification. Preserved under archival linen binding.",
       markings: "HERBARIUM DECCANENSIS \xB7 ACCESSION RECORD 1912"
     },
     decorations: {
@@ -1846,8 +1846,8 @@ var TEMPLATES = [
       name: "Forest Emerald Fern Seal"
     },
     postalMarks: {
-      postmarkText: "BENGALURU BOTANICAL GARDENS",
-      cachetCity: "Lalbagh Division",
+      postmarkText: "HERBARIUM CONSERVANCY ARCHIVE",
+      cachetCity: "Botanical Section",
       docketNumber: "HB-1912",
       stampName: "Botanical Fern 20p",
       stampIllustration: "\u{1F33F}",
@@ -1858,7 +1858,7 @@ var TEMPLATES = [
     sampleSignoff: "Catalogued in friendship,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Bengaluru",
+    sampleCity: "Postal Archive",
     sampleDate: "05 November 2026"
   },
   {
@@ -1906,7 +1906,7 @@ var TEMPLATES = [
     },
     postalMarks: {
       postmarkText: "CENTRAL CHRONO VAULT \xB7 10-YEAR LOCK",
-      cachetCity: "Hyderabad Vault",
+      cachetCity: "Chrono Vault",
       docketNumber: "CAP-2036-X",
       stampName: "Chrono Hourglass 5R",
       stampIllustration: "\u23F3",
@@ -1917,7 +1917,7 @@ var TEMPLATES = [
     sampleSignoff: "Penned from the past with endless love,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Hyderabad",
+    sampleCity: "Postal Archive",
     sampleDate: "Scheduled Unsealing: 12 October 2036"
   },
   {
@@ -1945,7 +1945,7 @@ var TEMPLATES = [
     textureDescription: "Soft handmade paper with real pressed flower fiber flecks, chamomile petals, and soft deckle",
     reverseSideDetails: {
       title: "Botanical Herbarium Provenance",
-      description: "Pressed flora harvested at morning dew from Deccan gardens, dried between archival blotting boards.",
+      description: "Pressed flora harvested at morning dew from mountain meadows, dried between archival blotting boards.",
       markings: "FLORA DECCANENSIS \xB7 JASMINE & MAIDENHAIR SPECIMEN"
     },
     decorations: {
@@ -1965,10 +1965,10 @@ var TEMPLATES = [
       name: "Rose Gold Floral Seal"
     },
     postalMarks: {
-      postmarkText: "CHENNAI FLORAL BUREAU",
-      cachetCity: "Chennai",
+      postmarkText: "MEADOW BOTANICAL PRESERVE",
+      cachetCity: "Journal Division",
       docketNumber: "FL-2026",
-      stampName: "Flora of Deccan 15p",
+      stampName: "Pressed Jasmine 15",
       stampIllustration: "\u{1F338}",
       cancellationDate: "28 OCT 2026"
     },
@@ -1977,7 +1977,7 @@ var TEMPLATES = [
     sampleSignoff: "With quiet devotion,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Chennai",
+    sampleCity: "Postal Archive",
     sampleDate: "28 October 2026"
   },
   {
@@ -2025,7 +2025,7 @@ var TEMPLATES = [
       name: "Copper Cipher Seal"
     },
     postalMarks: {
-      postmarkText: "HYDERABAD CONFIDENTIAL ARCHIVE",
+      postmarkText: "CONFIDENTIAL VAULT REGISTRY",
       cachetCity: "Secret Registry",
       docketNumber: "SEC-9904",
       stampName: "Cipher Key 50p",
@@ -2037,7 +2037,7 @@ var TEMPLATES = [
     sampleSignoff: "In utmost secrecy,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Hyderabad",
+    sampleCity: "Postal Archive",
     sampleDate: "01 November 2026"
   },
   {
@@ -2097,7 +2097,7 @@ var TEMPLATES = [
     sampleSignoff: "With unwavering faith,",
     sampleRecipient: "Recipient Name",
     sampleSender: "Your Name",
-    sampleCity: "Hyderabad",
+    sampleCity: "Postal Archive",
     sampleDate: "Scheduled Arrival: 01 January 2030"
   }
 ];
@@ -2232,13 +2232,13 @@ async function seedDatabase() {
       letterType: "LOVE",
       templateId: "ivory",
       salutation: "Dearest Recipient,",
-      body: "I am writing this on the quiet veranda in Hyderabad as dusk descends. I chose the 48-hour post because some words deserve the quiet patience of waiting.",
+      body: "I am writing this on the quiet veranda as dusk descends. I chose the 48-hour post because some words deserve the quiet patience of waiting.",
       signoff: "Yours in patience,",
       status: "DELIVERED",
       deliveryDate: past1Hour,
       trackingCode: "OL-1892-A",
       recipientVerificationMethod: "open",
-      postmarkCity: "Hyderabad Bureau",
+      postmarkCity: "Central Postal Archive",
       waitingHours: 48,
       attachments: [],
       postedAt: past49Hours,
@@ -2263,7 +2263,7 @@ async function seedDatabase() {
     await deliveryEventsColl.insertOne({
       letterId,
       eventType: "LETTER_POSTED",
-      metadata: { city: "Hyderabad Bureau" },
+      metadata: { city: "Central Postal Archive" },
       createdAt: past49Hours
     });
     await deliveryEventsColl.insertOne({
@@ -3650,7 +3650,7 @@ async function mapLetterDocToResponse(ltr, db, reqUser) {
     });
   } catch {
   }
-  const rawRecipientEmail = ltr.recipientEmail || recipient?.email || "recipient@correspondence.in";
+  const rawRecipientEmail = ltr.recipientEmail || recipient?.email || "recipient@example.com";
   const recipientEmailMasked = rawRecipientEmail ? rawRecipientEmail.replace(/(?<=.).(?=.*@)/g, "*") : "***@***.com";
   const now = Date.now();
   const createdAtTime = ltr.createdAt ? new Date(ltr.createdAt).getTime() : now;
@@ -3732,7 +3732,7 @@ async function mapLetterDocToResponse(ltr, db, reqUser) {
     deliveredAt: isDelivered ? ltr.deliveredAt ? ltr.deliveredAt.toISOString() : ltr.deliveryDate ? ltr.deliveryDate.toISOString() : void 0 : void 0,
     waitingHours: ltr.waitingHours || 48,
     status: isDelivered ? "DELIVERED" : ltr.status,
-    postmarkCity: ltr.postmarkCity || "Hyderabad Bureau",
+    postmarkCity: ltr.postmarkCity || "Central Postal Archive",
     paymentStatus: payment ? payment.status === "APPROVED" ? "PAID" : payment.status : "COMPLIMENTARY",
     amountPaid: payment?.amount || 0,
     currency: payment?.currency || "INR",
@@ -3814,7 +3814,7 @@ app.get(["/api/letters/received", "/api/letters-received"], requireAuth, async (
           canOpen: isDelivered,
           deliveryToken,
           sealedMessage: !isDelivered ? "SEALED IN TRANSIT \xB7 Your letter is still making its way to you." : void 0,
-          postmarkCity: ltr.postmarkCity || "Hyderabad Bureau",
+          postmarkCity: ltr.postmarkCity || "Central Postal Archive",
           verificationMethod: ltr.recipientVerificationMethod || "open",
           createdAt: ltr.createdAt ? new Date(ltr.createdAt).toISOString() : (/* @__PURE__ */ new Date()).toISOString()
         };
@@ -3845,7 +3845,7 @@ app.post(["/api/letters/draft", "/api/letters/save-draft"], requireAuth, async (
       verificationMethod = "open",
       scheduledDeliveryAt,
       waitingHours = 48,
-      postmarkCity = "Hyderabad Bureau",
+      postmarkCity = "Central Postal Archive",
       attachments = []
     } = req.body;
     const now = /* @__PURE__ */ new Date();
@@ -4015,7 +4015,7 @@ app.post("/api/letters", requireAuth, async (req, res) => {
       trackingCode,
       recipientVerificationMethod: input.verificationMethod,
       secretPassphraseHash: passphraseHash,
-      postmarkCity: input.postmarkCity || "Hyderabad Bureau",
+      postmarkCity: input.postmarkCity || "Central Postal Archive",
       waitingHours: input.waitingHours,
       attachments: req.body.attachments || [],
       personalMessage: req.body.personalMessage || void 0,
@@ -4208,7 +4208,7 @@ app.post("/api/letters", requireAuth, async (req, res) => {
       scheduledDeliveryAt: deliveryDate.toISOString(),
       waitingHours: input.waitingHours,
       status: input.status,
-      postmarkCity: input.postmarkCity || "Hyderabad Bureau"
+      postmarkCity: input.postmarkCity || "Central Postal Archive"
     };
     res.status(201).json({
       success: true,
@@ -4264,7 +4264,7 @@ app.get("/api/letters/:id", requireAuth, async (req, res) => {
           canOpen: false,
           sealedMessage: "SEALED IN TRANSIT \xB7 Your letter is still making its way to you.",
           scheduledDeliveryAt: letter.deliveryDate ? new Date(letter.deliveryDate).toISOString() : void 0,
-          postmarkCity: letter.postmarkCity || "Hyderabad Bureau"
+          postmarkCity: letter.postmarkCity || "Central Postal Archive"
         }
       });
     }
@@ -4609,7 +4609,7 @@ app.get(["/api/delivery/token/:token", "/api/letter/:token"], async (req, res) =
           remainingSeconds,
           remainingHours,
           templateId: letter.templateId || "ivory",
-          postmarkCity: letter.postmarkCity || "Hyderabad Bureau"
+          postmarkCity: letter.postmarkCity || "Central Postal Archive"
         }
       });
     }
@@ -4657,7 +4657,7 @@ app.get(["/api/delivery/token/:token", "/api/letter/:token"], async (req, res) =
           remainingSeconds: 0,
           remainingHours: 0,
           templateId: letter.templateId || "ivory",
-          postmarkCity: letter.postmarkCity || "Hyderabad Bureau"
+          postmarkCity: letter.postmarkCity || "Central Postal Archive"
         },
         letter: {
           id: letter._id.toString(),
@@ -4704,7 +4704,7 @@ app.get(["/api/delivery/token/:token", "/api/letter/:token"], async (req, res) =
         remainingSeconds: 0,
         remainingHours: 0,
         templateId: letter.templateId || "ivory",
-        postmarkCity: letter.postmarkCity || "Hyderabad Bureau"
+        postmarkCity: letter.postmarkCity || "Central Postal Archive"
       }
     });
   } catch (err) {

@@ -35,7 +35,7 @@ async function runTests() {
 
   // TEST 2: Signup with email + password (and Legal Consent enforcement)
   console.log('\n[TEST 2] Signup without Legal Consent (must fail with 400)...');
-  const testEmail = `testsender.${Date.now()}@correspondence.in`;
+  const testEmail = `testsender.${Date.now()}@example.com`;
   const unconsentedSignup = await request('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify({
@@ -196,7 +196,7 @@ async function runTests() {
 
   // TEST 11: Google Sign-In & Legal Consent Enforcement
   console.log('\n[TEST 11] Google Sign-In without Legal Consent (must fail with 400)...');
-  const brandNewGoogleEmail = `new.google.${Date.now()}@correspondence.in`;
+  const brandNewGoogleEmail = `new.google.${Date.now()}@example.com`;
   const unconsentedGoogleRes = await request('/api/auth/google/test-login', {
     method: 'POST',
     body: JSON.stringify({
@@ -620,7 +620,7 @@ async function runTests() {
       type: 'LOVE',
       templateId: 'ivory',
       senderName: 'Test Sender',
-      senderEmail: 'testsender.1791041148472@correspondence.in',
+      senderEmail: 'testsender.1791041148472@example.com',
       recipientName: 'Recipient Name',
       recipientEmail: 'recipient@example.com',
       greeting: 'Dear Recipient,',

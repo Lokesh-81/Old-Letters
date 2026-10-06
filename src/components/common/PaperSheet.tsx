@@ -424,11 +424,11 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
           <div className="w-full h-80 bg-stone-200 border-2 border-[#baa993] rounded-xs overflow-hidden relative shadow-inner">
             <img
               src="https://images.unsplash.com/photo-1596178065887-1198b6148b2b?auto=format&fit=crop&q=80&w=1000"
-              alt="Vintage Hyderabad"
+              alt="Archival Historical Heritage"
               className="w-full h-full object-cover filter sepia-[0.35] brightness-95"
             />
             <div className="absolute bottom-3 left-4 text-white font-serif text-lg drop-shadow-md tracking-wider">
-              Charminar & Old Hyderabad · Deccan Heritage
+              Heritage Architectural Series · Archival Preservation
             </div>
           </div>
           <div className="text-xs font-mono tracking-widest uppercase text-stone-500 pt-4">
@@ -438,35 +438,115 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
       ) : (
         /* ---------------- 4. STANDARD LETTER WRITING / READING SURFACE ---------------- */
         <div className={`p-8 sm:p-14 lg:p-16 ${fontClass} flex flex-col min-h-[580px] relative z-10`}>
-          {/* Header Metadata Bar */}
-          <div className="flex items-center justify-between border-b pb-4 mb-8" style={{ borderColor: `${border}60` }}>
-            <div className="flex items-center gap-2 text-[10px] sm:text-xs tracking-widest uppercase" style={{ color: muted }}>
-              <span>CORRESPONDENCE</span>
-              <span>·</span>
-              <span className="font-mono">{t.name}</span>
-              {t.postalMarks.cachetCity && (
-                <>
-                  <span>·</span>
-                  <span className="font-mono">{t.postalMarks.cachetCity}</span>
-                </>
+          {/* Header Metadata Bar: Tailored per template archetype */}
+          {isMidnight ? (
+            <div className="mb-8 pb-4 border-b border-[#e2c974]/30 flex items-center justify-between text-[10px] font-mono tracking-widest text-[#e2c974]">
+              <div className="flex items-center gap-2">
+                <span>✦ OBSERVATORY TRANSIT · RECORD NO. 74</span>
+              </div>
+              <span>{date}</span>
+            </div>
+          ) : isVellum ? (
+            <div className="mb-8 pb-4 border-b border-[#a89070]/40 flex items-center justify-between text-xs font-serif text-[#6b4c3b]">
+              <div className="flex items-center gap-2 tracking-widest uppercase text-[10px] font-mono">
+                <span>⚜ CODEX ARCHIVALIS · LIBER No. 12</span>
+              </div>
+              <span className="italic font-serif">{date}</span>
+            </div>
+          ) : isLove ? (
+            <div className="mb-6 text-center border-b pb-4 border-[#841824]/20">
+              <div className="text-[10px] font-mono tracking-[0.25em] text-[#841824] uppercase mb-1">
+                — BILLET-DOUX · CONFIDENTIAL HEARTS —
+              </div>
+              <div className="text-xs font-serif italic text-stone-500">{date}</div>
+            </div>
+          ) : isApology ? (
+            <div className="mb-8 text-center pb-3 border-b border-stone-200">
+              <span className="text-[10px] font-mono tracking-[0.3em] uppercase text-stone-500">
+                — QUIET REFLECTION —
+              </span>
+              <div className="text-xs font-mono text-stone-400 mt-1">{date}</div>
+            </div>
+          ) : isThankYou ? (
+            <div className="mb-8 text-center pb-4 border-b border-[#28442e]/20">
+              <div className="text-xl text-[#d4af37] mb-1">🌿</div>
+              <div className="text-[11px] font-serif tracking-[0.2em] uppercase text-[#28442e] font-semibold">
+                GRATITUDE & REGARD
+              </div>
+              <div className="text-[10px] font-mono text-stone-400 mt-1">{date}</div>
+            </div>
+          ) : isCongratulations ? (
+            <div className="mb-8 text-center pb-4 border-b-2 border-[#1e3a8a]/20">
+              <div className="text-xs font-mono tracking-[0.3em] uppercase text-[#1e3a8a] font-bold">
+                TESTIMONIUM ET HONOR
+              </div>
+              <div className="text-[10px] font-mono text-stone-500 mt-1">OFFICIAL CITATION · {date}</div>
+            </div>
+          ) : isBirthday ? (
+            <div className="mb-8 text-center pb-4 border-b border-amber-200">
+              <div className="text-sm tracking-widest text-amber-600 mb-1">☼ · ☼ · ☼</div>
+              <div className="text-[10px] font-mono tracking-[0.25em] uppercase text-amber-800 font-semibold">
+                JUBILEE CELEBRATION DISPATCH
+              </div>
+              <div className="text-[10px] font-mono text-stone-400 mt-1">{date}</div>
+            </div>
+          ) : isEncouragement ? (
+            <div className="mb-8 pb-4 border-b border-[#193325]/20 flex items-center justify-between text-[10px] font-mono text-[#193325]">
+              <span>🌲 EXPEDITION ARCHIVE · RESILIENCE DISPATCH</span>
+              <span>{date}</span>
+            </div>
+          ) : isGoodbye ? (
+            <div className="mb-8 pb-4 border-b border-[#212c3d]/20 flex items-center justify-between text-[10px] font-mono text-[#212c3d]">
+              <span>⚓ OUTWARD BOUND · FINAL DISPATCH</span>
+              <span>{date}</span>
+            </div>
+          ) : isTypewriter ? (
+            <div className="mb-6 pb-3 border-b-2 border-stone-800 flex items-center justify-between text-xs font-mono text-stone-900 tracking-wider">
+              <span className="font-bold">CONFIDENTIAL MEMORANDUM · DISPATCH NO. 48</span>
+              <span>DATE: {date}</span>
+            </div>
+          ) : isSecret ? (
+            <div className="mb-8 pb-4 border-b border-[#d4af37]/30 flex items-center justify-between text-[10px] font-mono tracking-widest text-[#d4af37]">
+              <span>🔒 EYES ONLY · ENCRYPTED DISPATCH</span>
+              <span>{date}</span>
+            </div>
+          ) : isFuture ? (
+            <div className="mb-8 text-center pb-4 border-b border-indigo-200">
+              <div className="text-xs text-indigo-700 font-mono tracking-[0.3em] uppercase">
+                ✦ LETTER TO THE FUTURE · CHRONO TRANSIT ✦
+              </div>
+              <div className="text-[10px] font-mono text-stone-500 mt-1">APPOINTED ERA: {date}</div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between border-b pb-4 mb-8" style={{ borderColor: `${border}60` }}>
+              <div className="flex items-center gap-2 text-[10px] sm:text-xs tracking-widest uppercase" style={{ color: muted }}>
+                <span>CORRESPONDENCE</span>
+                <span>·</span>
+                <span className="font-mono">{t.name}</span>
+                {t.postalMarks.cachetCity && (
+                  <>
+                    <span>·</span>
+                    <span className="font-mono">{t.postalMarks.cachetCity}</span>
+                  </>
+                )}
+              </div>
+
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={date}
+                  onChange={(e) => onDateChange?.(e.target.value)}
+                  placeholder="Date"
+                  className="text-right text-xs tracking-wider uppercase bg-transparent border-b border-dashed focus:outline-none"
+                  style={{ color: muted, borderColor: border }}
+                />
+              ) : (
+                <span className="text-xs tracking-wider uppercase font-mono" style={{ color: muted }}>
+                  {date}
+                </span>
               )}
             </div>
-
-            {isEditing ? (
-              <input
-                type="text"
-                value={date}
-                onChange={(e) => onDateChange?.(e.target.value)}
-                placeholder="Date"
-                className="text-right text-xs tracking-wider uppercase bg-transparent border-b border-dashed focus:outline-none"
-                style={{ color: muted, borderColor: border }}
-              />
-            ) : (
-              <span className="text-xs tracking-wider uppercase font-mono" style={{ color: muted }}>
-                {date}
-              </span>
-            )}
-          </div>
+          )}
 
           {/* Time Capsule Special Preservation Header */}
           {isTimeCapsule && (
@@ -480,7 +560,7 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
                   {date || '12 OCTOBER 2036'}
                 </div>
                 <div className="text-[9px] font-mono text-red-800/70">
-                  DOC NO. CAP-2036-DECCAN · REGISTRY LOCK REF #4819
+                  DOC NO. CAP-2036-ARCHIVE · REGISTRY LOCK REF #4819
                 </div>
               </div>
               <div className="w-12 h-12 rounded-full border-2 border-red-800/40 flex items-center justify-center text-xs font-mono text-red-900 rotate-[-12deg]">
@@ -514,7 +594,7 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
                 <div className="pt-2 text-center text-xs font-serif italic text-stone-700">
                   {attachments.length > 0 && attachments[0].caption
                     ? attachments[0].caption
-                    : 'Marine Drive Promenade · Monsoon Archives 1948'}
+                    : 'Historical Specimen Study · Archival Series 1948'}
                 </div>
               </div>
 
@@ -539,8 +619,8 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
                 PAR AVION · AIR MAIL
               </span>
               <div className="w-14 h-14 rounded-full border-2 border-dashed border-[#1d3557]/40 flex flex-col items-center justify-center text-[8px] font-mono text-[#1d3557] rotate-[-8deg] select-none">
-                <span>BOMBAY</span>
-                <span>G.P.O.</span>
+                <span>CENTRAL</span>
+                <span>POSTAL</span>
                 <span>TRANSIT</span>
               </div>
             </div>
@@ -592,8 +672,8 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
               <div className="border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-6 space-y-4" style={{ borderColor: border }}>
                 <div className="flex justify-end">
                   <div className="w-16 h-20 border-2 border-dashed flex flex-col items-center justify-center p-1 text-center" style={{ borderColor: border, backgroundColor: `${border}25` }}>
-                    <span className="text-[8px] font-mono uppercase" style={{ color: muted }}>INDIA POST</span>
-                    <span className="text-sm">🐘</span>
+                    <span className="text-[8px] font-mono uppercase" style={{ color: muted }}>POSTAGE</span>
+                    <span className="text-sm">📮</span>
                     <span className="text-[7px] font-mono" style={{ color: muted }}>48H POST</span>
                   </div>
                 </div>
@@ -603,7 +683,7 @@ export const PaperSheet: React.FC<PaperSheetProps> = ({
                   </div>
                   <div className="border-b pb-1 text-sm font-serif" style={{ borderColor: border, color: fg }}>{effectiveRecipient}</div>
                   <div className="border-b pb-1 text-xs font-mono" style={{ borderColor: border, color: muted }}>
-                    Poste Restante · {t.sampleCity || 'Hyderabad'}
+                    Poste Restante · {t.sampleCity || 'Postal Archive'}
                   </div>
                 </div>
               </div>

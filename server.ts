@@ -1727,7 +1727,7 @@ async function mapLetterDocToResponse(ltr: any, db: any, reqUser?: SessionUser) 
     });
   } catch {}
 
-  const rawRecipientEmail = ltr.recipientEmail || recipient?.email || 'recipient@correspondence.in';
+  const rawRecipientEmail = ltr.recipientEmail || recipient?.email || 'recipient@example.com';
   const recipientEmailMasked = rawRecipientEmail ? rawRecipientEmail.replace(/(?<=.).(?=.*@)/g, '*') : '***@***.com';
 
   const now = Date.now();
@@ -1813,7 +1813,7 @@ async function mapLetterDocToResponse(ltr: any, db: any, reqUser?: SessionUser) 
     deliveredAt: isDelivered ? (ltr.deliveredAt ? ltr.deliveredAt.toISOString() : (ltr.deliveryDate ? ltr.deliveryDate.toISOString() : undefined)) : undefined,
     waitingHours: ltr.waitingHours || 48,
     status: isDelivered ? 'DELIVERED' : ltr.status,
-    postmarkCity: ltr.postmarkCity || 'Hyderabad Bureau',
+    postmarkCity: ltr.postmarkCity || 'Central Postal Archive',
     paymentStatus: payment ? (payment.status === 'APPROVED' ? 'PAID' : payment.status) : 'COMPLIMENTARY',
     amountPaid: payment?.amount || 0,
     currency: payment?.currency || 'INR',
@@ -1918,7 +1918,7 @@ app.get(['/api/letters/received', '/api/letters-received'], requireAuth, async (
           canOpen: isDelivered,
           deliveryToken,
           sealedMessage: !isDelivered ? 'SEALED IN TRANSIT · Your letter is still making its way to you.' : undefined,
-          postmarkCity: ltr.postmarkCity || 'Hyderabad Bureau',
+          postmarkCity: ltr.postmarkCity || 'Central Postal Archive',
           verificationMethod: ltr.recipientVerificationMethod || 'open',
           createdAt: ltr.createdAt ? new Date(ltr.createdAt).toISOString() : new Date().toISOString(),
         };
@@ -1953,7 +1953,7 @@ app.post(['/api/letters/draft', '/api/letters/save-draft'], requireAuth, async (
       verificationMethod = 'open',
       scheduledDeliveryAt,
       waitingHours = 48,
-      postmarkCity = 'Hyderabad Bureau',
+      postmarkCity = 'Central Postal Archive',
       attachments = [],
     } = req.body;
 
@@ -2148,7 +2148,7 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
       trackingCode,
       recipientVerificationMethod: input.verificationMethod,
       secretPassphraseHash: passphraseHash,
-      postmarkCity: input.postmarkCity || 'Hyderabad Bureau',
+      postmarkCity: input.postmarkCity || 'Central Postal Archive',
       waitingHours: input.waitingHours,
       attachments: req.body.attachments || [],
       personalMessage: req.body.personalMessage || undefined,
@@ -2364,7 +2364,7 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
       scheduledDeliveryAt: deliveryDate.toISOString(),
       waitingHours: input.waitingHours,
       status: input.status,
-      postmarkCity: input.postmarkCity || 'Hyderabad Bureau',
+      postmarkCity: input.postmarkCity || 'Central Postal Archive',
     };
 
     res.status(201).json({
@@ -2436,7 +2436,7 @@ app.get('/api/letters/:id', requireAuth, async (req: AuthenticatedRequest, res) 
           canOpen: false,
           sealedMessage: 'SEALED IN TRANSIT · Your letter is still making its way to you.',
           scheduledDeliveryAt: letter.deliveryDate ? new Date(letter.deliveryDate).toISOString() : undefined,
-          postmarkCity: letter.postmarkCity || 'Hyderabad Bureau',
+          postmarkCity: letter.postmarkCity || 'Central Postal Archive',
         },
       });
     }
@@ -2849,7 +2849,7 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
           remainingSeconds,
           remainingHours,
           templateId: letter.templateId || 'ivory',
-          postmarkCity: letter.postmarkCity || 'Hyderabad Bureau',
+          postmarkCity: letter.postmarkCity || 'Central Postal Archive',
         },
       });
     }
@@ -2904,7 +2904,7 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
           remainingSeconds: 0,
           remainingHours: 0,
           templateId: letter.templateId || 'ivory',
-          postmarkCity: letter.postmarkCity || 'Hyderabad Bureau',
+          postmarkCity: letter.postmarkCity || 'Central Postal Archive',
         },
         letter: {
           id: letter._id.toString(),
@@ -2953,7 +2953,7 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
         remainingSeconds: 0,
         remainingHours: 0,
         templateId: letter.templateId || 'ivory',
-        postmarkCity: letter.postmarkCity || 'Hyderabad Bureau',
+        postmarkCity: letter.postmarkCity || 'Central Postal Archive',
       },
     });
   } catch (err: any) {

@@ -185,7 +185,7 @@ function emailWrapper(title: string, subtitle: string, contentHtml: string): str
             <td style="padding: 20px 32px; background-color: #faf9f7; border-top: 1px solid #eae4da; text-align: center; font-size: 11px; font-family: serif; font-style: italic; color: #78716c;">
               &ldquo;Some things are worth waiting for.&rdquo;<br>
               <span style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-style: normal; font-size: 10px; color: #a8a29e; margin-top: 4px; display: inline-block;">
-                Held in archival trust · Hyderabad Postal Registry
+                Held in archival trust · Central Postal Archive
               </span>
             </td>
           </tr>

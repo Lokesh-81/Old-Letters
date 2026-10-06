@@ -449,7 +449,7 @@ export const StationeryGallery: React.FC<StationeryGalleryProps> = ({
             {/* Postal Markings Pill Rail */}
             <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-[10px] font-mono text-stone-500">
               <div className="flex items-center gap-3">
-                <span>STAMP: {activeTemplate.postalMarks?.stampName || 'India Post 25p'}</span>
+                <span>STAMP: {activeTemplate.postalMarks?.stampName || 'Postal Standard 25'}</span>
                 <span>·</span>
                 <span>DESPATCH: {activeTemplate.postalMarks?.cachetCity}</span>
               </div>

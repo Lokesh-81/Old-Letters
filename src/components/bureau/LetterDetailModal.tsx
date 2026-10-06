@@ -232,7 +232,7 @@ export const LetterDetailModal: React.FC<LetterDetailModalProps> = ({
               {/* Postmark stamp watermark */}
               <div className="absolute top-4 right-4 sm:top-6 sm:right-6 border-2 border-teal-900/30 rounded-full w-20 h-20 sm:w-24 sm:h-24 flex flex-col items-center justify-center text-center rotate-12 pointer-events-none select-none">
                 <span className="text-[8px] font-mono uppercase tracking-widest text-teal-900/70 font-semibold">
-                  {letter.postmarkCity || 'HYDERABAD BUREAU'}
+                  {letter.postmarkCity || 'CENTRAL POSTAL ARCHIVE'}
                 </span>
                 <span className="text-[10px] font-serif font-bold text-teal-900/80">
                   {postedAtDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
