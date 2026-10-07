@@ -813,6 +813,11 @@ async function setupDatabaseIndexes() {
     await payments.createIndex({ status: 1 });
     await payments.createIndex({ userId: 1 });
     await payments.createIndex({ letterId: 1 });
+    await payments.createIndex({ upiReference: 1 }, { unique: true, sparse: true });
+    await payments.createIndex({ utr: 1 }, { unique: true, sparse: true });
+    const rateLimits = db.collection("rateLimits");
+    await rateLimits.createIndex({ key: 1 }, { unique: true });
+    await rateLimits.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
     const deliveryEvents = db.collection("deliveryEvents");
     await deliveryEvents.createIndex({ letterId: 1 });
     await deliveryEvents.createIndex({ letterId: 1, eventType: 1 }, { unique: true, sparse: true });
@@ -2356,6 +2361,39 @@ app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=(), interest-cohort=()");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  const cspDirectives = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: blob: https: https://oldletters.vercel.app https://assets.watermelon.sh",
+    "media-src 'self' blob: data:",
+    "connect-src 'self' https: wss: http://localhost:* ws://localhost:*",
+    "frame-src 'self' https://accounts.google.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self' https://accounts.google.com"
+  ].join("; ");
+  res.setHeader("Content-Security-Policy", cspDirectives);
+  const origin = req.headers.origin;
+  const isAllowedOrigin = !origin || origin === APP_URL || origin === "https://oldletters.vercel.app" || origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:") || origin.endsWith(".vercel.app") || origin.includes(".run.app");
+  if (origin && isAllowedOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-Recipient-Token");
+  }
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+  if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS") {
+    if (origin && !isAllowedOrigin) {
+      return res.status(403).json({ success: false, error: "Forbidden: Untrusted request origin." });
+    }
+  }
   const reqPathLower = (req.path || "").toLowerCase();
   if (reqPathLower.startsWith("/api") || reqPathLower.startsWith("/letter/") || reqPathLower.startsWith("/admin") || reqPathLower.startsWith("/bureau") || reqPathLower.startsWith("/profile") || reqPathLower.startsWith("/account") || reqPathLower.startsWith("/composer") || reqPathLower.startsWith("/archive") || reqPathLower.startsWith("/payment")) {
     res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
@@ -2440,7 +2478,9 @@ var authenticateToken = (req, res, next) => {
   }
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    if (decoded && decoded.id && (!decoded.scope || decoded.scope === "user_auth" || decoded.scope === "user_session")) {
+      req.user = decoded;
+    }
   } catch {
   }
   next();

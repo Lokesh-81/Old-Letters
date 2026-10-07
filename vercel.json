@@ -16,7 +16,7 @@
       "destination": "/api"
     },
     {
-      "source": "/((?!api(?:/|$)|logo\\.png|favicon\\.png|sitemap\\.xml|robots\\.txt|google.*\\.html).*)",
+      "source": "/((?!api(?:/|$)|assets(?:/|$)|\\.well-known(?:/|$)|manifest\\.webmanifest|logo\\.png|favicon\\.png|sitemap\\.xml|robots\\.txt|google.*\\.html|.*\\.(?:css|js|png|jpg|jpeg|svg|ico|otf|ttf|woff|woff2|webp|avif|json|xml|txt|webmanifest)$).*)",
       "destination": "/index.html"
     }
   ]

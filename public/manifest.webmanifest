@@ -1,0 +1,22 @@
+{
+  "name": "OLD-LETTERS",
+  "short_name": "OLD-LETTERS",
+  "description": "Modern luxury digital correspondence. Send letters that travel in real time.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#faf9f7",
+  "theme_color": "#faf9f7",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "2172x724",
+      "type": "image/png"
+    }
+  ]
+}

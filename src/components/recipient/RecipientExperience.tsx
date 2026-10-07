@@ -264,15 +264,23 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
           <button
             type="button"
             onClick={onExit}
-            className="flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-90"
+            className="flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-90 bg-transparent border-0 p-0 focus:outline-none"
             aria-label="OLD-LETTERS"
           >
             <img
               src="/logo.png"
               alt="OLD-LETTERS"
-              width={2172}
-              height={724}
-              className="h-8 sm:h-9 w-auto max-w-[170px] sm:max-w-[210px] object-contain"
+              width={210}
+              height={70}
+              style={{
+                maxHeight: '36px',
+                maxWidth: '210px',
+                width: 'auto',
+                height: 'auto',
+                objectFit: 'contain',
+                display: 'block',
+              }}
+              className="brand-logo-recipient h-8 sm:h-9 w-auto max-w-[170px] sm:max-w-[210px] object-contain block shrink-0"
             />
           </button>
           <span className="text-stone-300">·</span>

@@ -61,15 +61,23 @@ export const Navigation: React.FC<NavigationProps> = ({
         <button
           type="button"
           onClick={() => onNavigate('landing')}
-          className="transition-opacity hover:opacity-90 cursor-pointer select-none text-left py-1 flex items-center"
+          className="transition-opacity hover:opacity-90 cursor-pointer select-none text-left py-1 flex items-center bg-transparent border-0 p-0 focus:outline-none"
           aria-label="OLD-LETTERS Home"
         >
           <img
             src="/logo.png"
             alt="OLD-LETTERS — Digital Correspondence Desk"
-            width={2172}
-            height={724}
-            className="h-9 sm:h-11 w-auto max-w-[200px] sm:max-w-[240px] object-contain"
+            width={240}
+            height={80}
+            style={{
+              maxHeight: '44px',
+              maxWidth: '240px',
+              width: 'auto',
+              height: 'auto',
+              objectFit: 'contain',
+              display: 'block',
+            }}
+            className="brand-logo-nav h-9 sm:h-11 w-auto max-w-[200px] sm:max-w-[240px] object-contain block shrink-0"
           />
         </button>
 

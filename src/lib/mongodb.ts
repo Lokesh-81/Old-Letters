@@ -98,6 +98,14 @@ export interface OtpCodeDoc extends Document {
   createdAt: Date;
 }
 
+export interface RateLimitDoc extends Document {
+  _id: ObjectId;
+  key: string;
+  count: number;
+  firstSeen: Date;
+  expiresAt: Date;
+}
+
 export interface VerificationAttemptDoc extends Document {
   _id: ObjectId;
   identifier: string;
@@ -518,8 +526,15 @@ export async function setupDatabaseIndexes(): Promise<void> {
     await payments.createIndex({ status: 1 });
     await payments.createIndex({ userId: 1 });
     await payments.createIndex({ letterId: 1 });
+    await payments.createIndex({ upiReference: 1 }, { unique: true, sparse: true });
+    await payments.createIndex({ utr: 1 }, { unique: true, sparse: true });
 
-    // 6. deliveryEvents indexes
+    // 6. rateLimits indexes with TTL auto-expiration
+    const rateLimits = db.collection('rateLimits');
+    await rateLimits.createIndex({ key: 1 }, { unique: true });
+    await rateLimits.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+    // 7. deliveryEvents indexes
     const deliveryEvents = db.collection('deliveryEvents');
     await deliveryEvents.createIndex({ letterId: 1 });
     await deliveryEvents.createIndex({ letterId: 1, eventType: 1 }, { unique: true, sparse: true });
@@ -541,4 +556,106 @@ export async function setupDatabaseIndexes(): Promise<void> {
   } catch (err) {
     console.warn('[OLD-LETTERS MongoDB] Index setup notice:', err);
   }
+}
+
+export interface RateLimitStatus {
+  allowed: boolean;
+  limit: number;
+  remaining: number;
+  resetSeconds: number;
+  retryAfterSeconds: number;
+}
+
+// In-memory fallback if MongoDB connection is pending or offline in tests
+const inMemoryRateLimits = new Map<string, { count: number; expiresAt: number; firstSeen: number }>();
+
+export async function consumeDistributedRateLimit(
+  key: string,
+  limit: number,
+  windowMs: number
+): Promise<RateLimitStatus> {
+  const now = Date.now();
+  const resetDate = new Date(now + windowMs);
+
+  try {
+    const db = await getDb();
+    const rateLimitsColl = db.collection('rateLimits');
+
+    // Atomic findOneAndUpdate with upsert
+    const res = await rateLimitsColl.findOneAndUpdate(
+      { key },
+      {
+        $inc: { count: 1 },
+        $setOnInsert: {
+          firstSeen: new Date(now),
+          expiresAt: resetDate,
+        },
+      },
+      {
+        upsert: true,
+        returnDocument: 'after',
+      }
+    );
+
+    const doc: any = res?.value || res;
+    if (doc) {
+      const count = doc.count || 1;
+      const docExpiresAt = doc.expiresAt instanceof Date ? doc.expiresAt.getTime() : (now + windowMs);
+
+      // If document expired before TTL purged it, reset bucket
+      if (docExpiresAt < now) {
+        await rateLimitsColl.updateOne(
+          { key },
+          { $set: { count: 1, expiresAt: resetDate, firstSeen: new Date(now) } }
+        );
+        return {
+          allowed: true,
+          limit,
+          remaining: limit - 1,
+          resetSeconds: Math.ceil(windowMs / 1000),
+          retryAfterSeconds: 0,
+        };
+      }
+
+      const remaining = Math.max(0, limit - count);
+      const resetSeconds = Math.max(1, Math.ceil((docExpiresAt - now) / 1000));
+      const allowed = count <= limit;
+
+      return {
+        allowed,
+        limit,
+        remaining,
+        resetSeconds,
+        retryAfterSeconds: allowed ? 0 : resetSeconds,
+      };
+    }
+  } catch (err) {
+    // Fall back to in-memory store
+  }
+
+  // Fallback in-memory rate limiting
+  const rec = inMemoryRateLimits.get(key);
+  if (!rec || rec.expiresAt < now) {
+    inMemoryRateLimits.set(key, { count: 1, expiresAt: now + windowMs, firstSeen: now });
+    return {
+      allowed: true,
+      limit,
+      remaining: limit - 1,
+      resetSeconds: Math.ceil(windowMs / 1000),
+      retryAfterSeconds: 0,
+    };
+  }
+
+  rec.count += 1;
+  const remaining = Math.max(0, limit - rec.count);
+  const resetSeconds = Math.max(1, Math.ceil((rec.expiresAt - now) / 1000));
+  const allowed = rec.count <= limit;
+
+  return {
+    allowed,
+    limit,
+    remaining,
+    resetSeconds,
+    retryAfterSeconds: allowed ? 0 : resetSeconds,
+  };
 }

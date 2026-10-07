@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Signature } from '../ui/signature';
 
 interface LoadingScreenProps {
   onComplete?: () => void;
@@ -14,8 +13,6 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
   durationMs = 3000,
 }) => {
   const [isVisible, setIsVisible] = useState(true);
-  const minTimeElapsedRef = useRef(false);
-  const signatureFinishedRef = useRef(false);
   const dismissedRef = useRef(false);
 
   const dismiss = useCallback(() => {
@@ -25,31 +22,12 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
   }, []);
 
   useEffect(() => {
-    // Timer for minimum duration
-    const minTimer = setTimeout(() => {
-      minTimeElapsedRef.current = true;
-      if (signatureFinishedRef.current) {
-        dismiss();
-      }
+    const timer = setTimeout(() => {
+      dismiss();
     }, durationMs);
 
-    // Fallback maximum safety timer to guarantee dismiss even if signature or fonts take too long
-    const safetyTimer = setTimeout(() => {
-      dismiss();
-    }, durationMs + 1500);
-
-    return () => {
-      clearTimeout(minTimer);
-      clearTimeout(safetyTimer);
-    };
+    return () => clearTimeout(timer);
   }, [durationMs, dismiss]);
-
-  const handleSignatureComplete = useCallback(() => {
-    signatureFinishedRef.current = true;
-    if (minTimeElapsedRef.current) {
-      dismiss();
-    }
-  }, [dismiss]);
 
   const handleExitComplete = useCallback(() => {
     if (onComplete) {
@@ -89,23 +67,36 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
             </span>
           </motion.div>
 
-          {/* Animated Handwritten Signature for "OLD-LETTERS" */}
+          {/* Official Horizontal Brand Logo with responsive constraint */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.15 }}
-            className="flex items-center justify-center px-4"
+            initial={{ opacity: 0, scale: 0.95, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
+            className="flex items-center justify-center w-full max-w-full px-4 sm:px-6 my-2 sm:my-4"
           >
-            <Signature
-              text="OLD-LETTERS"
-              color="#134e4a"
-              fontSize={54}
-              duration={0.65}
-              delay={0.1}
-              charDelay={0.085}
-              onAnimationComplete={handleSignatureComplete}
-              className="drop-shadow-xs"
-            />
+            <div
+              className="flex items-center justify-center max-w-full"
+              style={{
+                width: 'min(85vw, 900px)',
+                maxWidth: '100%',
+              }}
+            >
+              <img
+                src="/logo.png"
+                alt="OLD-LETTERS"
+                width={900}
+                height={300}
+                style={{
+                  width: 'min(85vw, 900px)',
+                  height: 'auto',
+                  maxWidth: '100%',
+                  maxHeight: 'min(24vh, 220px)',
+                  objectFit: 'contain',
+                  display: 'block',
+                }}
+                className="brand-logo-loading max-w-full object-contain block drop-shadow-xs"
+              />
+            </div>
           </motion.div>
 
           {/* Bottom Cadence Label & Progress Line */}

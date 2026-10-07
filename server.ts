@@ -54,6 +54,8 @@ import {
   uploadGridFSBuffer,
   downloadGridFSBuffer,
   deleteGridFSFile,
+  consumeDistributedRateLimit,
+  RateLimitStatus,
 } from './src/lib/mongodb';
 import { seedDatabase } from './scripts/seed';
 import { ADMIN_EMAILS, isAdminEmail, isUserAdminRole } from './src/lib/admin';
@@ -93,6 +95,55 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=(), interest-cohort=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+
+  // Restrictive Content Security Policy allowing required fonts, assets, and Google Auth
+  const cspDirectives = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: blob: https: https://oldletters.vercel.app https://assets.watermelon.sh",
+    "media-src 'self' blob: data:",
+    "connect-src 'self' https: wss: http://localhost:* ws://localhost:*",
+    "frame-src 'self' https://accounts.google.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self' https://accounts.google.com",
+  ].join('; ');
+  res.setHeader('Content-Security-Policy', cspDirectives);
+
+  // CORS & Origin Validation: Never use Access-Control-Allow-Origin: * on authenticated APIs
+  const origin = req.headers.origin;
+  const isAllowedOrigin =
+    !origin ||
+    origin === APP_URL ||
+    origin === 'https://oldletters.vercel.app' ||
+    origin.startsWith('http://localhost:') ||
+    origin.startsWith('http://127.0.0.1:') ||
+    origin.endsWith('.vercel.app') ||
+    origin.includes('.run.app');
+
+  if (origin && isAllowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-Recipient-Token');
+  }
+
+  // Preflight check
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
+  // CSRF Defense: Reject state-changing requests from disallowed third-party origins
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
+    if (origin && !isAllowedOrigin) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Untrusted request origin.' });
+    }
+  }
 
   // Prevent search engines from indexing private, authenticated, administrative, and tokenized routes
   const reqPathLower = (req.path || '').toLowerCase();
@@ -250,7 +301,10 @@ const authenticateToken: express.RequestHandler = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
-    req.user = decoded;
+    // Strictly isolate sender user sessions from recipient tokens
+    if (decoded && decoded.id && (!decoded.scope || decoded.scope === 'user_auth' || decoded.scope === 'user_session')) {
+      req.user = decoded;
+    }
   } catch {
     // Invalid token, leave req.user undefined
   }
@@ -342,6 +396,45 @@ const requireAdmin: express.RequestHandler = async (req, res, next) => {
 
   next();
 };
+
+// Helper to extract reliable client IP from actual proxy / serverless environment
+function getClientIp(req: express.Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') {
+    const firstIp = forwarded.split(',')[0].trim();
+    if (firstIp) return firstIp;
+  } else if (Array.isArray(forwarded) && forwarded[0]) {
+    return forwarded[0].trim();
+  }
+  const realIp = req.headers['x-real-ip'];
+  if (typeof realIp === 'string' && realIp.trim()) {
+    return realIp.trim();
+  }
+  return req.socket.remoteAddress || '127.0.0.1';
+}
+
+// Attach standard rate limit headers to response
+function setRateLimitHeaders(res: express.Response, status: RateLimitStatus) {
+  res.setHeader('RateLimit-Limit', status.limit.toString());
+  res.setHeader('RateLimit-Remaining', status.remaining.toString());
+  res.setHeader('RateLimit-Reset', status.resetSeconds.toString());
+  if (!status.allowed && status.retryAfterSeconds > 0) {
+    res.setHeader('Retry-After', status.retryAfterSeconds.toString());
+  }
+}
+
+// Distributed rate limiter backed by MongoDB rateLimits collection with automatic TTL
+async function checkDistributedRateLimit(
+  req: express.Request,
+  res: express.Response,
+  key: string,
+  limit: number = 5,
+  windowMs: number = 15 * 60 * 1000
+): Promise<boolean> {
+  const status = await consumeDistributedRateLimit(key, limit, windowMs);
+  setRateLimitHeaders(res, status);
+  return status.allowed;
+}
 
 // Rate Limiting Bucket
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();

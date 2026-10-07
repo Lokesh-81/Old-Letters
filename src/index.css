@@ -1,9 +1,13 @@
 @import "tailwindcss";
 
+@source "../index.html";
+@source "../src/**/*.{ts,tsx,js,jsx,html}";
+@source "../components/**/*.{ts,tsx,js,jsx,html}";
+
 @theme {
-  --font-serif: "Georgia", "Cormorant Garamond", "Times New Roman", serif;
-  --font-display: "Georgia", "Cormorant Garamond", serif;
-  --font-editorial: "Newsreader", Georgia, serif;
+  --font-serif: "Cormorant Garamond", "Newsreader", "Georgia", "Times New Roman", serif;
+  --font-display: "Cormorant Garamond", "Georgia", serif;
+  --font-editorial: "Newsreader", "Georgia", serif;
   --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
   --font-typewriter: "Courier Prime", monospace;
 
@@ -19,7 +23,44 @@
   --color-teal-700: #0f766e;
 }
 
+@layer base {
+  /* Guaranteed Brand Asset Constraints — Never blowout intrinsically */
+  img[src*="logo.png"]:not(.brand-logo-loading) {
+    max-width: 240px;
+    max-height: 48px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+}
+
 @layer utilities {
+  /* Brand Logo Constraints — Guaranteed bounded dimensions */
+  .brand-logo-nav {
+    max-width: 240px;
+    max-height: 44px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+  }
+  .brand-logo-recipient {
+    max-width: 210px;
+    max-height: 36px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+  }
+  .brand-logo-loading {
+    width: min(85vw, 900px);
+    max-width: 100%;
+    max-height: min(25vh, 220px);
+    height: auto;
+    object-fit: contain;
+    display: block;
+  }
+
   .perspective-1000 {
     perspective: 1000px;
   }
