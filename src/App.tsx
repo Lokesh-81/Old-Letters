@@ -21,7 +21,7 @@ import { CookieConsentBanner } from './components/legal/CookieConsentBanner';
 import { CookiePreferencesModal } from './components/legal/CookiePreferencesModal';
 import { NotFoundView } from './components/common/NotFoundView';
 import { applySEO } from './lib/seo';
-import { fetchLetters, getDeliveryMeta, getCurrentUser, logoutUser } from './lib/api';
+import { fetchLetters, getDeliveryMeta, getCurrentUser, logoutUser, normalizeApiError } from './lib/api';
 import { AdminPaymentModal } from './components/admin/AdminPaymentModal';
 import { AdminDashboardView } from './components/admin/AdminDashboardView';
 import { AuthModal } from './components/auth/AuthModal';
@@ -89,27 +89,23 @@ export default function App() {
   const [recipientDeliveryToken, setRecipientDeliveryToken] = useState<string | undefined>(undefined);
   const [currentView, setCurrentView] = useState<AppView>('landing');
 
-  // Stored correspondence letters
+  // Stored correspondence letters (real database records only; no mock letters in production)
   const [letters, setLetters] = useState<Letter[]>(() => {
     try {
       const saved = localStorage.getItem('old_letters_archive');
       if (saved) {
-        const lower = saved.toLowerCase();
-        if (
-          lower.includes('vasantha') ||
-          lower.includes('correspondence.in') ||
-          lower.includes('lokesh') ||
-          lower.includes('hyderabad')
-        ) {
-          localStorage.removeItem('old_letters_archive');
-          return INITIAL_ARCHIVE_LETTERS;
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((item: any) => {
+            const str = JSON.stringify(item).toLowerCase();
+            return !str.includes('vasantha') && !str.includes('correspondence.in') && !str.includes('lokesh') && !str.includes('hyderabad');
+          });
         }
-        return JSON.parse(saved);
       }
     } catch {
       // Fallback
     }
-    return INITIAL_ARCHIVE_LETTERS;
+    return [];
   });
 
   // Current active letter and metadata for recipient experience (STRICTLY null by default to prevent leakage)
@@ -180,7 +176,7 @@ export default function App() {
         setCurrentView('composer');
       } else if (path === '/archive') {
         setCurrentView('archive');
-      } else if (path.startsWith('/letter/')) {
+      } else if (path.startsWith('/letter/') || path.startsWith('/recipient/')) {
         // Token will be resolved below
       } else if (path === '/login' || path === '/signup') {
         setCurrentView('landing');
@@ -249,11 +245,13 @@ export default function App() {
         setTimeout(() => setAuthNotice(null), 5000);
       }
 
-      const match = path.match(/\/letter\/([a-zA-Z0-9_-]+)/);
-      const tokenFromUrl = match ? match[1] : searchParams.get('letter');
+      const match = path.match(/\/(?:letter|recipient)\/([a-zA-Z0-9_-]+)/);
+      const tokenFromUrl = match ? match[1] : (searchParams.get('letter') || searchParams.get('token'));
 
       if (tokenFromUrl) {
         setRecipientDeliveryToken(tokenFromUrl);
+        setShowLoading(false);
+        setCurrentView('recipient');
         getDeliveryMeta(tokenFromUrl)
           .then((res) => {
             setRecipientMetadata(res.metadata);
@@ -262,12 +260,30 @@ export default function App() {
             } else {
               setActiveRecipientLetter(null);
             }
-            setCurrentView('recipient');
           })
-          .catch(() => {
-            setRecipientMetadata(null);
+          .catch((err) => {
+            const errNotice = normalizeApiError(err, 'The letter reference could not be found or has expired.');
+            setRecipientMetadata({
+              trackingCode: tokenFromUrl.startsWith('OL-') ? tokenFromUrl : 'UNRESOLVED',
+              senderName: 'Central Postal Bureau',
+              recipientName: 'Recipient',
+              recipientEmailMasked: '',
+              verificationMethod: 'open',
+              status: 'NOT_FOUND',
+              isDelivered: false,
+              isArrived: false,
+              canUnseal: false,
+              deliveryDate: new Date().toISOString(),
+              scheduledDeliveryAt: new Date().toISOString(),
+              waitingHours: 48,
+              remainingMs: 0,
+              remainingSeconds: 0,
+              remainingHours: 0,
+              templateId: 'ivory',
+              postmarkCity: 'Central Postal Archive',
+              errorNotice: errNotice,
+            } as any);
             setActiveRecipientLetter(null);
-            setCurrentView('recipient');
           });
       }
 
@@ -294,9 +310,7 @@ export default function App() {
           setAndPersistUser(user);
           // Fetch authenticated letters
           fetchLetters().then((data) => {
-            if (data && data.length > 0) {
-              setLetters(data);
-            }
+            setLetters(data || []);
           }).catch(() => {});
         } else {
           // Only clear if neither cookie nor local cache nor oauth redirect indicates active session
@@ -304,6 +318,7 @@ export default function App() {
           const isGoogleSuccessUrl = typeof window !== 'undefined' && window.location.search.includes('google_success');
           if (!hasLoggedInCookie && !isGoogleSuccessUrl) {
             setAndPersistUser(null);
+            setLetters([]);
           }
         }
         setAuthChecking(false);
@@ -323,7 +338,7 @@ export default function App() {
   // Helper to save posted letter to archive
   const handleLetterPosted = (newLetter: Letter) => {
     setLetters((prev) => {
-      const updated = [newLetter, ...prev];
+      const updated = [newLetter, ...prev.filter((l) => l.id !== newLetter.id)];
       try {
         localStorage.setItem('old_letters_archive', JSON.stringify(updated));
       } catch {
@@ -333,30 +348,49 @@ export default function App() {
     });
   };
 
-  // Launch recipient mode for a specific letter
+  // Launch recipient mode for a specific letter with accurate in-transit / arrived status
   const handleOpenRecipientView = (letterToOpen?: Letter) => {
     const target = letterToOpen || (letters.length > 0 ? letters[0] : null);
     if (target) {
       setActiveRecipientLetter(target);
+      const now = Date.now();
+      const scheduledTime = target.scheduledDeliveryAt ? new Date(target.scheduledDeliveryAt).getTime() : now;
+      const isDelivered = target.status === 'DELIVERED' || target.status === 'OPENED';
+      const isArrived = isDelivered || now >= scheduledTime;
+      const remainingMs = isArrived ? 0 : Math.max(0, scheduledTime - now);
+      const remainingSeconds = Math.ceil(remainingMs / 1000);
+      const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
+
       setRecipientMetadata({
         trackingCode: target.trackingCode,
         senderName: target.senderName,
         recipientName: target.recipientName,
         recipientEmailMasked: target.recipientEmail ? target.recipientEmail.replace(/(?<=.).(?=.*@)/g, '*') : '***@***.com',
-        verificationMethod: target.verificationMethod,
-        status: target.status,
-        isDelivered: target.status !== 'SCHEDULED',
-        isArrived: true,
-        canUnseal: true,
+        verificationMethod: target.verificationMethod || 'open',
+        status: isDelivered ? 'DELIVERED' : 'IN TRANSIT',
+        isDelivered,
+        isArrived,
+        canUnseal: isArrived,
         deliveryDate: target.scheduledDeliveryAt || new Date().toISOString(),
         scheduledDeliveryAt: target.scheduledDeliveryAt || new Date().toISOString(),
         waitingHours: target.waitingHours || 48,
-        remainingMs: 0,
-        remainingSeconds: 0,
-        remainingHours: 0,
-        templateId: target.templateId,
+        remainingMs,
+        remainingSeconds,
+        remainingHours,
+        templateId: target.templateId || 'ivory',
         postmarkCity: target.postmarkCity || 'Central Postal Archive',
       });
+
+      const token = target.deliveryToken || target.id;
+      if (token) {
+        setRecipientDeliveryToken(token);
+        getDeliveryMeta(token)
+          .then((res) => {
+            if (res.metadata) setRecipientMetadata(res.metadata);
+            if (res.letter) setActiveRecipientLetter(res.letter);
+          })
+          .catch(() => {});
+      }
     } else {
       setActiveRecipientLetter(null);
       setRecipientMetadata(null);

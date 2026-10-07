@@ -62,16 +62,20 @@ export const WaxSeal: React.FC<WaxSealProps> = ({
 
       {/* Inner debossed seal ring */}
       <span
-        className="relative flex items-center justify-center w-[76%] h-[76%] rounded-full border border-white/20 select-none text-white/95 font-serif font-bold"
+        className="relative flex items-center justify-center w-[76%] h-[76%] rounded-full border border-white/20 select-none text-white/95 overflow-hidden"
         style={{
           boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.6), 0 1px 1px rgba(255,255,255,0.2)',
           textShadow: '0 1px 2px rgba(0,0,0,0.8)',
         }}
       >
         {broken ? (
-          <span className="text-amber-200/90 rotate-12 scale-110">✦</span>
+          <span className="text-amber-200/90 rotate-12 scale-110 font-serif">✦</span>
         ) : (
-          <span>{emblem}</span>
+          <img
+            src="/favicon.png"
+            alt="OLD-LETTERS Seal"
+            className="w-[70%] h-[70%] object-contain drop-shadow brightness-110"
+          />
         )}
       </span>
     </button>

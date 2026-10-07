@@ -80,6 +80,9 @@ const getProductionAppUrl = (): string => {
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL.replace(/\/+$/, '')}`;
   }
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://oldletters.vercel.app';
+  }
   return `http://localhost:${PORT}`;
 };
 
@@ -1729,7 +1732,9 @@ app.get('/api/templates', async (req, res) => {
 // Helper for mapping letter documents for API responses
 async function mapLetterDocToResponse(ltr: any, db: any, reqUser?: SessionUser) {
   const recipientsColl = db.collection('letterRecipients');
-  const recipient = await recipientsColl.findOne({ letterId: ltr._id });
+  const recipient = await recipientsColl.findOne({
+    $or: [{ letterId: ltr._id }, { letterId: ltr._id.toString() }],
+  });
 
   // Lookup payment records for this letter
   const paymentsColl = db.collection('payments');
@@ -1744,7 +1749,29 @@ async function mapLetterDocToResponse(ltr: any, db: any, reqUser?: SessionUser) 
     });
   } catch {}
 
-  const rawRecipientEmail = ltr.recipientEmail || recipient?.email || 'recipient@example.com';
+  // Lookup delivery token
+  const tokensColl = db.collection('deliveryTokens');
+  let deliveryToken: string | undefined = undefined;
+  try {
+    const tokenDoc = await tokensColl.findOne({
+      $or: [
+        { letterId: ltr._id },
+        { letterId: ltr._id.toString() },
+        ...(ObjectId.isValid(ltr._id) ? [{ letterId: new ObjectId(ltr._id) }] : []),
+      ],
+    });
+    if (tokenDoc?.rawToken) {
+      deliveryToken = tokenDoc.rawToken;
+    } else if (tokenDoc?.tokenHash) {
+      deliveryToken = tokenDoc.tokenHash;
+    } else {
+      deliveryToken = ltr.trackingCode || ltr._id.toString();
+    }
+  } catch {
+    deliveryToken = ltr.trackingCode || ltr._id.toString();
+  }
+
+  const rawRecipientEmail = ltr.recipientEmail || recipient?.email || '';
   const recipientEmailMasked = rawRecipientEmail ? rawRecipientEmail.replace(/(?<=.).(?=.*@)/g, '*') : '***@***.com';
 
   const now = Date.now();
@@ -1831,6 +1858,7 @@ async function mapLetterDocToResponse(ltr: any, db: any, reqUser?: SessionUser) 
     waitingHours: ltr.waitingHours || 48,
     status: isDelivered ? 'DELIVERED' : ltr.status,
     postmarkCity: ltr.postmarkCity || 'Central Postal Archive',
+    deliveryToken,
     paymentStatus: payment ? (payment.status === 'APPROVED' ? 'PAID' : payment.status) : 'COMPLIMENTARY',
     amountPaid: payment?.amount || 0,
     currency: payment?.currency || 'INR',
@@ -1896,16 +1924,26 @@ app.get(['/api/letters/received', '/api/letters-received'], requireAuth, async (
 
     const receivedLetters = await Promise.all(
       rawLetters.map(async (ltr: any) => {
-        const isDelivered = ltr.status === 'DELIVERED' || (ltr.deliveryDate && new Date(ltr.deliveryDate) <= now);
+        const isDelivered = ltr.status === 'DELIVERED' || ltr.status === 'OPENED' || (ltr.deliveryDate && new Date(ltr.deliveryDate) <= now);
 
         let deliveryToken: string | undefined = undefined;
-        if (isDelivered) {
+        try {
           const tokenDoc = await tokensColl.findOne({
-            $or: [{ letterId: ltr._id }, { letterId: ltr._id.toString() }],
+            $or: [
+              { letterId: ltr._id },
+              { letterId: ltr._id.toString() },
+              ...(ObjectId.isValid(ltr._id) ? [{ letterId: new ObjectId(ltr._id) }] : []),
+            ],
           });
           if (tokenDoc?.rawToken) {
             deliveryToken = tokenDoc.rawToken;
+          } else if (tokenDoc?.tokenHash) {
+            deliveryToken = tokenDoc.tokenHash;
+          } else {
+            deliveryToken = ltr.trackingCode || ltr._id.toString();
           }
+        } catch {
+          deliveryToken = ltr.trackingCode || ltr._id.toString();
         }
 
         const scheduledAt = ltr.deliveryDate ? new Date(ltr.deliveryDate).toISOString() : undefined;
@@ -2736,36 +2774,69 @@ async function resolveLetterFromToken(rawToken: string, db: any) {
   const lettersColl = db.collection('letters');
   const recipientsColl = db.collection('letterRecipients');
 
+  let tokenRec: any = null;
+  let letter: any = null;
+
   // 1. Primary lookup: By SHA-256 hash in deliveryTokens collection
-  let tokenRec = await tokensColl.findOne({
+  tokenRec = await tokensColl.findOne({
     tokenHash,
-    expiresAt: { $gte: new Date() },
+    $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gte: new Date() } }],
   });
 
-  let letter = null;
   if (tokenRec) {
-    letter = await lettersColl.findOne({ _id: new ObjectId(tokenRec.letterId) });
-  } else {
-    // 2. Direct token record fallback
+    letter = await lettersColl.findOne({
+      _id: ObjectId.isValid(tokenRec.letterId) ? new ObjectId(tokenRec.letterId) : tokenRec.letterId,
+    });
+  }
+
+  // 2. Direct token record fallback: By rawToken or tokenHash
+  if (!letter) {
     tokenRec = await tokensColl.findOne({
-      $or: [{ tokenHash: cleanToken }, { rawToken: cleanToken }],
-      expiresAt: { $gte: new Date() },
+      $and: [
+        { $or: [{ tokenHash: cleanToken }, { rawToken: cleanToken }] },
+        { $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gte: new Date() } }] },
+      ],
     });
     if (tokenRec) {
-      letter = await lettersColl.findOne({ _id: new ObjectId(tokenRec.letterId) });
-    } else {
-      // 3. Tracking code lookup
-      const letterByCode = await lettersColl.findOne({ trackingCode: cleanToken });
-      if (letterByCode) {
-        letter = letterByCode;
-        tokenRec = await tokensColl.findOne({ letterId: letterByCode._id });
-      }
+      letter = await lettersColl.findOne({
+        _id: ObjectId.isValid(tokenRec.letterId) ? new ObjectId(tokenRec.letterId) : tokenRec.letterId,
+      });
+    }
+  }
+
+  // 3. Tracking code lookup (case-insensitive)
+  if (!letter) {
+    const letterByCode = await lettersColl.findOne({
+      trackingCode: { $regex: new RegExp(`^${cleanToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+    });
+    if (letterByCode) {
+      letter = letterByCode;
+      tokenRec = await tokensColl.findOne({
+        $or: [{ letterId: letterByCode._id }, { letterId: letterByCode._id.toString() }],
+      });
+    }
+  }
+
+  // 4. Letter ObjectId lookup fallback (e.g. /letter/<letter-id> clicked from email or browser)
+  if (!letter && ObjectId.isValid(cleanToken)) {
+    const letterById = await lettersColl.findOne({ _id: new ObjectId(cleanToken) });
+    if (letterById) {
+      letter = letterById;
+      tokenRec = await tokensColl.findOne({
+        $or: [{ letterId: letterById._id }, { letterId: letterById._id.toString() }],
+      });
     }
   }
 
   if (!letter) return null;
-  const recipient = await recipientsColl.findOne({ letterId: letter._id });
-  return { letter, tokenRec, recipient, tokenHash };
+
+  const recipient = await recipientsColl.findOne({
+    $or: [{ letterId: letter._id }, { letterId: letter._id.toString() }],
+  });
+
+  const resolvedTokenHash = tokenRec?.tokenHash || tokenHash;
+
+  return { letter, tokenRec, recipient, tokenHash: resolvedTokenHash };
 }
 
 // Helper to verify if the current HTTP request has a verified recipient session for a specific letter
@@ -2806,23 +2877,24 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
 
     const { letter, recipient } = resolved;
     const now = new Date();
-    const deliveryDate = new Date(letter.deliveryDate || letter.createdAt);
-    const isArrived = now.getTime() >= deliveryDate.getTime();
-    const remainingMs = Math.max(0, deliveryDate.getTime() - now.getTime());
+    const deliveryDate = new Date(letter.deliveryDate || letter.scheduledDeliveryAt || letter.createdAt);
+    const isDeliveredByStatus = letter.status === 'DELIVERED' || letter.status === 'OPENED' || letter.status === 'COMPLETED';
+    const isArrived = isDeliveredByStatus || (now.getTime() >= deliveryDate.getTime());
+    const remainingMs = isArrived ? 0 : Math.max(0, deliveryDate.getTime() - now.getTime());
     const remainingSeconds = Math.ceil(remainingMs / 1000);
     const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
 
-    // Auto-transition status if arrived but still scheduled
-    if (isArrived && letter.status === 'SCHEDULED') {
+    // Auto-transition status if arrived but still scheduled or in transit
+    if (isArrived && (letter.status === 'SCHEDULED' || letter.status === 'IN TRANSIT' || letter.status === 'IN_TRANSIT')) {
       await lettersColl.updateOne(
-        { _id: letter._id, status: 'SCHEDULED' },
-        { $set: { status: 'DELIVERED', deliveredAt: now, updatedAt: now } }
+        { _id: letter._id },
+        { $set: { status: 'DELIVERED', deliveredAt: letter.deliveredAt || now, updatedAt: now } }
       );
       letter.status = 'DELIVERED';
     }
 
     // Mask recipient email for privacy
-    const rawEmail = recipient?.email || '';
+    const rawEmail = recipient?.email || letter.recipientEmail || '';
     const maskedEmail = rawEmail.replace(/(?<=.).(?=.*@)/g, '*');
 
     // Resolve authoritative sender display name
@@ -2840,6 +2912,7 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
 
     const verificationMethod = letter.recipientVerificationMethod || 'open';
     const isVerifiedSession = isArrived && isRecipientSessionVerified(req, letter._id.toString());
+    const isAuthorizedToRead = isVerifiedSession || (verificationMethod === 'open');
 
     // 1. BEFORE ARRIVAL: STRICTLY SEALED IN TRANSIT. NEVER RETURN LETTER BODY/CONTENT.
     if (!isArrived) {
@@ -2852,7 +2925,7 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
         metadata: {
           trackingCode: letter.trackingCode,
           senderName: senderDisplayName,
-          recipientName: recipient?.displayName || 'Recipient',
+          recipientName: recipient?.displayName || letter.recipientName || 'Recipient',
           recipientEmailMasked: maskedEmail,
           verificationMethod,
           status: 'IN TRANSIT',
@@ -2871,24 +2944,61 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
       });
     }
 
-    // 2. AFTER ARRIVAL & RECIPIENT ALREADY VERIFIED IN SESSION: Return decrypted letter content
-    if (isVerifiedSession) {
-      const paidList = await (
-        await paidFeaturesColl.find({
+    // 2. AFTER ARRIVAL & AUTHORIZED TO READ (open verification OR already verified session):
+    if (isAuthorizedToRead) {
+      // Auto-issue recipient verification session token and cookie
+      const recipientAccessToken = jwt.sign(
+        {
           letterId: letter._id.toString(),
-          status: 'UNLOCKED',
-        })
-      ).toArray();
+          trackingCode: letter.trackingCode,
+          verified: true,
+          scope: 'recipient_read',
+        },
+        JWT_SECRET,
+        { expiresIn: '30d' }
+      );
+      const secure = getCookieSecurity(req);
+      res.cookie(`oldletters_rcpt_${letter._id.toString()}`, recipientAccessToken, {
+        httpOnly: true,
+        secure,
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 3600 * 1000,
+        path: '/',
+      });
+
+      // Update status to OPENED if DELIVERED
+      if (letter.status === 'DELIVERED') {
+        await lettersColl.updateOne(
+          { _id: letter._id, status: 'DELIVERED' },
+          { $set: { status: 'OPENED', openedAt: now, updatedAt: now } }
+        );
+        letter.status = 'OPENED';
+      }
+
+      const paidList = await paidFeaturesColl.find({
+        letterId: letter._id.toString(),
+        status: 'UNLOCKED',
+      }).toArray();
 
       // Check for approved personal message enclosure
       const paymentsColl = db.collection('payments');
       const mediaColl = db.collection('mediaMetadata');
       const approvedPayment = await paymentsColl.findOne({
-        letterId: letter._id.toString(),
+        $or: [
+          { letterId: letter._id.toString() },
+          ...(letter.trackingCode ? [{ letterId: letter.trackingCode }] : []),
+          ...(letter.mediaPaymentId ? [{ paymentId: letter.mediaPaymentId }] : []),
+          ...(letter.personalMessage?.paymentId ? [{ paymentId: letter.personalMessage.paymentId }] : []),
+        ],
         status: 'APPROVED',
       });
       const approvedMedia = await mediaColl.findOne({
-        letterId: letter._id.toString(),
+        $or: [
+          { letterId: letter._id.toString() },
+          ...(letter.mediaStorageKey ? [{ storageKey: letter.mediaStorageKey }] : []),
+          ...(letter.personalMessage?.mediaStorageKey ? [{ storageKey: letter.personalMessage.mediaStorageKey }] : []),
+          ...(approvedPayment ? [{ paymentId: approvedPayment._id.toString() }, { paymentId: approvedPayment.paymentId }] : []),
+        ],
         mediaStatus: 'APPROVED',
       });
       const personalMessage = (approvedPayment && approvedMedia && approvedMedia.mediaStatus === 'APPROVED') ? {
@@ -2896,6 +3006,8 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
         storageKey: approvedMedia.storageKey,
         mediaStatus: 'APPROVED',
         streamUrl: `/api/delivery/media/${rawToken}`,
+      } : (letter.personalMessage?.mediaStatus === 'REJECTED' || approvedPayment?.status === 'REJECTED') ? {
+        mediaStatus: 'REJECTED',
       } : null;
 
       return res.json({
@@ -2904,10 +3016,11 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
         isArrived: true,
         canUnseal: true,
         isVerified: true,
+        recipientAccessToken,
         metadata: {
           trackingCode: letter.trackingCode,
           senderName: senderDisplayName,
-          recipientName: recipient?.displayName || 'Recipient',
+          recipientName: recipient?.displayName || letter.recipientName || 'Recipient',
           recipientEmailMasked: maskedEmail,
           verificationMethod,
           status: letter.status,
@@ -2929,7 +3042,7 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
           type: letter.letterType,
           templateId: letter.templateId,
           senderName: senderDisplayName,
-          recipientName: recipient?.displayName || 'Recipient',
+          recipientName: recipient?.displayName || letter.recipientName || 'Recipient',
           letterDate: new Date(letter.createdAt).toLocaleDateString('en-US', {
             month: 'long',
             day: 'numeric',
@@ -2946,7 +3059,7 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
       });
     }
 
-    // 3. AFTER ARRIVAL BUT NOT YET VERIFIED: Return arrived metadata, ready to unseal/verify. NO BODY.
+    // 3. AFTER ARRIVAL BUT NOT YET VERIFIED (Requires OTP or Passphrase):
     return res.json({
       success: true,
       isSealed: true,
@@ -2956,7 +3069,7 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
       metadata: {
         trackingCode: letter.trackingCode,
         senderName: senderDisplayName,
-        recipientName: recipient?.displayName || 'Recipient',
+        recipientName: recipient?.displayName || letter.recipientName || 'Recipient',
         recipientEmailMasked: maskedEmail,
         verificationMethod,
         status: letter.status,
@@ -2997,9 +3110,10 @@ app.post(['/api/delivery/request-otp', '/api/recipient/request-otp'], async (req
 
     const { letter, recipient } = resolved;
     const now = new Date();
-    const deliveryDate = new Date(letter.deliveryDate || letter.createdAt);
-    const isArrived = now.getTime() >= deliveryDate.getTime();
-    const remainingMs = Math.max(0, deliveryDate.getTime() - now.getTime());
+    const deliveryDate = new Date(letter.deliveryDate || letter.scheduledDeliveryAt || letter.createdAt);
+    const isDeliveredByStatus = letter.status === 'DELIVERED' || letter.status === 'OPENED' || letter.status === 'COMPLETED';
+    const isArrived = isDeliveredByStatus || (now.getTime() >= deliveryDate.getTime());
+    const remainingMs = isArrived ? 0 : Math.max(0, deliveryDate.getTime() - now.getTime());
     const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
 
     // STRICT SERVER-SIDE CHECK: NO OTP CAN BE REQUESTED BEFORE ARRIVAL
@@ -3106,9 +3220,10 @@ app.post(['/api/delivery/verify', '/api/delivery/verify/:token', '/api/delivery/
 
     const { letter, recipient, tokenHash } = resolved;
     const now = new Date();
-    const deliveryDate = new Date(letter.deliveryDate || letter.createdAt);
-    const isArrived = now.getTime() >= deliveryDate.getTime();
-    const remainingMs = Math.max(0, deliveryDate.getTime() - now.getTime());
+    const deliveryDate = new Date(letter.deliveryDate || letter.scheduledDeliveryAt || letter.createdAt);
+    const isDeliveredByStatus = letter.status === 'DELIVERED' || letter.status === 'OPENED' || letter.status === 'COMPLETED';
+    const isArrived = isDeliveredByStatus || (now.getTime() >= deliveryDate.getTime());
+    const remainingMs = isArrived ? 0 : Math.max(0, deliveryDate.getTime() - now.getTime());
     const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
 
     // STRICT SERVER-SIDE CHECK: NO UNSEALING ALLOWED BEFORE SCHEDULED ARRIVAL TIME
@@ -5044,7 +5159,8 @@ async function startServer() {
       const cleanPath = req.path.toLowerCase().replace(/\/+$/, '') || '/';
       const isKnownRoute =
         KNOWN_CLIENT_ROUTES.has(cleanPath) ||
-        cleanPath.startsWith('/letter/');
+        cleanPath.startsWith('/letter/') ||
+        cleanPath.startsWith('/recipient/');
 
       if (isKnownRoute) {
         res.status(200).sendFile(path.resolve(__dirname, 'dist', 'index.html'));

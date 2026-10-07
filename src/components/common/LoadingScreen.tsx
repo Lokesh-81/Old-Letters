@@ -81,8 +81,8 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
             transition={{ duration: 0.8, delay: 0.1 }}
             className="flex items-center gap-3 mb-6"
           >
-            <span className="w-8 h-8 rounded-full bg-[#134e4a] text-white flex items-center justify-center font-serif text-sm shadow-md">
-              ❦
+            <span className="w-8 h-8 rounded-full bg-[#134e4a] p-1 flex items-center justify-center shadow-md">
+              <img src="/favicon.png" alt="OLD-LETTERS" className="w-5 h-5 object-contain" />
             </span>
             <span className="text-[10px] sm:text-xs font-mono tracking-[0.25em] uppercase text-[#134e4a]/70">
               POSTAL VAULT & CORRESPONDENCE

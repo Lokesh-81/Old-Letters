@@ -165,7 +165,7 @@ export interface RecipientMetadata {
   recipientName: string;
   recipientEmailMasked: string;
   verificationMethod: 'otp' | 'passphrase' | 'open';
-  status: 'DRAFT' | 'SCHEDULED' | 'IN TRANSIT' | 'DELIVERED' | 'OPENED' | 'COMPLETED' | 'CANCELLED';
+  status: 'DRAFT' | 'SCHEDULED' | 'IN TRANSIT' | 'DELIVERED' | 'OPENED' | 'COMPLETED' | 'CANCELLED' | 'NOT_FOUND';
   isDelivered: boolean;
   isArrived: boolean;
   canUnseal: boolean;
@@ -182,6 +182,7 @@ export interface RecipientMetadata {
 export interface Letter {
   id: string;
   trackingCode: string;
+  deliveryToken?: string;
   type: LetterType;
   templateId: string;
   senderName: string;

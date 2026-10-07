@@ -143,52 +143,92 @@ export async function sendMail(
 // OLD-LETTERS LUXURY POSTAL EMAIL TEMPLATES
 // ====================================================================
 
+export const PRODUCTION_DOMAIN = 'https://oldletters.vercel.app';
+export const EMAIL_LOGO_URL = `${PRODUCTION_DOMAIN}/logo.png`;
+export const EMAIL_FAVICON_URL = `${PRODUCTION_DOMAIN}/favicon.png`;
+
 function emailWrapper(title: string, subtitle: string, contentHtml: string): string {
   return `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
 </head>
-<body style="margin: 0; padding: 0; background-color: #faf9f7; font-family: 'Times New Roman', Times, serif; color: #141618; -webkit-font-smoothing: antialiased;">
-  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #faf9f7; padding: 32px 12px;">
+<body style="margin: 0; padding: 0; background-color: #F7F5F0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #292524; -webkit-font-smoothing: antialiased; line-height: 1.6;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #F7F5F0; padding: 40px 16px;">
     <tr>
       <td align="center">
-        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 540px; background-color: #ffffff; border: 1px solid #eae4da; border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.04); overflow: hidden;">
-          <!-- Postal Header Band -->
+        <!-- Main Content Card -->
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 560px; background-color: #FFFFFF; border: 1px solid #EAE4DA; border-radius: 3px; box-shadow: 0 2px 12px rgba(0,0,0,0.03); overflow: hidden;">
+          
+          <!-- Editorial Brand Header with Official Horizontal Logo -->
           <tr>
-            <td style="padding: 24px 32px; background-color: #134e4a; text-align: center; border-bottom: 3px solid #0f3d3a;">
-              <span style="display: block; font-size: 16px; font-weight: normal; letter-spacing: 0.25em; color: #f2ede4; text-transform: uppercase; margin-bottom: 4px;">OLD-LETTERS</span>
-              <span style="display: block; font-size: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; letter-spacing: 0.2em; color: #b7cfcc; text-transform: uppercase;">Central Correspondence Bureau</span>
+            <td align="center" style="padding: 36px 32px 24px 32px; border-bottom: 1px solid #F0ECE4; background-color: #FFFFFF;">
+              <a href="${PRODUCTION_DOMAIN}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                <img
+                  src="${EMAIL_LOGO_URL}"
+                  alt="OLD-LETTERS"
+                  width="200"
+                  height="67"
+                  style="display: block; width: 200px; max-width: 200px; height: auto; border: 0; outline: none; margin: 0 auto; object-fit: contain;"
+                />
+              </a>
+              <span style="display: block; font-size: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; letter-spacing: 0.24em; color: #78716C; text-transform: uppercase; margin-top: 12px;">
+                Central Correspondence Bureau
+              </span>
             </td>
           </tr>
 
-          <!-- Docket & Subtitle -->
+          <!-- Docket & Subject Heading -->
           <tr>
-            <td style="padding: 24px 32px 8px 32px; text-align: center;">
-              <span style="font-size: 10px; font-family: monospace, Courier; letter-spacing: 0.2em; text-transform: uppercase; color: #78716c; background-color: #f5f3ef; padding: 4px 10px; border-radius: 2px; border: 1px solid #e7e3dc;">${subtitle}</span>
-              <h1 style="font-size: 24px; font-weight: 400; color: #134e4a; margin: 16px 0 8px 0; line-height: 1.3;">${title}</h1>
+            <td style="padding: 28px 36px 12px 36px; text-align: center;">
+              ${subtitle ? `
+              <div style="margin-bottom: 14px;">
+                <span style="display: inline-block; font-size: 10px; font-family: 'Courier New', Courier, monospace; letter-spacing: 0.22em; text-transform: uppercase; color: #57534E; background-color: #F7F5F0; padding: 5px 14px; border-radius: 2px; border: 1px solid #EAE4DA;">
+                  ${subtitle}
+                </span>
+              </div>` : ''}
+              <h1 style="font-family: 'Times New Roman', Georgia, serif; font-size: 24px; font-weight: normal; color: #134E4A; margin: 0; line-height: 1.35; letter-spacing: 0.02em;">
+                ${title}
+              </h1>
             </td>
           </tr>
 
-          <!-- Body Content -->
+          <!-- Editorial Body Surface -->
           <tr>
-            <td style="padding: 12px 32px 32px 32px; font-size: 14px; line-height: 1.7; color: #44403c; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <td style="padding: 16px 36px 36px 36px; font-size: 14px; line-height: 1.75; color: #33302C;">
               ${contentHtml}
             </td>
           </tr>
 
-          <!-- Postal Footer -->
+          <!-- Refined Postal Footer with Standalone Favicon Mark -->
           <tr>
-            <td style="padding: 20px 32px; background-color: #faf9f7; border-top: 1px solid #eae4da; text-align: center; font-size: 11px; font-family: serif; font-style: italic; color: #78716c;">
-              &ldquo;Some things are worth waiting for.&rdquo;<br>
-              <span style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-style: normal; font-size: 10px; color: #a8a29e; margin-top: 4px; display: inline-block;">
-                Held in archival trust · Central Postal Archive
-              </span>
+            <td style="padding: 24px 36px; background-color: #FAF9F7; border-top: 1px solid #EAE4DA; text-align: center;">
+              <div style="margin-bottom: 10px;">
+                <img
+                  src="${EMAIL_FAVICON_URL}"
+                  alt="OLD-LETTERS Seal"
+                  width="20"
+                  height="20"
+                  style="display: inline-block; vertical-align: middle; border: 0; outline: none; width: 20px; height: 20px; object-fit: contain;"
+                />
+              </div>
+              <div style="font-family: 'Times New Roman', Georgia, serif; font-style: italic; font-size: 13px; color: #57534E; margin-bottom: 6px;">
+                &ldquo;Some things are worth waiting for.&rdquo;
+              </div>
+              <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #A8A29E;">
+                Held in Archival Trust · Central Postal Vault
+              </div>
+              <div style="margin-top: 10px;">
+                <a href="${PRODUCTION_DOMAIN}" target="_blank" rel="noopener noreferrer" style="font-size: 10px; color: #78716C; text-decoration: underline; font-family: monospace;">
+                  ${PRODUCTION_DOMAIN.replace(/^https?:\/\//, '')}
+                </a>
+              </div>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>
@@ -306,7 +346,7 @@ export async function sendLetterDispatchedRecipientEmail(params: {
       </p>
       <div style="text-align: center; margin: 28px 0 10px 0;">
         <a href="${params.recipientUrl}" style="background-color: #134e4a; color: #ffffff; padding: 12px 26px; font-size: 11px; text-decoration: none; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
-          CHECK IN-TRANSIT STATUS →
+          VIEW TRANSIT COUNTDOWN →
         </a>
       </div>
       <p style="font-size: 11px; color: #a8a29e; text-align: center; margin-top: 14px;">
@@ -515,7 +555,7 @@ export async function sendArrivalRecipientEmail(params: {
       </p>
       <div style="text-align: center; margin: 30px 0 10px 0;">
         <a href="${params.recipientUrl}" style="background-color: #134e4a; color: #ffffff; padding: 14px 32px; font-size: 12px; text-decoration: none; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; border-radius: 2px; display: inline-block;">
-          UNSEAL YOUR LETTER →
+          READ YOUR DELIVERED LETTER →
         </a>
       </div>
     `
@@ -525,7 +565,7 @@ export async function sendArrivalRecipientEmail(params: {
     to: params.recipientEmail,
     subject,
     html,
-    text: `Your letter (Ref: ${params.trackingCode}) has arrived! The 48-hour wait is complete.${params.hasApprovedMedia ? '\n\nYour personal message enclosure is now available.' : ''}\n\nUnseal and read your letter now: ${params.recipientUrl}`,
+    text: `Your letter (Ref: ${params.trackingCode}) has arrived! The 48-hour wait is complete.${params.hasApprovedMedia ? '\n\nYour personal message enclosure is now available.' : ''}\n\nRead your delivered letter now: ${params.recipientUrl}`,
   });
 }
 

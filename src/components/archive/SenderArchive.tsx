@@ -71,46 +71,70 @@ export const SenderArchive: React.FC<SenderArchiveProps> = ({
       </div>
 
       {/* Editorial List Layout */}
-      <div className="divide-y divide-[#eae4da]">
-        {filtered.map((ltr) => {
-          const isDelivered = ltr.status === 'DELIVERED' || ltr.status === 'OPENED';
-          const arrivalDate = new Date(ltr.scheduledDeliveryAt).toLocaleDateString('en-US', {
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric',
-          });
-
-          const tpl = TEMPLATES.find((t) => t.id === ltr.templateId) || TEMPLATES[0];
-
-          return (
-            <div
-              key={ltr.id}
-              className="py-10 group flex flex-col md:flex-row md:items-center justify-between gap-6 transition-colors hover:bg-stone-50 px-4 -mx-4 rounded-xs"
+      {filtered.length === 0 ? (
+        <div className="py-20 text-center space-y-4 border border-dashed border-[#eae4da] bg-white rounded-xs p-8">
+          <div className="w-12 h-12 mx-auto rounded-full bg-stone-100 flex items-center justify-center p-2.5">
+            <img src="/favicon.png" alt="OLD-LETTERS" className="w-full h-full object-contain" />
+          </div>
+          <h3 className="font-serif text-2xl text-teal-900 font-light">
+            No Letters in This Registry
+          </h3>
+          <p className="font-serif italic text-stone-500 text-sm max-w-md mx-auto">
+            {filter === 'ALL'
+              ? 'You have not yet dispatched any correspondence. Write your first letter and seal it for the future.'
+              : `You have no letters currently marked as ${filter.toLowerCase()}.`}
+          </p>
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={onWriteNew}
+              className="rounded-sm bg-teal-900 px-6 py-2.5 text-xs uppercase tracking-wider font-medium text-white hover:bg-teal-800 transition-colors cursor-pointer"
             >
-              {/* Left Column: Miniature Swatch + Recipient & Excerpt */}
-              <div className="flex items-start gap-5 max-w-xl">
-                {/* Miniature stationery paper swatch with wax seal badge */}
-                <div
-                  className="shrink-0 w-16 h-20 rounded-xs border shadow-sm p-1.5 flex flex-col justify-between select-none relative group-hover:scale-105 transition-transform"
-                  style={{
-                    backgroundColor: tpl.paperColor,
-                    borderColor: tpl.borderColor || '#cbbda5',
-                    color: tpl.inkColor,
-                  }}
-                  title={`Stationery: ${tpl.name}`}
-                >
-                  <div className="text-[8px] font-mono uppercase tracking-tighter opacity-60 leading-none">
-                    {tpl.name.split(' ')[0]}
+              Write a Letter →
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="divide-y divide-[#eae4da]">
+          {filtered.map((ltr) => {
+            const isDelivered = ltr.status === 'DELIVERED' || ltr.status === 'OPENED';
+            const arrivalDate = new Date(ltr.scheduledDeliveryAt).toLocaleDateString('en-US', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            });
+
+            const tpl = TEMPLATES.find((t) => t.id === ltr.templateId) || TEMPLATES[0];
+
+            return (
+              <div
+                key={ltr.id}
+                className="py-10 group flex flex-col md:flex-row md:items-center justify-between gap-6 transition-colors hover:bg-stone-50 px-4 -mx-4 rounded-xs"
+              >
+                {/* Left Column: Miniature Swatch + Recipient & Excerpt */}
+                <div className="flex items-start gap-5 max-w-xl">
+                  {/* Miniature stationery paper swatch with wax seal badge */}
+                  <div
+                    className="shrink-0 w-16 h-20 rounded-xs border shadow-sm p-1.5 flex flex-col justify-between select-none relative group-hover:scale-105 transition-transform"
+                    style={{
+                      backgroundColor: tpl.paperColor,
+                      borderColor: tpl.borderColor || '#cbbda5',
+                      color: tpl.inkColor,
+                    }}
+                    title={`Stationery: ${tpl.name}`}
+                  >
+                    <div className="text-[8px] font-mono uppercase tracking-tighter opacity-60 leading-none">
+                      {tpl.name.split(' ')[0]}
+                    </div>
+                    <div className="flex justify-end">
+                      <span
+                        className="w-5 h-5 rounded-full flex items-center justify-center p-0.5 shadow-2xs"
+                        style={{ backgroundColor: tpl.waxSealStyle.color }}
+                      >
+                        <img src="/favicon.png" alt="Seal" className="w-3.5 h-3.5 object-contain" />
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex justify-end">
-                    <span
-                      className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] shadow-2xs"
-                      style={{ backgroundColor: tpl.waxSealStyle.color, color: '#fef08a' }}
-                    >
-                      {tpl.waxSealStyle.emblem}
-                    </span>
-                  </div>
-                </div>
 
                 <div className="space-y-2">
                   <div className="flex items-center gap-3 text-xs font-mono text-stone-500 uppercase tracking-wider">
@@ -160,6 +184,7 @@ export const SenderArchive: React.FC<SenderArchiveProps> = ({
           );
         })}
       </div>
+      )}
     </div>
   );
 };

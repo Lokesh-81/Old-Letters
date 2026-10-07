@@ -312,6 +312,7 @@ export async function getDeliveryMeta(token: string): Promise<DeliveryMetaResult
       success: boolean;
       metadata?: RecipientMetadata;
       letter?: Letter;
+      recipientAccessToken?: string;
       isSealed?: boolean;
       isArrived?: boolean;
       canUnseal?: boolean;
@@ -321,6 +322,12 @@ export async function getDeliveryMeta(token: string): Promise<DeliveryMetaResult
 
     if (!res.ok || !data.success || !data.metadata) {
       throw new Error(data.error || 'The letter link is invalid or has expired.');
+    }
+
+    if (data.recipientAccessToken) {
+      try {
+        sessionStorage.setItem(`oldletters_rcpt_${token}`, data.recipientAccessToken);
+      } catch {}
     }
 
     return {

@@ -16,7 +16,7 @@
       "destination": "/api"
     },
     {
-      "source": "/((?!api(?:/|$)|sitemap\\.xml|robots\\.txt|google.*\\.html).*)",
+      "source": "/((?!api(?:/|$)|logo\\.png|favicon\\.png|sitemap\\.xml|robots\\.txt|google.*\\.html).*)",
       "destination": "/index.html"
     }
   ]

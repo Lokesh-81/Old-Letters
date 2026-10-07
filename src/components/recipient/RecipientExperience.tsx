@@ -22,7 +22,17 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
   onReply,
 }) => {
   const [activeLetter, setActiveLetter] = useState<Letter | null>(initialLetter || null);
-  const [stage, setStage] = useState<'sealed' | 'unsealing' | 'reading' | 'reveal' | 'parlour'>('sealed');
+
+  // Determine delivery arrival state
+  const isArrived = metadata ? metadata.isArrived : (activeLetter ? activeLetter.status !== 'SCHEDULED' : true);
+  const isSealedInTransit = !isArrived;
+
+  const [stage, setStage] = useState<'sealed' | 'unsealing' | 'reading' | 'reveal' | 'parlour'>(() => {
+    if (initialLetter?.content && (metadata?.isArrived ?? true)) {
+      return 'reading';
+    }
+    return 'sealed';
+  });
 
   // Verification states
   const [showVerificationPrompt, setShowVerificationPrompt] = useState(false);
@@ -37,12 +47,18 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
   useEffect(() => {
     if (initialLetter) {
       setActiveLetter(initialLetter);
+      if (initialLetter.content && isArrived) {
+        setStage('reading');
+      }
     }
-  }, [initialLetter]);
+  }, [initialLetter, isArrived]);
 
-  // Determine delivery arrival state
-  const isArrived = metadata ? metadata.isArrived : (activeLetter ? activeLetter.status !== 'SCHEDULED' : true);
-  const isSealedInTransit = !isArrived;
+  // Transition to reading view as soon as letter content arrives
+  useEffect(() => {
+    if (activeLetter?.content && isArrived && stage === 'sealed') {
+      setStage('reading');
+    }
+  }, [activeLetter?.content, isArrived, stage]);
 
   // Live countdown timer for in-transit letters
   const [remainingSeconds, setRemainingSeconds] = useState<number>(() => {
@@ -138,6 +154,20 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
     }
   };
 
+  // Automatically prompt for verification if delivered letter requires OTP or passphrase
+  useEffect(() => {
+    if (isArrived && (verificationMethod === 'otp' || verificationMethod === 'passphrase') && !activeLetter?.content) {
+      setShowVerificationPrompt(true);
+    }
+  }, [isArrived, verificationMethod, activeLetter?.content]);
+
+  // Automatically unseal if delivered and open verification but content not yet fetched
+  useEffect(() => {
+    if (isArrived && verificationMethod === 'open' && !activeLetter?.content && !isVerifying && !verificationError) {
+      handleDirectUnseal();
+    }
+  }, [isArrived, verificationMethod, activeLetter?.content, isVerifying, verificationError]);
+
   const handleOpenEnvelope = () => {
     // If still in transit, opening is strictly forbidden
     if (isSealedInTransit) {
@@ -228,15 +258,26 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
 
   return (
     <div className="min-h-screen bg-[#faf9f7] text-teal-900 flex flex-col justify-between p-4 sm:p-8 select-none relative overflow-x-hidden">
-      {/* Minimal Top Bar */}
+      {/* Minimal Top Bar with Official Horizontal Logo */}
       <header className="max-w-4xl mx-auto w-full flex items-center justify-between py-4 border-b border-[#eae4da]">
         <div className="flex items-center gap-3">
-          <span className="text-lg tracking-[0.14em] text-teal-900" style={{ fontFamily: 'sans-serif' }}>
-            OLD-LETTERS
-          </span>
+          <button
+            type="button"
+            onClick={onExit}
+            className="flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-90"
+            aria-label="OLD-LETTERS"
+          >
+            <img
+              src="/logo.png"
+              alt="OLD-LETTERS"
+              width={2172}
+              height={724}
+              className="h-8 sm:h-9 w-auto max-w-[170px] sm:max-w-[210px] object-contain"
+            />
+          </button>
           <span className="text-stone-300">·</span>
           <span className="text-[11px] font-mono tracking-widest uppercase text-stone-500">
-            {isSealedInTransit ? 'IN TRANSIT' : 'PRIVATE ARRIVAL'}
+            {metadata?.status === 'NOT_FOUND' ? 'POSTAL REGISTRY' : (isSealedInTransit ? 'IN TRANSIT' : 'PRIVATE ARRIVAL')}
           </span>
         </div>
 
@@ -251,10 +292,32 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
       </header>
 
       {/* ========================================================================= */}
-      {/* CASE A: SEALED IN TRANSIT (48-hour intentional waiting period active)     */}
-      {/* STRICT SERVER-BACKED VIEW: ABSOLUTELY NO LETTER CONTENT IS IN THE DOM    */}
+      {/* CASE 0: NOT FOUND OR EXPIRED DELIVERY LINK                                */}
       {/* ========================================================================= */}
-      {isSealedInTransit ? (
+      {metadata?.status === 'NOT_FOUND' ? (
+        <main className="max-w-md mx-auto my-auto py-16 text-center space-y-6 animate-fade-in w-full">
+          <div className="w-16 h-16 mx-auto rounded-full bg-stone-100 p-3.5 flex items-center justify-center border border-stone-200">
+            <img src="/favicon.png" alt="OLD-LETTERS" className="w-full h-full object-contain" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="font-serif text-3xl sm:text-4xl text-teal-950 font-light">
+              Correspondence Not Found
+            </h1>
+            <p className="font-serif italic text-stone-600 text-sm leading-relaxed">
+              {(metadata as any).errorNotice || 'The requested correspondence could not be located in the postal registry. The delivery link may be expired, mistyped, or not yet dispatched.'}
+            </p>
+          </div>
+          <div className="pt-4">
+            <button
+              type="button"
+              onClick={onExit}
+              className="px-6 py-2.5 bg-teal-900 hover:bg-teal-800 text-white font-sans text-xs uppercase tracking-wider rounded-xs cursor-pointer shadow-xs"
+            >
+              Return to Postal Bureau →
+            </button>
+          </div>
+        </main>
+      ) : isSealedInTransit ? (
         <main className="max-w-2xl mx-auto my-auto py-12 flex flex-col items-center justify-center text-center space-y-8 animate-fade-in w-full">
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-100 border border-stone-200 text-stone-600 rounded-full text-[11px] font-mono tracking-widest uppercase">
@@ -562,7 +625,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
                 <div className="max-w-2xl mx-auto w-full p-6 bg-white border border-[#eae4da] shadow-paper rounded-xs space-y-4">
                   <div className="flex items-center justify-between border-b border-stone-100 pb-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-teal-900 font-serif text-lg">❦</span>
+                      <img src="/favicon.png" alt="Seal" className="w-4 h-4 object-contain" />
                       <span className="text-xs font-mono tracking-widest uppercase text-stone-700 font-semibold">
                         {(activeLetter as any).personalMessage.mediaType === 'VIDEO' ? 'PERSONAL VIDEO ENCLOSURE' : 'PERSONAL VOICE ENCLOSURE'}
                       </span>
@@ -585,8 +648,8 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
                     />
                   ) : (
                     <div className="p-4 bg-[#faf9f7] border border-stone-200 rounded-xs flex flex-col items-center space-y-3">
-                      <div className="w-12 h-12 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-900 text-lg">
-                        🎙️
+                      <div className="w-12 h-12 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center p-2.5">
+                        <img src="/favicon.png" alt="Enclosure" className="w-full h-full object-contain" />
                       </div>
                       <audio
                         src={(activeLetter as any).personalMessage.streamUrl || `/api/delivery/media/${deliveryToken || activeLetter.id}`}

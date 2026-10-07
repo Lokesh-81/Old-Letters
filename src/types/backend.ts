@@ -81,7 +81,7 @@ export type AdminVerifyPaymentInput = z.infer<typeof AdminVerifyPaymentSchema>;
 
 // Recipient Verification Request Schema
 export const RecipientVerifySchema = z.object({
-  token: z.string().min(16),
+  token: z.string().min(1),
   verificationMethod: z.enum(['otp', 'passphrase', 'open']).optional(),
   otp: z.string().length(6).optional(),
   passphrase: z.string().optional(),
