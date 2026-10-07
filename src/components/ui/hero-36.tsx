@@ -1,4 +1,5 @@
 import { motion, type Variants } from "framer-motion";
+import { TextRepel } from "./text-repel";
 
 interface Hero36Props {
   onStartWriting?: () => void;
@@ -100,13 +101,29 @@ export default function Hero36({
               variants={titleLineVariants}
               className="block will-change-transform"
             >
-              Some things
+              <TextRepel
+                text="Some things"
+                radius={130}
+                strength={45}
+                stiffness={200}
+                damping={15}
+                mass={0.35}
+                className="justify-center"
+              />
             </motion.span>
             <motion.span
               variants={titleLineVariants}
-              className="block will-change-transform"
+              className="block will-change-transform mt-1 sm:mt-2"
             >
-              are worth waiting for.
+              <TextRepel
+                text="are worth waiting for."
+                radius={130}
+                strength={45}
+                stiffness={200}
+                damping={15}
+                mass={0.35}
+                className="justify-center"
+              />
             </motion.span>
           </motion.h1>
 

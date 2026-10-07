@@ -6,6 +6,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import LogoIcon from '@/assets/logo-icon';
+import { KineticTextReveal } from './kinetic-text-reveal';
 
 interface LinkItem {
   label: string;
@@ -35,6 +36,8 @@ interface Footer23Props {
   onWriteClick?: () => void;
   onHowItWorksClick?: () => void;
   onNavigateLegal?: (view: 'cookies' | 'privacy' | 'terms') => void;
+  onNavigateArchive?: () => void;
+  onSelectStationery?: (templateId: string) => void;
   onOpenCookiePreferences?: () => void;
 }
 
@@ -44,34 +47,25 @@ const defaultColumns: NavColumn[] = [
     links: [
       { label: 'Letter Types', href: '#letter-types' },
       { label: 'Curated Stationery', href: '#stationery' },
-      { label: 'Wax Seal Protection', href: '#how-it-works' },
-      { label: '48-Hour Vault', href: '#how-it-works' },
-      { label: 'Private Salon', href: '#delivery' },
+      { label: 'Wax Seal Protection', href: '#how-it-works-section' },
+      { label: '48-Hour Vault', href: '#how-it-works-section' },
+      { label: 'Write a Letter', href: '#write' },
     ],
   },
   {
     title: 'STATIONERY',
     links: [
-      { label: 'Ivory Classical', href: '#stationery' },
-      { label: 'Typewritten Post', href: '#stationery' },
-      { label: 'Air Mail Par Avion', href: '#stationery' },
-      { label: 'Burgundy Velvet', href: '#stationery' },
-      { label: 'Midnight Archive', href: '#stationery' },
-    ],
-  },
-  {
-    title: 'PHILOSOPHY',
-    links: [
-      { label: 'On Taking Time', href: '#how-it-works' },
-      { label: 'The Transit Interval', href: '#how-it-works' },
-      { label: 'Ceremonial Unsealing', href: '#delivery' },
-      { label: 'Phase 2: Spoken Cylinders', href: '#write' },
+      { label: 'Ivory Classical', href: '#stationery-ivory' },
+      { label: 'Typewritten Post', href: '#stationery-typewriter' },
+      { label: 'Air Mail Par Avion', href: '#stationery-airmail' },
+      { label: 'Burgundy Velvet', href: '#stationery-burgundy' },
+      { label: 'Midnight Archive', href: '#stationery-midnight' },
     ],
   },
   {
     title: 'REGISTRY',
     links: [
-      { label: 'Correspondence Archive', href: '#archive' },
+      { label: 'Correspondence Archive', href: '/archive' },
       { label: 'Terms of Service', href: '/terms' },
       { label: 'Privacy Policy', href: '/privacy' },
       { label: 'Cookie Policy', href: '/cookies' },
@@ -171,6 +165,8 @@ export default function Footer23({
   onWriteClick,
   onHowItWorksClick,
   onNavigateLegal,
+  onNavigateArchive,
+  onSelectStationery,
   onOpenCookiePreferences,
 }: Footer23Props) {
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -195,7 +191,7 @@ export default function Footer23({
           className="flex flex-col gap-2 lg:max-w-md xl:max-w-lg"
         >
           <h2 className="text-[clamp(1.75rem,4.5vw,2.5rem)] leading-[1.15] font-normal tracking-[-0.02em] text-zinc-900 font-serif">
-            {ctaHeading}
+            <KineticTextReveal text={ctaHeading} className="font-serif" />
           </h2>
           <p className="text-md max-w-sm text-zinc-500 font-serif">{ctaSubtitle}</p>
         </motion.div>
@@ -248,7 +244,7 @@ export default function Footer23({
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, amount: 0.12 }}
-        className="grid grid-cols-1 gap-6 md:gap-40 px-6 pt-8 pb-6 sm:px-10 md:grid-cols-[auto_1fr] lg:px-14 xl:px-16"
+        className="grid grid-cols-1 gap-10 md:gap-16 px-6 pt-8 pb-6 sm:px-10 md:grid-cols-[280px_1fr] lg:grid-cols-[300px_1fr] lg:px-14 xl:px-16"
       >
         {/* Left: logo + subscribe */}
         <motion.div
@@ -304,7 +300,7 @@ export default function Footer23({
         <motion.nav
           variants={midStagger}
           aria-label="Footer navigation"
-          className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-4"
+          className="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-8"
         >
           {columns.map((col) => (
             <motion.div
@@ -315,25 +311,56 @@ export default function Footer23({
               <h3 className="text-sm font-medium text-zinc-400 uppercase font-mono">
                 {col.title}
               </h3>
-              <motion.ul variants={linkCascade} className="flex flex-col gap-2">
+              <motion.ul variants={linkCascade} className="flex flex-col gap-2.5">
                 {col.links.map((link, i) => {
-                  const isLegal = link.href.startsWith('/');
-                  const isCookiePreferences = link.href === '#preferences';
                   return (
                     <motion.li key={`${link.label}-${i}`} variants={linkTrickle}>
                       <a
                         href={link.href}
                         onClick={(e) => {
-                          if (isCookiePreferences && onOpenCookiePreferences) {
+                          if (link.href === '#preferences') {
                             e.preventDefault();
-                            onOpenCookiePreferences();
-                          } else if (isLegal && onNavigateLegal) {
+                            onOpenCookiePreferences?.();
+                          } else if (link.href === '/archive') {
+                            e.preventDefault();
+                            if (onNavigateArchive) {
+                              onNavigateArchive();
+                            } else {
+                              window.location.href = '/archive';
+                            }
+                          } else if (link.href === '#write') {
+                            e.preventDefault();
+                            onWriteClick?.();
+                          } else if (link.href.startsWith('#stationery-')) {
+                            e.preventDefault();
+                            const tplKey = link.href.replace('#stationery-', '');
+                            const tplMap: Record<string, string> = {
+                              ivory: 'ivory-classic',
+                              typewriter: 'typewriter',
+                              airmail: 'air-mail',
+                              burgundy: 'love-letter',
+                              midnight: 'midnight-archive',
+                            };
+                            const targetTpl = tplMap[tplKey] || 'ivory-classic';
+                            onSelectStationery?.(targetTpl);
+                            const el = document.getElementById('stationery');
+                            if (el) el.scrollIntoView({ behavior: 'smooth' });
+                          } else if (link.href.startsWith('#')) {
+                            e.preventDefault();
+                            const id = link.href.replace('#', '');
+                            const el = document.getElementById(id);
+                            if (el) {
+                              el.scrollIntoView({ behavior: 'smooth' });
+                            } else if (id === 'how-it-works-section' || id === 'how-it-works') {
+                              onHowItWorksClick?.();
+                            }
+                          } else if (link.href.startsWith('/') && onNavigateLegal) {
                             e.preventDefault();
                             const path = link.href.replace('/', '') as 'cookies' | 'privacy' | 'terms';
                             onNavigateLegal(path);
                           }
                         }}
-                        className="text-sm leading-none font-medium text-zinc-600 transition-colors duration-150 hover:text-teal-900 cursor-pointer"
+                        className="text-sm leading-normal font-medium text-zinc-600 transition-colors duration-150 hover:text-teal-900 cursor-pointer"
                       >
                         {link.label}
                       </a>

@@ -314,17 +314,29 @@ export const RadialCarousel: React.FC<RadialCarouselProps> = ({
 
                 {/* Letter Body Preview (Crisp High-Contrast Text) */}
                 <div className="space-y-2 py-3 flex-1 flex flex-col justify-center">
-                  <div className="text-sm sm:text-base font-serif font-medium" style={{ color: fg }}>
-                    Dear Recipient,
+                  <div
+                    className={`text-sm sm:text-base font-medium ${
+                      currentTemplate.id === 'typewriter' ? 'font-mono uppercase font-bold' : 'font-serif'
+                    }`}
+                    style={{ color: fg }}
+                  >
+                    {currentTemplate.sampleSalutation || 'Dear Recipient,'}
                   </div>
                   <p
-                    className="text-xs sm:text-sm font-serif italic leading-relaxed line-clamp-3"
+                    className={`text-xs sm:text-sm leading-relaxed line-clamp-3 ${
+                      currentTemplate.id === 'typewriter' ? 'font-mono' : 'font-serif italic'
+                    }`}
                     style={{ color: fg, opacity: 0.9 }}
                   >
-                    &ldquo;I am writing this on the balcony as the evening cools down over the city. I wanted to tell you how much I value your presence in my life.&rdquo;
+                    &ldquo;{currentTemplate.sampleBody ? currentTemplate.sampleBody.split('\n')[0] : 'Some things are worth waiting for...'}&rdquo;
                   </p>
-                  <div className="text-[11px] font-serif italic" style={{ color: fg, opacity: 0.85 }}>
-                    With affection, Your Name
+                  <div
+                    className={`text-[11px] ${
+                      currentTemplate.id === 'typewriter' ? 'font-mono' : 'font-serif italic'
+                    }`}
+                    style={{ color: fg, opacity: 0.85 }}
+                  >
+                    {currentTemplate.sampleSignoff || 'With affection,'} {currentTemplate.sampleSender || 'Your Name'}
                   </div>
                 </div>
 
@@ -393,12 +405,28 @@ export const RadialCarousel: React.FC<RadialCarouselProps> = ({
                 </div>
 
                 <div className="space-y-4 py-6">
-                  <div className="text-lg font-serif">Dear Recipient,</div>
-                  <p className="text-base font-serif italic leading-relaxed" style={{ color: fg, opacity: 0.9 }}>
-                    &ldquo;I am writing this on the balcony as the evening cools down over the city. I wanted to tell you how much I value your presence in my life.&rdquo;
+                  <div
+                    className={`text-lg ${
+                      currentTemplate.id === 'typewriter' ? 'font-mono font-bold uppercase' : 'font-serif'
+                    }`}
+                  >
+                    {currentTemplate.sampleSalutation || 'Dear Recipient,'}
+                  </div>
+                  <p
+                    className={`text-base leading-relaxed ${
+                      currentTemplate.id === 'typewriter' ? 'font-mono' : 'font-serif italic'
+                    }`}
+                    style={{ color: fg, opacity: 0.9 }}
+                  >
+                    &ldquo;{currentTemplate.sampleBody ? currentTemplate.sampleBody.split('\n')[0] : 'Some things are worth waiting for...'}&rdquo;
                   </p>
-                  <div className="text-sm font-serif italic" style={{ color: fg, opacity: 0.85 }}>
-                    With affection, Your Name
+                  <div
+                    className={`text-sm ${
+                      currentTemplate.id === 'typewriter' ? 'font-mono' : 'font-serif italic'
+                    }`}
+                    style={{ color: fg, opacity: 0.85 }}
+                  >
+                    {currentTemplate.sampleSignoff || 'With affection,'} {currentTemplate.sampleSender || 'Your Name'}
                   </div>
                 </div>
 
@@ -579,7 +607,7 @@ const OrbitTemplateItem: React.FC<OrbitTemplateItemProps> = ({
         {/* Air Mail Border if Air Mail */}
         {isAirMail && (
           <div
-            className="absolute inset-x-0 top-0 h-1"
+            className="absolute inset-x-0 top-0 h-1.5"
             style={{
               backgroundImage:
                 'repeating-linear-gradient(-45deg, #dc2626, #dc2626 6px, #f8f9fa 6px, #f8f9fa 9px, #2563eb 9px, #2563eb 15px, #f8f9fa 15px, #f8f9fa 18px)',
@@ -590,6 +618,26 @@ const OrbitTemplateItem: React.FC<OrbitTemplateItemProps> = ({
         {/* Diary Line if Diary */}
         {isDiary && (
           <div className="absolute top-0 bottom-0 left-3 w-[1px] bg-rose-400/50 pointer-events-none" />
+        )}
+
+        {/* Postcard mini divider */}
+        {template.id === 'vintage-postcard' && (
+          <div className="absolute top-1 bottom-1 left-1/2 w-[1px] border-r border-dashed border-stone-400/50 pointer-events-none" />
+        )}
+
+        {/* Secret letter red stripe */}
+        {template.id === 'secret-letter' && (
+          <div className="absolute inset-x-0 top-0 h-1 bg-red-600 pointer-events-none" />
+        )}
+
+        {/* Midnight gold star */}
+        {template.id === 'midnight-archive' && (
+          <span className="absolute top-1 right-1 text-[7px] text-[#e2c974]">✦</span>
+        )}
+
+        {/* Thank you laurel */}
+        {template.id === 'thank-you' && (
+          <span className="absolute top-1 right-1 text-[7px] text-[#BFA24E]">🌿</span>
         )}
 
         {/* Top Seal Stamp & Category */}

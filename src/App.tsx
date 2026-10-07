@@ -634,6 +634,7 @@ export default function App() {
                 }
               }}
               onNavigateLegal={handleNavigate}
+              onNavigateArchive={handleOpenArchive}
               onOpenCookiePreferences={() => setShowCookiePreferencesModal(true)}
             />
           </div>

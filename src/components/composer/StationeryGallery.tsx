@@ -290,7 +290,7 @@ export const StationeryGallery: React.FC<StationeryGalleryProps> = ({
                 key={tpl.id}
                 type="button"
                 onClick={() => handleSelectSpecific(tpl)}
-                className={`group relative shrink-0 w-32 sm:w-36 rounded-xs p-3 text-left transition-all duration-300 flex flex-col justify-between cursor-pointer border ${
+                className={`group relative shrink-0 w-32 sm:w-36 rounded-xs p-3 text-left transition-all duration-300 flex flex-col justify-between cursor-pointer border overflow-hidden ${
                   isSelected
                     ? 'ring-2 ring-teal-900 shadow-lg -translate-y-1.5 scale-102 z-10'
                     : 'hover:-translate-y-1 shadow-xs hover:shadow-md opacity-90 hover:opacity-100'
@@ -301,6 +301,57 @@ export const StationeryGallery: React.FC<StationeryGalleryProps> = ({
                   borderColor: isSelected ? cardAccent : cardBorder,
                 }}
               >
+                {/* Air Mail mini chevron stripe */}
+                {(tpl.id === 'air-mail' || tpl.borderStyle === 'airmail-chevron') && (
+                  <div
+                    className="absolute inset-x-0 top-0 h-1.5"
+                    style={{
+                      backgroundImage:
+                        'repeating-linear-gradient(-45deg, #dc2626, #dc2626 5px, #ffffff 5px, #ffffff 8px, #2563eb 8px, #2563eb 13px, #ffffff 13px, #ffffff 16px)',
+                    }}
+                  />
+                )}
+
+                {/* Typewriter mechanical left margin line */}
+                {(tpl.id === 'typewriter' || tpl.borderStyle === 'typewriter-rule') && (
+                  <div className="absolute top-0 bottom-0 left-2 w-[1px] bg-red-500/40 pointer-events-none" />
+                )}
+
+                {/* Midnight gold star cue */}
+                {(tpl.id === 'midnight-archive' || tpl.borderStyle === 'midnight-gold') && (
+                  <span className="absolute top-1 right-1 text-[8px] text-[#e2c974]">✦</span>
+                )}
+
+                {/* Diary ruled lines cue */}
+                {(tpl.id === 'personal-diary' || tpl.borderStyle === 'notebook-margin') && (
+                  <div className="absolute top-0 bottom-0 left-3 w-[1px] bg-red-400/40 pointer-events-none" />
+                )}
+
+                {/* Postcard mini divider cue */}
+                {tpl.id === 'vintage-postcard' && (
+                  <div className="absolute top-1.5 bottom-1.5 left-1/2 w-[1px] border-r border-dashed border-stone-400/60 pointer-events-none" />
+                )}
+
+                {/* Secret letter classified red bar */}
+                {tpl.id === 'secret-letter' && (
+                  <div className="absolute inset-x-0 top-0 h-1 bg-red-600 pointer-events-none" />
+                )}
+
+                {/* Thank you golden laurel floret */}
+                {tpl.id === 'thank-you' && (
+                  <span className="absolute top-1 right-1 text-[8px] text-[#BFA24E]">🌿</span>
+                )}
+
+                {/* Love letter heart cue */}
+                {tpl.id === 'love-letter' && (
+                  <span className="absolute top-1 right-1 text-[8px] text-[#841824]">❦</span>
+                )}
+
+                {/* Blush rose flower cue */}
+                {tpl.id === 'blush-pressed-rose' && (
+                  <span className="absolute top-1 right-1 text-[8px] text-[#a04658]">🌸</span>
+                )}
+
                 {/* Active check indicator */}
                 {isSelected && (
                   <div

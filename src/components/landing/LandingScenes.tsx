@@ -5,12 +5,14 @@ import { PaperSheet } from '../common/PaperSheet';
 import Footer23 from '../ui/index';
 import ScrollTriggered from '../ui/scroll-triggered';
 import RadialCarousel from '../ui/radial-carousel';
+import { KineticTextReveal } from '../ui/kinetic-text-reveal';
 
 interface LandingScenesProps {
   onSelectLetterType: (type: LetterType) => void;
   onStartWriting: () => void;
   onExploreHowItWorks?: () => void;
   onNavigateLegal?: (view: 'cookies' | 'privacy' | 'terms') => void;
+  onNavigateArchive?: () => void;
   onOpenCookiePreferences?: () => void;
 }
 
@@ -19,6 +21,7 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
   onStartWriting,
   onExploreHowItWorks,
   onNavigateLegal,
+  onNavigateArchive,
   onOpenCookiePreferences,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<LetterCategory>('ROMANTIC');
@@ -49,7 +52,7 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
         <div className="max-w-5xl mx-auto space-y-16">
           <div className="text-center space-y-3">
             <h2 className="text-4xl sm:text-6xl text-teal-900 font-extralight max-w-2xl mx-auto leading-[1.05]" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-              Why do we rush everything?
+              <KineticTextReveal text="Why do we rush everything?" />
             </h2>
           </div>
 
@@ -78,10 +81,10 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-lg sm:text-xl text-stone-700 leading-relaxed" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
                   <p>
-                    Modern digital conversations happen in fractured milliseconds. We reply before we have digested what the other person wrote, and our words vanish into endless notification feeds.
+                    <KineticTextReveal text="Modern digital conversations happen in fractured milliseconds. We reply before we have digested what the other person wrote, and our words vanish into endless notification feeds." />
                   </p>
                   <p className="text-teal-900 font-normal">
-                    OLD-LETTERS restores the ceremony of waiting. When you choose a delivery date, your letter is sealed in transit, allowing anticipation to give your words permanence.
+                    <KineticTextReveal text="OLD-LETTERS restores the ceremony of waiting. When you choose a delivery date, your letter is sealed in transit, allowing anticipation to give your words permanence." />
                   </p>
                 </div>
 
@@ -114,11 +117,11 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#eae4da] pb-8">
             <div>
               <h2 className="text-4xl sm:text-5xl text-teal-900 font-extralight" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-                The Four Movements
+                <KineticTextReveal text="The Four Movements" />
               </h2>
             </div>
             <div className="italic text-teal-900/80 max-w-sm text-base" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-              The journey from a blank page to the moment an envelope is opened.
+              <KineticTextReveal text="The journey from a blank page to the moment an envelope is opened." />
             </div>
           </div>
 
@@ -223,10 +226,10 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
       <section className="py-24 px-6 sm:px-12 border-t border-[#eae4da] bg-[#fbf9f5] overflow-hidden">
         <div className="max-w-4xl mx-auto space-y-4 text-center">
           <h2 className="text-4xl sm:text-6xl text-teal-900 font-extralight" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-            Letters That Rise With You
+            <KineticTextReveal text="Letters That Rise With You" />
           </h2>
           <p className="text-teal-900/80 text-lg sm:text-xl max-w-xl mx-auto leading-relaxed" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-            As you scroll, correspondence sheets rise from the postal archive with spring physical depth. Select any letter to inscribe your own words.
+            <KineticTextReveal text="As you scroll, correspondence sheets rise from the postal archive with spring physical depth. Select any letter to inscribe your own words." />
           </p>
         </div>
 
@@ -242,10 +245,10 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
         <div className="max-w-6xl mx-auto space-y-16">
           <div className="space-y-4">
             <h2 className="text-4xl sm:text-6xl text-teal-900 font-extralight" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-              What will you say?
+              <KineticTextReveal text="What will you say?" />
             </h2>
             <p className="text-teal-900/80 text-lg sm:text-xl max-w-xl" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-              Select an intention. Each correspondence category carries its own emotional cadence.
+              <KineticTextReveal text="Select an intention. Each correspondence category carries its own emotional cadence." />
             </p>
 
             {/* Category tabs */}
@@ -349,11 +352,11 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#eae4da] pb-8">
             <div>
               <h2 className="text-4xl sm:text-5xl text-teal-900 font-extralight" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-                Curated Stationery
+                <KineticTextReveal text="Curated Stationery" />
               </h2>
             </div>
             <div className="italic text-teal-900/80 max-w-sm text-base" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-              Explore our collection of authentic tactile stationery designs with our interactive radial stationery compass.
+              <KineticTextReveal text="Explore our collection of authentic tactile stationery designs with our interactive radial stationery compass." />
             </div>
           </div>
 
@@ -417,6 +420,11 @@ export const LandingScenes: React.FC<LandingScenesProps> = ({
         onWriteClick={onStartWriting}
         onHowItWorksClick={onExploreHowItWorks}
         onNavigateLegal={onNavigateLegal}
+        onNavigateArchive={onNavigateArchive}
+        onSelectStationery={(tplId) => {
+          const idx = TEMPLATES.findIndex((t) => t.id === tplId);
+          if (idx !== -1) setActiveTemplateIndex(idx);
+        }}
         onOpenCookiePreferences={onOpenCookiePreferences}
       />
     </div>
