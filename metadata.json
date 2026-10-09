@@ -1,6 +1,6 @@
 {
   "name": "OLD-LETTERS",
-  "description": "Modern luxury digital correspondence. Some things are worth waiting for.",
+  "description": "Write meaningful letters to the people who matter, seal them for the future, and deliver them when the time is right. OLD-LETTERS preserves personal messages for tomorrow.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

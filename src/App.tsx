@@ -40,6 +40,7 @@ export default function App() {
   const [intendedDestination, setIntendedDestination] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
+  const [isOffline, setIsOffline] = useState<boolean>(typeof navigator !== 'undefined' ? !navigator.onLine : false);
 
   // Initialize currentUser synchronously from URL payload (post-OAuth redirect) or local cache so authenticated state is preserved across redirects/refreshes
   const [currentUser, setCurrentUser] = useState<{
@@ -335,7 +336,17 @@ export default function App() {
         setAuthChecking(false);
       });
 
-    return () => window.removeEventListener('popstate', handleLocationChange);
+    // Offline / Online network listeners
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // Synchronize document metadata, canonical URLs, robots, and JSON-LD
@@ -539,9 +550,32 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#faf9f7] text-teal-900 flex flex-col font-sans selection:bg-stone-300/50 selection:text-stone-900">
+      {/* Accessible skip link for keyboard navigation */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-teal-900 focus:text-white focus:rounded-xs focus:shadow-paper-md focus:text-xs focus:font-mono focus:uppercase focus:tracking-wider focus:outline-none"
+      >
+        Skip to main correspondence desk
+      </a>
+
       {/* 3-Second Loading Screen with Signature Animation */}
       {showLoading && (
         <LoadingScreen durationMs={3000} onComplete={() => setShowLoading(false)} />
+      )}
+
+      {/* Offline Status Banner */}
+      {isOffline && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="bg-stone-900 text-stone-100 border-b border-stone-800 px-6 py-2.5 text-xs font-sans flex items-center justify-between z-50 shadow-xs"
+        >
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" aria-hidden="true" />
+            <span>You are currently working offline. Correspondence drafts are preserved locally and will sync when reconnected.</span>
+          </div>
+          <span className="text-stone-400 font-mono text-[11px] uppercase tracking-wider">[OFFLINE MODE]</span>
+        </div>
       )}
 
       {/* Auth / Configuration Notification Banner */}
@@ -584,7 +618,7 @@ export default function App() {
       />
 
       {/* Main View Router */}
-      <main className="flex-1 flex flex-col">
+      <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col focus:outline-none">
         {currentView === 'profile' && (
           <BureauDashboard
             initialTab={bureauTab}

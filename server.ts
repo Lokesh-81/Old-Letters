@@ -1718,10 +1718,11 @@ app.post('/api/auth/request-otp', async (req, res) => {
       });
     }
 
+    const isProdEnv = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
     res.json({
       success: true,
       message: 'Access code sent to email.',
-      devOtpHint: isEmailConfigured() ? undefined : otpCode,
+      devOtpHint: (!isEmailConfigured() && !isProdEnv) ? otpCode : undefined,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -2889,10 +2890,15 @@ async function resolveLetterFromToken(rawToken: string, db: any) {
   let tokenRec: any = null;
   let letter: any = null;
 
+  const validTokenCondition = {
+    $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gte: new Date() } }],
+    $and: [{ revoked: { $ne: true } }],
+  };
+
   // 1. Primary lookup: By SHA-256 hash in deliveryTokens collection
   tokenRec = await tokensColl.findOne({
     tokenHash,
-    $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gte: new Date() } }],
+    ...validTokenCondition,
   });
 
   if (tokenRec) {
@@ -2906,7 +2912,7 @@ async function resolveLetterFromToken(rawToken: string, db: any) {
     tokenRec = await tokensColl.findOne({
       $and: [
         { $or: [{ tokenHash: cleanToken }, { rawToken: cleanToken }] },
-        { $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gte: new Date() } }] },
+        validTokenCondition,
       ],
     });
     if (tokenRec) {
@@ -2922,10 +2928,16 @@ async function resolveLetterFromToken(rawToken: string, db: any) {
       trackingCode: { $regex: new RegExp(`^${cleanToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
     });
     if (letterByCode) {
-      letter = letterByCode;
       tokenRec = await tokensColl.findOne({
-        $or: [{ letterId: letterByCode._id }, { letterId: letterByCode._id.toString() }],
+        $and: [
+          { $or: [{ letterId: letterByCode._id }, { letterId: letterByCode._id.toString() }] },
+          { $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gte: new Date() } }] },
+          { revoked: { $ne: true } },
+        ],
       });
+      if (tokenRec || !(await tokensColl.findOne({ $or: [{ letterId: letterByCode._id }, { letterId: letterByCode._id.toString() }] }))) {
+        letter = letterByCode;
+      }
     }
   }
 
@@ -2933,10 +2945,16 @@ async function resolveLetterFromToken(rawToken: string, db: any) {
   if (!letter && ObjectId.isValid(cleanToken)) {
     const letterById = await lettersColl.findOne({ _id: new ObjectId(cleanToken) });
     if (letterById) {
-      letter = letterById;
       tokenRec = await tokensColl.findOne({
-        $or: [{ letterId: letterById._id }, { letterId: letterById._id.toString() }],
+        $and: [
+          { $or: [{ letterId: letterById._id }, { letterId: letterById._id.toString() }] },
+          { $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gte: new Date() } }] },
+          { revoked: { $ne: true } },
+        ],
       });
+      if (tokenRec || !(await tokensColl.findOne({ $or: [{ letterId: letterById._id }, { letterId: letterById._id.toString() }] }))) {
+        letter = letterById;
+      }
     }
   }
 
@@ -2988,6 +3006,13 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
     }
 
     const { letter, recipient } = resolved;
+    if (letter.status === 'CANCELLED') {
+      return res.status(410).json({
+        success: false,
+        error: 'This correspondence has been recalled or cancelled by the sender.',
+        status: 'CANCELLED',
+      });
+    }
     const nowMs = Date.now();
     const now = new Date(nowMs);
     const { date: deliveryDate, ms: deliveryTimeMs } = resolveDeliveryDate(letter);
@@ -3310,10 +3335,11 @@ app.post(['/api/delivery/request-otp', '/api/recipient/request-otp'], async (req
       });
     }
 
+    const isProdEnv = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
     res.json({
       success: true,
       message: 'Verification code dispatched to recipient email.',
-      devOtpHint: isEmailConfigured() ? undefined : otpCode,
+      devOtpHint: (!isEmailConfigured() && !isProdEnv) ? otpCode : undefined,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -4332,6 +4358,12 @@ app.post(['/api/payments', '/api/payments/create', '/payments', '/payments/creat
     });
   } catch (err: any) {
     console.error('[OLD-LETTERS Payment Error]', err);
+    if (err?.code === 11000 || err?.message?.includes('E11000 duplicate key error') || err?.message?.includes('duplicate key')) {
+      return res.status(409).json({
+        success: false,
+        error: 'This UPI reference / UTR number has already been registered in the bureau ledger. Please check your transaction reference.',
+      });
+    }
     const isDbUnavailable =
       err?.message?.includes('Database connection unavailable') ||
       err?.message?.includes('MongoDB Atlas connection unavailable') ||
@@ -4629,6 +4661,20 @@ app.get(['/api/delivery/media/:token', '/api/delivery/media/:token/:storageKey',
 
     if (!isArrived) {
       return res.status(403).json({ success: false, error: 'Sealed in transit. Media is locked until arrival.' });
+    }
+
+    // Require recipient OTP / passphrase verification before streaming private media
+    const verificationMethod = letter.recipientVerificationMethod || 'open';
+    if (verificationMethod !== 'open') {
+      const isVerified = isRecipientSessionVerified(req, letter._id.toString());
+      if (!isVerified) {
+        return res.status(403).json({
+          success: false,
+          error: 'Recipient identity verification (OTP or cipher passphrase) required before streaming personal media attachment.',
+          verificationRequired: true,
+          verificationMethod,
+        });
+      }
     }
 
     // 3. Find payment & media metadata
@@ -5286,7 +5332,7 @@ app.get('/sitemap.xml', (req, res) => {
 });
 
 // Explicit JSON 404 handler for any unmatched /api routes (prevents HTML fallthrough)
-app.all('/api/*', (req, res) => {
+app.all(['/api', '/api/*'], (req, res) => {
   res.status(404).json({
     success: false,
     error: `Postal API endpoint not found: ${req.method} ${req.path}`,

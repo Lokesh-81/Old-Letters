@@ -3852,10 +3852,11 @@ app.post("/api/auth/request-otp", async (req, res) => {
         `
       });
     }
+    const isProdEnv = process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
     res.json({
       success: true,
       message: "Access code sent to email.",
-      devOtpHint: isEmailConfigured() ? void 0 : otpCode
+      devOtpHint: !isEmailConfigured() && !isProdEnv ? otpCode : void 0
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -4855,9 +4856,13 @@ async function resolveLetterFromToken(rawToken, db) {
   const recipientsColl = db.collection("letterRecipients");
   let tokenRec = null;
   let letter = null;
+  const validTokenCondition = {
+    $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gte: /* @__PURE__ */ new Date() } }],
+    $and: [{ revoked: { $ne: true } }]
+  };
   tokenRec = await tokensColl.findOne({
     tokenHash,
-    $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gte: /* @__PURE__ */ new Date() } }]
+    ...validTokenCondition
   });
   if (tokenRec) {
     letter = await lettersColl.findOne({
@@ -4868,7 +4873,7 @@ async function resolveLetterFromToken(rawToken, db) {
     tokenRec = await tokensColl.findOne({
       $and: [
         { $or: [{ tokenHash: cleanToken }, { rawToken: cleanToken }] },
-        { $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gte: /* @__PURE__ */ new Date() } }] }
+        validTokenCondition
       ]
     });
     if (tokenRec) {
@@ -4882,19 +4887,31 @@ async function resolveLetterFromToken(rawToken, db) {
       trackingCode: { $regex: new RegExp(`^${cleanToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") }
     });
     if (letterByCode) {
-      letter = letterByCode;
       tokenRec = await tokensColl.findOne({
-        $or: [{ letterId: letterByCode._id }, { letterId: letterByCode._id.toString() }]
+        $and: [
+          { $or: [{ letterId: letterByCode._id }, { letterId: letterByCode._id.toString() }] },
+          { $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gte: /* @__PURE__ */ new Date() } }] },
+          { revoked: { $ne: true } }
+        ]
       });
+      if (tokenRec || !await tokensColl.findOne({ $or: [{ letterId: letterByCode._id }, { letterId: letterByCode._id.toString() }] })) {
+        letter = letterByCode;
+      }
     }
   }
   if (!letter && ObjectId.isValid(cleanToken)) {
     const letterById = await lettersColl.findOne({ _id: new ObjectId(cleanToken) });
     if (letterById) {
-      letter = letterById;
       tokenRec = await tokensColl.findOne({
-        $or: [{ letterId: letterById._id }, { letterId: letterById._id.toString() }]
+        $and: [
+          { $or: [{ letterId: letterById._id }, { letterId: letterById._id.toString() }] },
+          { $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gte: /* @__PURE__ */ new Date() } }] },
+          { revoked: { $ne: true } }
+        ]
       });
+      if (tokenRec || !await tokensColl.findOne({ $or: [{ letterId: letterById._id }, { letterId: letterById._id.toString() }] })) {
+        letter = letterById;
+      }
     }
   }
   if (!letter) return null;
@@ -4931,6 +4948,13 @@ app.get(["/api/delivery/token/:token", "/api/letter/:token"], async (req, res) =
       return res.status(404).json({ success: false, error: "Correspondence not found or delivery link expired." });
     }
     const { letter, recipient } = resolved;
+    if (letter.status === "CANCELLED") {
+      return res.status(410).json({
+        success: false,
+        error: "This correspondence has been recalled or cancelled by the sender.",
+        status: "CANCELLED"
+      });
+    }
     const nowMs = Date.now();
     const now = new Date(nowMs);
     const { date: deliveryDate, ms: deliveryTimeMs } = resolveDeliveryDate(letter);
@@ -5216,10 +5240,11 @@ app.post(["/api/delivery/request-otp", "/api/recipient/request-otp"], async (req
         `
       });
     }
+    const isProdEnv = process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
     res.json({
       success: true,
       message: "Verification code dispatched to recipient email.",
-      devOtpHint: isEmailConfigured() ? void 0 : otpCode
+      devOtpHint: !isEmailConfigured() && !isProdEnv ? otpCode : void 0
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -6085,6 +6110,12 @@ app.post(["/api/payments", "/api/payments/create", "/payments", "/payments/creat
     });
   } catch (err) {
     console.error("[OLD-LETTERS Payment Error]", err);
+    if (err?.code === 11e3 || err?.message?.includes("E11000 duplicate key error") || err?.message?.includes("duplicate key")) {
+      return res.status(409).json({
+        success: false,
+        error: "This UPI reference / UTR number has already been registered in the bureau ledger. Please check your transaction reference."
+      });
+    }
     const isDbUnavailable = err?.message?.includes("Database connection unavailable") || err?.message?.includes("MongoDB Atlas connection unavailable") || err?.message?.includes("MONGODB_URI is missing or invalid") || err?.message?.includes("querySrv") || err?.message?.includes("ENOTFOUND") || err?.message?.includes("ETIMEDOUT") || err?.name === "MongoServerSelectionError" || err?.name === "MongoNetworkError";
     const statusCode = isDbUnavailable ? 503 : 500;
     const clientMsg = isDbUnavailable ? "Payment could not be registered because the payment service is temporarily unavailable. Please try again." : err.message || "Payment submission could not be completed.";
@@ -6315,6 +6346,18 @@ app.get(["/api/delivery/media/:token", "/api/delivery/media/:token/:storageKey",
     const isArrived = isDeliveredByStatus || nowMs >= deliveryTimeMs;
     if (!isArrived) {
       return res.status(403).json({ success: false, error: "Sealed in transit. Media is locked until arrival." });
+    }
+    const verificationMethod = letter.recipientVerificationMethod || "open";
+    if (verificationMethod !== "open") {
+      const isVerified = isRecipientSessionVerified(req, letter._id.toString());
+      if (!isVerified) {
+        return res.status(403).json({
+          success: false,
+          error: "Recipient identity verification (OTP or cipher passphrase) required before streaming personal media attachment.",
+          verificationRequired: true,
+          verificationMethod
+        });
+      }
     }
     const payment = await paymentsColl.findOne({
       $or: [
@@ -6879,7 +6922,7 @@ app.get("/sitemap.xml", (req, res) => {
   }
   return res.status(404).send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');
 });
-app.all("/api/*", (req, res) => {
+app.all(["/api", "/api/*"], (req, res) => {
   res.status(404).json({
     success: false,
     error: `Postal API endpoint not found: ${req.method} ${req.path}`

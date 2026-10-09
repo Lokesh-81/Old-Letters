@@ -82,6 +82,8 @@ export default function Hero36({
         <img
           src="https://assets.watermelon.sh/bg-hero-36.avif"
           alt="Wildflower meadow representing intentional digital correspondence"
+          width={1920}
+          height={1080}
           loading="eager"
           decoding="async"
           fetchPriority="high"

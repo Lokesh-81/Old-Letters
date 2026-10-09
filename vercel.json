@@ -6,6 +6,25 @@
       "schedule": "0 0 * * *"
     }
   ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
+        { "key": "Permissions-Policy", "value": "camera=(self), microphone=(self), geolocation=(), interest-cohort=()" }
+      ]
+    },
+    {
+      "source": "/404.html",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/api",
@@ -16,7 +35,23 @@
       "destination": "/api"
     },
     {
-      "source": "/((?!api(?:/|$)|assets(?:/|$)|\\.well-known(?:/|$)|manifest\\.webmanifest|logo\\.png|favicon\\.png|sitemap\\.xml|robots\\.txt|google.*\\.html|.*\\.(?:css|js|png|jpg|jpeg|svg|ico|otf|ttf|woff|woff2|webp|avif|json|xml|txt|webmanifest)$).*)",
+      "source": "/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(how-it-works|cookies|privacy|terms|profile|account|bureau|admin|composer|archive|recipient|login|signup)",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/letter/:token",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/recipient/:token",
       "destination": "/index.html"
     }
   ]
