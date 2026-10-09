@@ -171,12 +171,17 @@ export interface RecipientMetadata {
   canUnseal: boolean;
   deliveryDate: string;
   scheduledDeliveryAt: string;
+  deliveryDateMs?: number;
+  serverTime?: string;
+  serverTimeMs?: number;
   waitingHours: number;
   remainingMs: number;
   remainingSeconds: number;
   remainingHours: number;
   templateId?: string;
   postmarkCity?: string;
+  postalTempoLabel?: string;
+  errorNotice?: string;
 }
 
 export interface Letter {
@@ -198,6 +203,7 @@ export interface Letter {
   verificationMethod: 'otp' | 'passphrase' | 'open';
   passphrase?: string;
   postedAt: string;
+  deliveryDate?: string;
   scheduledDeliveryAt: string;
   deliveredAt?: string;
   createdAt?: string;

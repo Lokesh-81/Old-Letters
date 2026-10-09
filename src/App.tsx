@@ -22,6 +22,7 @@ import { CookiePreferencesModal } from './components/legal/CookiePreferencesModa
 import { NotFoundView } from './components/common/NotFoundView';
 import { applySEO } from './lib/seo';
 import { fetchLetters, getDeliveryMeta, getCurrentUser, logoutUser, normalizeApiError } from './lib/api';
+import { resolveDeliveryDate } from './lib/delivery';
 import { AdminPaymentModal } from './components/admin/AdminPaymentModal';
 import { AdminDashboardView } from './components/admin/AdminDashboardView';
 import { AuthModal } from './components/auth/AuthModal';
@@ -111,6 +112,7 @@ export default function App() {
   // Current active letter and metadata for recipient experience (STRICTLY null by default to prevent leakage)
   const [activeRecipientLetter, setActiveRecipientLetter] = useState<Letter | null>(null);
   const [recipientMetadata, setRecipientMetadata] = useState<RecipientMetadata | null>(null);
+  const [recipientLoading, setRecipientLoading] = useState<boolean>(false);
 
   // Initial letter type passed to composer
   const [composerInitialType, setComposerInitialType] = useState<LetterType>('LOVE');
@@ -250,6 +252,9 @@ export default function App() {
 
       if (tokenFromUrl) {
         setRecipientDeliveryToken(tokenFromUrl);
+        setRecipientLoading(true);
+        setRecipientMetadata(null);
+        setActiveRecipientLetter(null);
         setShowLoading(false);
         setCurrentView('recipient');
         getDeliveryMeta(tokenFromUrl)
@@ -284,6 +289,9 @@ export default function App() {
               errorNotice: errNotice,
             } as any);
             setActiveRecipientLetter(null);
+          })
+          .finally(() => {
+            setRecipientLoading(false);
           });
       }
 
@@ -354,12 +362,12 @@ export default function App() {
     if (target) {
       setActiveRecipientLetter(target);
       const now = Date.now();
-      const scheduledTime = target.scheduledDeliveryAt ? new Date(target.scheduledDeliveryAt).getTime() : now;
-      const isDelivered = target.status === 'DELIVERED' || target.status === 'OPENED';
+      const { ms: scheduledTime, date: deliveryDateObj } = resolveDeliveryDate(target);
+      const isDelivered = target.status === 'DELIVERED' || target.status === 'OPENED' || target.status === 'COMPLETED';
       const isArrived = isDelivered || now >= scheduledTime;
       const remainingMs = isArrived ? 0 : Math.max(0, scheduledTime - now);
-      const remainingSeconds = Math.ceil(remainingMs / 1000);
-      const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
+      const remainingSeconds = isArrived ? 0 : Math.max(1, Math.ceil(remainingMs / 1000));
+      const remainingHours = isArrived ? 0 : Math.ceil(remainingMs / (1000 * 60 * 60));
 
       setRecipientMetadata({
         trackingCode: target.trackingCode,
@@ -371,8 +379,10 @@ export default function App() {
         isDelivered,
         isArrived,
         canUnseal: isArrived,
-        deliveryDate: target.scheduledDeliveryAt || new Date().toISOString(),
-        scheduledDeliveryAt: target.scheduledDeliveryAt || new Date().toISOString(),
+        deliveryDate: deliveryDateObj.toISOString(),
+        scheduledDeliveryAt: deliveryDateObj.toISOString(),
+        deliveryDateMs: scheduledTime,
+        serverTimeMs: now,
         waitingHours: target.waitingHours || 48,
         remainingMs,
         remainingSeconds,
@@ -712,6 +722,7 @@ export default function App() {
             letter={activeRecipientLetter}
             metadata={recipientMetadata}
             deliveryToken={recipientDeliveryToken}
+            isLoading={recipientLoading}
             onExit={() => {
               window.history.pushState(null, '', '/');
               setCurrentView('landing');

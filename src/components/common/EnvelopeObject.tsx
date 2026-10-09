@@ -18,6 +18,7 @@ interface EnvelopeObjectProps {
   className?: string;
   showStamp?: boolean;
   size?: 'sm' | 'md' | 'lg';
+  waitingHours?: number;
 }
 
 export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
@@ -35,6 +36,7 @@ export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
   className = '',
   showStamp = true,
   size = 'md',
+  waitingHours,
 }) => {
   const normalizedId =
     templateId === 'ivory' || templateId === 'classic'
@@ -183,7 +185,7 @@ export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
                 </div>
               ) : isTypewriter ? (
                 <div className="text-[10px] font-mono font-bold text-stone-900 tracking-wider">
-                  DISPATCH MEMO // 48-H
+                  DISPATCH MEMO // {waitingHours && waitingHours !== 48 ? (waitingHours % 24 === 0 && waitingHours >= 24 ? `${waitingHours / 24}D` : `${waitingHours}H`) : '48-H'}
                 </div>
               ) : isTimeCapsule ? (
                 <div className="border border-red-700/60 bg-red-950/10 px-2 py-0.5 rounded-xs text-[8px] font-mono text-red-700 font-bold uppercase tracking-wider">
@@ -221,15 +223,15 @@ export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
                     isMidnight ? 'text-[#c9a84e]' : 'text-stone-600'
                   }`}
                 >
-                  {isAirMail ? 'AERO POST 48' : isMidnight ? 'NOCTURNE' : 'POST RESTANTE'}
+                  {isAirMail ? (waitingHours && waitingHours !== 48 ? `AERO POST ${waitingHours}H` : 'AERO POST 48') : isMidnight ? 'NOCTURNE' : 'POST RESTANTE'}
                 </div>
                 <div className="text-xs font-mono font-semibold">{date}</div>
               </div>
             )}
           </div>
 
-          {/* Recipient Center Block */}
-          <div className="my-auto pl-4 sm:pl-10 pr-4">
+          {/* Recipient Center Block - positioned clearly on the left/center to ensure zero overlap with seal */}
+          <div className="my-auto pl-4 sm:pl-8 pr-3 max-w-[52%] sm:max-w-[55%]">
             <div
               className={`text-[9px] font-mono tracking-widest uppercase mb-1 ${
                 isMidnight ? 'text-[#c9a84e]/80' : 'text-stone-500'
@@ -238,7 +240,7 @@ export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
               {isTypewriter ? 'DELIVER TO:' : isTimeCapsule ? 'RESERVED UNTIL DELIVERY FOR:' : 'FOR THE EYES OF:'}
             </div>
             <div
-              className={`font-serif text-2xl sm:text-3xl font-normal tracking-tight ${
+              className={`font-serif text-2xl sm:text-3xl font-normal tracking-tight truncate ${
                 isMidnight ? 'text-[#F7F0E5]' : isTypewriter ? 'font-mono font-bold text-stone-900' : 'text-stone-950'
               }`}
             >
@@ -262,17 +264,23 @@ export const EnvelopeObject: React.FC<EnvelopeObjectProps> = ({
             }`}
           >
             <span>OLD-LETTERS</span>
-            <span>48-HOUR VAULT PASSAGE</span>
+            <span>
+              {waitingHours && waitingHours !== 48
+                ? (waitingHours % 24 === 0 && waitingHours >= 24
+                    ? `${waitingHours / 24}-DAY VAULT PASSAGE`
+                    : `${waitingHours}-HOUR VAULT PASSAGE`)
+                : '48-HOUR VAULT PASSAGE'}
+            </span>
           </div>
         </div>
 
-        {/* Center Wax Seal */}
+        {/* Wax Seal - positioned cleanly at right-center without obscuring recipient name */}
         {!isOpen && isSealed && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 transition-transform duration-300">
+          <div className="absolute right-5 sm:right-8 top-1/2 -translate-y-1/2 z-30 transition-transform duration-300 pointer-events-auto">
             <WaxSeal
               color={effectiveSealColor}
               emblem={effectiveSealEmblem}
-              size={size === 'sm' ? 'md' : 'lg'}
+              size={size === 'sm' ? 'sm' : 'md'}
               interactive={interactiveSeal}
               onClick={onSealClick}
               label="Open correspondence"

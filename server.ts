@@ -2238,18 +2238,16 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
     const createdAt = now;
 
     // ONE CANONICAL SERVER-SIDE CALCULATION:
-    // deliveryAt = createdAt + 48 hours (when 48-hour option is selected)
     let deliveryDate: Date;
-    if (input.waitingHours === 48 || input.selectedTempoId === '48h' || !input.scheduledDeliveryAt) {
-      deliveryDate = new Date(createdAt.getTime() + 48 * 3600 * 1000);
-    } else {
+    if (input.scheduledDeliveryAt) {
       const parsed = new Date(input.scheduledDeliveryAt);
-      const minDeliveryTime = createdAt.getTime() + (input.waitingHours || 48) * 3600 * 1000;
-      if (!isNaN(parsed.getTime()) && parsed.getTime() >= createdAt.getTime() + 48 * 3600 * 1000 - (15 * 60 * 1000)) {
+      if (!isNaN(parsed.getTime())) {
         deliveryDate = parsed;
       } else {
-        deliveryDate = new Date(minDeliveryTime);
+        deliveryDate = new Date(createdAt.getTime() + (input.waitingHours || 48) * 3600 * 1000);
       }
+    } else {
+      deliveryDate = new Date(createdAt.getTime() + (input.waitingHours || 48) * 3600 * 1000);
     }
 
     // CRITICAL: Always use req.user.id as senderId (never trust client body senderId)
@@ -2562,8 +2560,9 @@ app.get('/api/letters/:id', requireAuth, async (req: AuthenticatedRequest, res) 
     }
 
     // For recipients: strictly enforce sealed protection if delivery date has not arrived
-    const now = new Date();
-    const isDelivered = letter.status === 'DELIVERED' || (letter.deliveryDate && new Date(letter.deliveryDate) <= now);
+    const nowMs = Date.now();
+    const { ms: deliveryTimeMs } = resolveDeliveryDate(letter);
+    const isDelivered = letter.status === 'DELIVERED' || letter.status === 'OPENED' || letter.status === 'COMPLETED' || (nowMs >= deliveryTimeMs);
 
     if (isRecipient && !isSender && !isAdmin && !isDelivered) {
       return res.json({
@@ -2857,6 +2856,9 @@ app.delete('/api/letters/:id', requireAuth, async (req: AuthenticatedRequest, re
 // RECIPIENT EXPERIENCE (Strict Delivery Verification & Zero Content Leakage)
 // ====================================================================
 
+import { resolveDeliveryDate, parseToMs } from './src/lib/delivery';
+export { resolveDeliveryDate, parseToMs };
+
 // Helper to resolve letter and recipient records securely from a delivery token or tracking code
 async function resolveLetterFromToken(rawToken: string, db: any) {
   if (!rawToken || typeof rawToken !== 'string') return null;
@@ -2969,16 +2971,18 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
     }
 
     const { letter, recipient } = resolved;
-    const now = new Date();
-    const deliveryDate = new Date(letter.deliveryDate || letter.scheduledDeliveryAt || letter.createdAt);
+    const nowMs = Date.now();
+    const now = new Date(nowMs);
+    const { date: deliveryDate, ms: deliveryTimeMs } = resolveDeliveryDate(letter);
     const isDeliveredByStatus = letter.status === 'DELIVERED' || letter.status === 'OPENED' || letter.status === 'COMPLETED';
-    const isArrived = isDeliveredByStatus || (now.getTime() >= deliveryDate.getTime());
-    const remainingMs = isArrived ? 0 : Math.max(0, deliveryDate.getTime() - now.getTime());
-    const remainingSeconds = Math.ceil(remainingMs / 1000);
-    const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
+    const isArrived = isDeliveredByStatus || (nowMs >= deliveryTimeMs);
+    const remainingMs = isArrived ? 0 : Math.max(0, deliveryTimeMs - nowMs);
+    // When in transit (not arrived), remainingSeconds must be at least 1 so it never outputs 0m 0s prematurely
+    const remainingSeconds = isArrived ? 0 : Math.max(1, Math.ceil(remainingMs / 1000));
+    const remainingHours = isArrived ? 0 : Math.ceil(remainingMs / (1000 * 60 * 60));
 
     // Auto-transition status if arrived but still scheduled or in transit
-    if (isArrived && (letter.status === 'SCHEDULED' || letter.status === 'IN TRANSIT' || letter.status === 'IN_TRANSIT')) {
+    if (isArrived && (letter.status === 'SCHEDULED' || letter.status === 'IN TRANSIT' || letter.status === 'IN_TRANSIT' || letter.status === 'DRAFT')) {
       await lettersColl.updateOne(
         { _id: letter._id },
         { $set: { status: 'DELIVERED', deliveredAt: letter.deliveredAt || now, updatedAt: now } }
@@ -3027,6 +3031,9 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
           canUnseal: false,
           deliveryDate: deliveryDate.toISOString(),
           scheduledDeliveryAt: deliveryDate.toISOString(),
+          deliveryDateMs: deliveryTimeMs,
+          serverTime: now.toISOString(),
+          serverTimeMs: nowMs,
           waitingHours: letter.waitingHours || 48,
           remainingMs,
           remainingSeconds,
@@ -3122,6 +3129,9 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
           canUnseal: true,
           deliveryDate: deliveryDate.toISOString(),
           scheduledDeliveryAt: deliveryDate.toISOString(),
+          deliveryDateMs: deliveryTimeMs,
+          serverTime: now.toISOString(),
+          serverTimeMs: nowMs,
           waitingHours: letter.waitingHours || 48,
           remainingMs: 0,
           remainingSeconds: 0,
@@ -3171,6 +3181,9 @@ app.get(['/api/delivery/token/:token', '/api/letter/:token'], async (req, res) =
         canUnseal: true,
         deliveryDate: deliveryDate.toISOString(),
         scheduledDeliveryAt: deliveryDate.toISOString(),
+        deliveryDateMs: deliveryTimeMs,
+        serverTime: now.toISOString(),
+        serverTimeMs: nowMs,
         waitingHours: letter.waitingHours || 48,
         remainingMs: 0,
         remainingSeconds: 0,
@@ -3202,11 +3215,12 @@ app.post(['/api/delivery/request-otp', '/api/recipient/request-otp'], async (req
     }
 
     const { letter, recipient } = resolved;
-    const now = new Date();
-    const deliveryDate = new Date(letter.deliveryDate || letter.scheduledDeliveryAt || letter.createdAt);
+    const nowMs = Date.now();
+    const now = new Date(nowMs);
+    const { date: deliveryDate, ms: deliveryTimeMs } = resolveDeliveryDate(letter);
     const isDeliveredByStatus = letter.status === 'DELIVERED' || letter.status === 'OPENED' || letter.status === 'COMPLETED';
-    const isArrived = isDeliveredByStatus || (now.getTime() >= deliveryDate.getTime());
-    const remainingMs = isArrived ? 0 : Math.max(0, deliveryDate.getTime() - now.getTime());
+    const isArrived = isDeliveredByStatus || (nowMs >= deliveryTimeMs);
+    const remainingMs = isArrived ? 0 : Math.max(0, deliveryTimeMs - nowMs);
     const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
 
     // STRICT SERVER-SIDE CHECK: NO OTP CAN BE REQUESTED BEFORE ARRIVAL
@@ -3312,11 +3326,12 @@ app.post(['/api/delivery/verify', '/api/delivery/verify/:token', '/api/delivery/
     }
 
     const { letter, recipient, tokenHash } = resolved;
-    const now = new Date();
-    const deliveryDate = new Date(letter.deliveryDate || letter.scheduledDeliveryAt || letter.createdAt);
+    const nowMs = Date.now();
+    const now = new Date(nowMs);
+    const { date: deliveryDate, ms: deliveryTimeMs } = resolveDeliveryDate(letter);
     const isDeliveredByStatus = letter.status === 'DELIVERED' || letter.status === 'OPENED' || letter.status === 'COMPLETED';
-    const isArrived = isDeliveredByStatus || (now.getTime() >= deliveryDate.getTime());
-    const remainingMs = isArrived ? 0 : Math.max(0, deliveryDate.getTime() - now.getTime());
+    const isArrived = isDeliveredByStatus || (nowMs >= deliveryTimeMs);
+    const remainingMs = isArrived ? 0 : Math.max(0, deliveryTimeMs - nowMs);
     const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
 
     // STRICT SERVER-SIDE CHECK: NO UNSEALING ALLOWED BEFORE SCHEDULED ARRIVAL TIME
@@ -3483,7 +3498,7 @@ app.post(['/api/delivery/verify', '/api/delivery/verify/:token', '/api/delivery/
           type: letter.letterType,
           templateId: letter.templateId,
           senderName: senderDisplayName,
-          recipientName: recipient?.displayName || 'Recipient',
+          recipientName: recipient?.displayName || letter.recipientName || 'Recipient',
           letterDate: new Date(letter.createdAt).toLocaleDateString('en-US', {
             month: 'long',
             day: 'numeric',
@@ -3530,15 +3545,15 @@ export async function runDeliveryScheduler(db: any) {
   const activeScheduledLetters = await lettersColl.find({ status: 'SCHEDULED' }).toArray();
 
   for (const letter of activeScheduledLetters) {
-    const deliveryDate = new Date(letter.deliveryDate || letter.scheduledDeliveryAt || letter.createdAt);
+    const { date: deliveryDate, ms: deliveryTimeMs } = resolveDeliveryDate(letter);
     const postedAt = new Date(letter.postedAt || letter.createdAt);
     const elapsedMs = now.getTime() - postedAt.getTime();
-    const msUntilArrival = deliveryDate.getTime() - now.getTime();
+    const msUntilArrival = deliveryTimeMs - now.getTime();
 
     // ----------------------------------------------------
     // EMAIL 3 — FIRST DAY / WAITING UPDATE (T+24h)
     // ----------------------------------------------------
-    if (elapsedMs >= 24 * 3600 * 1000 && now < deliveryDate) {
+    if (elapsedMs >= 24 * 3600 * 1000 && now.getTime() < deliveryTimeMs) {
       const alreadySentHalfway = await eventsColl.findOne({
         letterId: letter._id,
         eventType: 'HALFWAY_EMAIL_SENT',
@@ -3636,7 +3651,7 @@ export async function runDeliveryScheduler(db: any) {
     // ----------------------------------------------------
     // EMAIL 4 — 47.5 HOURS / 30 MINUTES BEFORE ARRIVAL (Pre-arrival OTP)
     // ----------------------------------------------------
-    if (msUntilArrival <= 30 * 60 * 1000 && now < deliveryDate) {
+    if (msUntilArrival <= 30 * 60 * 1000 && now.getTime() < deliveryTimeMs) {
       const alreadySentPreArrival = await eventsColl.findOne({
         letterId: letter._id,
         eventType: 'PRE_ARRIVAL_NOTICE_SENT',
@@ -3728,16 +3743,20 @@ export async function runDeliveryScheduler(db: any) {
   }
 
   // ----------------------------------------------------
-  // EMAIL 5 — EXACT 48 HOURS (Arrival / Opening Eligible)
+  // EMAIL 5 — EXACT ARRIVAL (Arrival / Opening Eligible)
   // ----------------------------------------------------
-  const dueLetters = await lettersColl.find({
-    status: 'SCHEDULED',
-    deliveryDate: { $lte: now },
+  const candidateScheduledLetters = await lettersColl.find({
+    status: { $in: ['SCHEDULED', 'IN TRANSIT', 'IN_TRANSIT'] },
   }).toArray();
+
+  const dueLetters = candidateScheduledLetters.filter((letter: any) => {
+    const { ms: deliveryTimeMs } = resolveDeliveryDate(letter);
+    return now.getTime() >= deliveryTimeMs;
+  });
 
   for (const letter of dueLetters) {
     const updated = await lettersColl.findOneAndUpdate(
-      { _id: letter._id, status: 'SCHEDULED' },
+      { _id: letter._id, status: { $in: ['SCHEDULED', 'IN TRANSIT', 'IN_TRANSIT'] } },
       {
         $set: {
           status: 'DELIVERED',
@@ -4527,11 +4546,12 @@ app.get(['/api/delivery/media/:token', '/api/delivery/media/:token/:storageKey',
       return res.status(404).json({ success: false, error: 'Letter not found.' });
     }
 
-    const now = new Date();
-    const deliveryDate = new Date(letter.deliveryDate || letter.scheduledDeliveryAt);
-    const isDelivered = letter.status !== 'SCHEDULED' && letter.status !== 'DRAFT';
+    const nowMs = Date.now();
+    const { ms: deliveryTimeMs } = resolveDeliveryDate(letter);
+    const isDeliveredByStatus = letter.status === 'DELIVERED' || letter.status === 'OPENED' || letter.status === 'COMPLETED';
+    const isArrived = isDeliveredByStatus || (nowMs >= deliveryTimeMs);
 
-    if (!isDelivered && now < deliveryDate) {
+    if (!isArrived) {
       return res.status(403).json({ success: false, error: 'Sealed in transit. Media is locked until arrival.' });
     }
 

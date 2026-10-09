@@ -1,41 +1,138 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Letter, RecipientMetadata } from '../../types/letter';
 import { TEMPLATES } from '../../data/mockData';
 import { EnvelopeObject } from '../common/EnvelopeObject';
 import { PaperSheet } from '../common/PaperSheet';
-import { requestOtp, verifyRecipientAccess } from '../../lib/api';
+import { getDeliveryMeta, requestOtp, verifyRecipientAccess } from '../../lib/api';
 import { Clock, Lock, ShieldCheck, Mail, KeyRound } from 'lucide-react';
 
 interface RecipientExperienceProps {
   letter?: Letter | null;
   metadata?: RecipientMetadata | null;
   deliveryToken?: string;
+  isLoading?: boolean;
   onExit: () => void;
   onReply?: (recipientLetter: Letter) => void;
+}
+
+// UTC timestamp parser supporting ISO string, numeric timestamps (sec or ms), and Date objects
+function parseToMs(val: any): number | null {
+  if (val === null || val === undefined || val === '') return null;
+  if (val instanceof Date) {
+    const t = val.getTime();
+    return isNaN(t) ? null : t;
+  }
+  if (typeof val === 'number' && !isNaN(val)) {
+    return val < 1e11 ? val * 1000 : val;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed) return null;
+    if (/^\d+$/.test(trimmed)) {
+      const num = Number(trimmed);
+      return num < 1e11 ? num * 1000 : num;
+    }
+    const parsed = Date.parse(trimmed);
+    return isNaN(parsed) ? null : parsed;
+  }
+  return null;
 }
 
 export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
   letter: initialLetter,
   metadata,
   deliveryToken,
+  isLoading = false,
   onExit,
   onReply,
 }) => {
   const [activeLetter, setActiveLetter] = useState<Letter | null>(initialLetter || null);
+  const [localMetadata, setLocalMetadata] = useState<RecipientMetadata | null>(metadata || null);
 
-  // Determine delivery arrival state
-  const isArrived = metadata ? metadata.isArrived : (activeLetter ? activeLetter.status !== 'SCHEDULED' : true);
+  // Sync incoming props
+  useEffect(() => {
+    if (initialLetter) {
+      setActiveLetter(initialLetter);
+    }
+  }, [initialLetter]);
+
+  useEffect(() => {
+    if (metadata) {
+      setLocalMetadata(metadata);
+    }
+  }, [metadata]);
+
+  const effectiveMeta = localMetadata || metadata;
+  const currentLetter = activeLetter || initialLetter;
+
+  // Authoritative arrival state derived directly from server API response:
+  const isArrived = Boolean(
+    effectiveMeta?.isArrived ||
+    (effectiveMeta?.status && ['DELIVERED', 'OPENED', 'COMPLETED'].includes(effectiveMeta.status)) ||
+    (currentLetter?.status && ['DELIVERED', 'OPENED', 'COMPLETED'].includes(currentLetter.status))
+  );
   const isSealedInTransit = !isArrived;
 
+  // Server-authoritative time skew calculation:
+  // Calculates server-client clock offset so client clock manipulation cannot unlock early
+  const serverOffsetRef = useRef<number>(0);
+  useEffect(() => {
+    if (effectiveMeta?.serverTimeMs && typeof effectiveMeta.serverTimeMs === 'number') {
+      serverOffsetRef.current = effectiveMeta.serverTimeMs - Date.now();
+    }
+  }, [effectiveMeta?.serverTimeMs]);
+
+  // Target delivery time in exact Unix milliseconds resolved canonically:
+  // letter.deliveryDate || letter.scheduledDeliveryAt || letter.createdAt
+  const targetDeliveryMs = useMemo<number>(() => {
+    if (effectiveMeta?.deliveryDateMs && effectiveMeta.deliveryDateMs > 0) {
+      return effectiveMeta.deliveryDateMs;
+    }
+    const candidateMs =
+      parseToMs(effectiveMeta?.deliveryDate) ??
+      parseToMs(effectiveMeta?.scheduledDeliveryAt) ??
+      parseToMs(currentLetter?.deliveryDate) ??
+      parseToMs(currentLetter?.scheduledDeliveryAt) ??
+      parseToMs((currentLetter as any)?.createdAt) ??
+      parseToMs((effectiveMeta as any)?.createdAt) ??
+      0;
+    return candidateMs;
+  }, [effectiveMeta, currentLetter]);
+
+  const computeRemainingSeconds = useCallback((): number => {
+    if (isArrived) return 0;
+    if (!targetDeliveryMs || targetDeliveryMs <= 0) {
+      return effectiveMeta?.remainingSeconds && effectiveMeta.remainingSeconds > 0
+        ? effectiveMeta.remainingSeconds
+        : 1;
+    }
+    const currentServerTime = Date.now() + serverOffsetRef.current;
+    const diffMs = targetDeliveryMs - currentServerTime;
+    if (diffMs <= 0) {
+      return 0;
+    }
+    return Math.max(1, Math.ceil(diffMs / 1000));
+  }, [isArrived, targetDeliveryMs, effectiveMeta?.remainingSeconds]);
+
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(() => computeRemainingSeconds());
+
+  useEffect(() => {
+    setRemainingSeconds(computeRemainingSeconds());
+  }, [computeRemainingSeconds]);
+
+  // Initial stage derived from actual letter & arrival state
   const [stage, setStage] = useState<'sealed' | 'unsealing' | 'reading' | 'reveal' | 'parlour'>(() => {
-    if (initialLetter?.content && (metadata?.isArrived ?? true)) {
+    if ((initialLetter?.content || activeLetter?.content) && isArrived) {
       return 'reading';
     }
     return 'sealed';
   });
 
   // Verification states
-  const [showVerificationPrompt, setShowVerificationPrompt] = useState(false);
+  const [showVerificationPrompt, setShowVerificationPrompt] = useState(() => {
+    const vm = effectiveMeta?.verificationMethod || currentLetter?.verificationMethod || 'open';
+    return isArrived && (vm === 'otp' || vm === 'passphrase') && !(currentLetter?.content);
+  });
   const [enteredPassphrase, setEnteredPassphrase] = useState('');
   const [enteredOtp, setEnteredOtp] = useState('');
   const [otpSentMessage, setOtpSentMessage] = useState<string | null>(null);
@@ -43,95 +140,54 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
 
-  // Sync initial letter if changed
-  useEffect(() => {
-    if (initialLetter) {
-      setActiveLetter(initialLetter);
-      if (initialLetter.content && isArrived) {
-        setStage('reading');
-      }
-    }
-  }, [initialLetter, isArrived]);
-
   // Transition to reading view as soon as letter content arrives
   useEffect(() => {
-    if (activeLetter?.content && isArrived && stage === 'sealed') {
+    if ((activeLetter?.content || initialLetter?.content) && isArrived) {
       setStage('reading');
     }
-  }, [activeLetter?.content, isArrived, stage]);
+  }, [activeLetter?.content, initialLetter?.content, isArrived]);
 
-  // Live countdown timer for in-transit letters
-  const [remainingSeconds, setRemainingSeconds] = useState<number>(() => {
-    if (metadata?.deliveryDate) {
-      const diff = new Date(metadata.deliveryDate).getTime() - Date.now();
-      return Math.max(0, Math.ceil(diff / 1000));
-    }
-    return metadata?.remainingSeconds || 0;
-  });
-
-  useEffect(() => {
-    if (!isSealedInTransit || remainingSeconds <= 0) return;
-    const interval = setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          // Auto reload once wait completes so server transitions to arrived
-          window.location.reload();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [isSealedInTransit, remainingSeconds]);
-
-  const formatRemaining = (totalSecs: number): string => {
-    const days = Math.floor(totalSecs / 86400);
-    const hours = Math.floor((totalSecs % 86400) / 3600);
-    const minutes = Math.floor((totalSecs % 3600) / 60);
-    const seconds = totalSecs % 60;
-
-    if (days > 0) {
-      return `${days}d ${hours}h ${minutes}m ${seconds}s`;
-    }
-    if (hours > 0) {
-      return `${hours}h ${minutes}m ${seconds}s`;
-    }
-    return `${minutes}m ${seconds}s`;
-  };
-
-  const templateId = activeLetter?.templateId || metadata?.templateId || 'ivory';
+  const templateId = currentLetter?.templateId || effectiveMeta?.templateId || 'ivory';
   const template = TEMPLATES.find((t) => t.id === templateId) || TEMPLATES[0];
 
-  const senderDisplayName = activeLetter?.senderName || metadata?.senderName || 'A correspondent';
-  const recipientDisplayName = activeLetter?.recipientName || metadata?.recipientName || 'Recipient';
-  const trackingCode = activeLetter?.trackingCode || metadata?.trackingCode || 'OL-DISPATCH';
-  const verificationMethod = metadata?.verificationMethod || activeLetter?.verificationMethod || 'open';
-  const waitingHours = metadata?.waitingHours || activeLetter?.waitingHours || 48;
-  const postmarkCity = metadata?.postmarkCity || activeLetter?.postmarkCity || 'Central Postal Archive';
+  const senderDisplayName = currentLetter?.senderName || effectiveMeta?.senderName || 'A correspondent';
+  const recipientDisplayName = currentLetter?.recipientName || effectiveMeta?.recipientName || 'Recipient';
+  const trackingCode = currentLetter?.trackingCode || effectiveMeta?.trackingCode || 'OL-DISPATCH';
+  const verificationMethod = effectiveMeta?.verificationMethod || currentLetter?.verificationMethod || 'open';
+  const postmarkCity = effectiveMeta?.postmarkCity || currentLetter?.postmarkCity || 'Central Postal Archive';
 
-  const scheduledArrivalDateString = metadata?.deliveryDate
-    ? new Date(metadata.deliveryDate).toLocaleString('en-US', {
+  // Configured duration resolved from waitingHours or delivery and creation timestamps
+  const configuredWaitingHours = useMemo(() => {
+    if (effectiveMeta?.waitingHours && effectiveMeta.waitingHours > 0) {
+      return effectiveMeta.waitingHours;
+    }
+    if (currentLetter?.waitingHours && currentLetter.waitingHours > 0) {
+      return currentLetter.waitingHours;
+    }
+    const createdMs = parseToMs((currentLetter as any)?.createdAt || (effectiveMeta as any)?.createdAt);
+    if (targetDeliveryMs > 0 && createdMs && targetDeliveryMs > createdMs) {
+      const diffHours = Math.round((targetDeliveryMs - createdMs) / (3600 * 1000));
+      if (diffHours > 0) return diffHours;
+    }
+    return 48;
+  }, [effectiveMeta, currentLetter, targetDeliveryMs]);
+
+  const scheduledArrivalDateString = useMemo(() => {
+    if (targetDeliveryMs > 0) {
+      return new Date(targetDeliveryMs).toLocaleString('en-US', {
         month: 'long',
         day: 'numeric',
         year: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
-      })
-    : (activeLetter?.scheduledDeliveryAt
-        ? new Date(activeLetter.scheduledDeliveryAt).toLocaleString('en-US', {
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-          })
-        : 'In 48 Hours');
+      });
+    }
+    return 'In 48 Hours';
+  }, [targetDeliveryMs]);
 
   // Direct unseal handler (calls server to verify and fetch protected letter content)
-  const handleDirectUnseal = async () => {
+  const handleDirectUnseal = useCallback(async () => {
     try {
       setIsVerifying(true);
       setVerificationError(null);
@@ -152,7 +208,87 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
     } finally {
       setIsVerifying(false);
     }
+  }, [deliveryToken, trackingCode]);
+
+  // Live countdown timer for in-transit letters with authoritative server verification upon expiry
+  const isPollingArrivalRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (!isSealedInTransit) return;
+
+    const interval = setInterval(() => {
+      const secs = computeRemainingSeconds();
+      setRemainingSeconds(secs);
+
+      if (secs <= 0 && !isPollingArrivalRef.current) {
+        isPollingArrivalRef.current = true;
+        const token = deliveryToken || trackingCode;
+        if (token) {
+          getDeliveryMeta(token)
+            .then((res) => {
+              if (res.metadata) {
+                setLocalMetadata(res.metadata);
+              }
+              if (res.letter) {
+                setActiveLetter(res.letter);
+              }
+              if (res.isArrived) {
+                clearInterval(interval);
+                if (res.letter?.content) {
+                  setStage('reading');
+                } else if (res.metadata.verificationMethod === 'open') {
+                  handleDirectUnseal();
+                } else {
+                  setShowVerificationPrompt(true);
+                }
+              }
+            })
+            .catch(() => {
+              // Retry on next tick
+            })
+            .finally(() => {
+              isPollingArrivalRef.current = false;
+            });
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isSealedInTransit, computeRemainingSeconds, deliveryToken, trackingCode, handleDirectUnseal]);
+
+  // Format remaining time accurately without premature 0m 0s
+  const formatRemaining = (totalSecs: number): string => {
+    if (totalSecs <= 0) {
+      return 'Arriving now';
+    }
+    const days = Math.floor(totalSecs / 86400);
+    const hours = Math.floor((totalSecs % 86400) / 3600);
+    const minutes = Math.floor((totalSecs % 3600) / 60);
+    const seconds = totalSecs % 60;
+
+    if (days > 0) {
+      return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+    }
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${seconds}s`;
+    }
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
   };
+
+  // Postal tempo label formatting reflecting actual configured delivery duration
+  const postalTempoLabel = useMemo(() => {
+    const h = configuredWaitingHours;
+    if (h === 1) return '1 Hour Sealed';
+    if (h < 24) return `${h} Hours Sealed`;
+    if (h === 24) return '1 Day Sealed';
+    if (h === 48) return '48 Hours Sealed';
+    if (h === 168) return '7 Days Sealed';
+    if (h === 720) return '30 Days Sealed';
+    if (h % 24 === 0) return `${h / 24} Days Sealed`;
+    return `${h} Hours Sealed`;
+  }, [configuredWaitingHours]);
 
   // Automatically prompt for verification if delivered letter requires OTP or passphrase
   useEffect(() => {
@@ -161,12 +297,14 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
     }
   }, [isArrived, verificationMethod, activeLetter?.content]);
 
-  // Automatically unseal if delivered and open verification but content not yet fetched
+  // Automatically unseal if delivered and open verification but content not yet loaded
+  const unsealTriggeredRef = useRef(false);
   useEffect(() => {
-    if (isArrived && verificationMethod === 'open' && !activeLetter?.content && !isVerifying && !verificationError) {
+    if (isArrived && verificationMethod === 'open' && !activeLetter?.content && !unsealTriggeredRef.current && !isVerifying && !verificationError) {
+      unsealTriggeredRef.current = true;
       handleDirectUnseal();
     }
-  }, [isArrived, verificationMethod, activeLetter?.content, isVerifying, verificationError]);
+  }, [isArrived, verificationMethod, activeLetter?.content, isVerifying, verificationError, handleDirectUnseal]);
 
   const handleOpenEnvelope = () => {
     // If still in transit, opening is strictly forbidden
@@ -256,6 +394,62 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
     }
   };
 
+  if (isLoading || (!effectiveMeta && !activeLetter)) {
+    return (
+      <div className="min-h-screen bg-[#faf9f7] text-teal-900 flex flex-col justify-between p-4 sm:p-8 select-none">
+        <header className="max-w-4xl mx-auto w-full flex items-center justify-between py-4 border-b border-[#eae4da]">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onExit}
+              className="flex items-center gap-2 cursor-pointer bg-transparent border-0 p-0"
+              aria-label="OLD-LETTERS"
+            >
+              <img
+                src="/logo.png"
+                alt="OLD-LETTERS"
+                className="brand-logo-recipient h-8 sm:h-9 w-auto max-w-[170px] sm:max-w-[210px] object-contain block shrink-0"
+              />
+            </button>
+            <span className="text-stone-300">·</span>
+            <span className="text-[11px] font-mono tracking-widest uppercase text-stone-500">
+              POSTAL REGISTRY
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onExit}
+            className="text-xs font-mono text-stone-500 hover:text-teal-900 transition-colors cursor-pointer flex items-center gap-2"
+          >
+            <span>✕</span>
+            <span>Close</span>
+          </button>
+        </header>
+
+        <main className="max-w-md mx-auto my-auto py-16 text-center space-y-6 animate-fade-in w-full">
+          <div className="w-16 h-16 mx-auto rounded-full bg-stone-100 p-3.5 flex items-center justify-center border border-stone-200 animate-pulse">
+            <img src="/favicon.png" alt="OLD-LETTERS" className="w-full h-full object-contain" />
+          </div>
+          <div className="space-y-2">
+            <span className="text-[10px] font-mono tracking-[0.25em] uppercase text-stone-500 block">
+              CENTRAL POSTAL BUREAU
+            </span>
+            <h1 className="font-serif text-2xl sm:text-3xl text-teal-950 font-light">
+              Examining Postal Registry...
+            </h1>
+            <p className="font-serif italic text-stone-600 text-sm leading-relaxed max-w-sm mx-auto">
+              Locating dispatch records and verifying wax seal integrity.
+            </p>
+          </div>
+        </main>
+
+        <footer className="max-w-4xl mx-auto w-full py-4 text-center text-xs font-mono text-stone-400 border-t border-[#eae4da]">
+          OLD-LETTERS ARCHIVAL REGISTRY
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#faf9f7] text-teal-900 flex flex-col justify-between p-4 sm:p-8 select-none relative overflow-x-hidden">
       {/* Minimal Top Bar with Official Horizontal Logo */}
@@ -285,7 +479,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
           </button>
           <span className="text-stone-300">·</span>
           <span className="text-[11px] font-mono tracking-widest uppercase text-stone-500">
-            {metadata?.status === 'NOT_FOUND' ? 'POSTAL REGISTRY' : (isSealedInTransit ? 'IN TRANSIT' : 'PRIVATE ARRIVAL')}
+            {effectiveMeta?.status === 'NOT_FOUND' ? 'POSTAL REGISTRY' : (isSealedInTransit ? 'IN TRANSIT' : 'PRIVATE ARRIVAL')}
           </span>
         </div>
 
@@ -302,7 +496,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
       {/* ========================================================================= */}
       {/* CASE 0: NOT FOUND OR EXPIRED DELIVERY LINK                                */}
       {/* ========================================================================= */}
-      {metadata?.status === 'NOT_FOUND' ? (
+      {effectiveMeta?.status === 'NOT_FOUND' ? (
         <main className="max-w-md mx-auto my-auto py-16 text-center space-y-6 animate-fade-in w-full">
           <div className="w-16 h-16 mx-auto rounded-full bg-stone-100 p-3.5 flex items-center justify-center border border-stone-200">
             <img src="/favicon.png" alt="OLD-LETTERS" className="w-full h-full object-contain" />
@@ -312,7 +506,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
               Correspondence Not Found
             </h1>
             <p className="font-serif italic text-stone-600 text-sm leading-relaxed">
-              {(metadata as any).errorNotice || 'The requested correspondence could not be located in the postal registry. The delivery link may be expired, mistyped, or not yet dispatched.'}
+              {(effectiveMeta as any).errorNotice || 'The requested correspondence could not be located in the postal registry. The delivery link may be expired, mistyped, or not yet dispatched.'}
             </p>
           </div>
           <div className="pt-4">
@@ -347,11 +541,12 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
               templateId={templateId}
               recipientName={recipientDisplayName}
               senderName={senderDisplayName}
-              date={metadata?.deliveryDate ? new Date(metadata.deliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'In Transit'}
+              date={effectiveMeta?.deliveryDate ? new Date(effectiveMeta.deliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'In Transit'}
               sealColor={template.waxSealStyle?.color}
               sealEmblem={template.waxSealStyle?.emblem}
               isSealed={true}
               interactiveSeal={false}
+              waitingHours={configuredWaitingHours}
             />
           </div>
 
@@ -386,7 +581,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
                   POSTAL TEMPO
                 </span>
                 <span className="font-mono text-xs text-stone-700">
-                  {waitingHours} Hours Sealed
+                  {postalTempoLabel}
                 </span>
               </div>
             </div>
@@ -539,6 +734,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
                     sealEmblem={template.waxSealStyle?.emblem}
                     isSealed={true}
                     interactiveSeal={true}
+                    waitingHours={configuredWaitingHours}
                     onSealClick={handleOpenEnvelope}
                   />
                 </div>
@@ -586,6 +782,7 @@ export const RecipientExperience: React.FC<RecipientExperienceProps> = ({
                   sealEmblem={template.waxSealStyle?.emblem}
                   isSealed={false}
                   isOpen={true}
+                  waitingHours={configuredWaitingHours}
                 />
               </div>
 

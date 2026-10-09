@@ -23,6 +23,7 @@ import {
   PRODUCTION_DOMAIN,
 } from '../src/lib/email';
 import { RecipientVerifySchema } from '../src/types/backend';
+import { resolveDeliveryDate, formatRemaining, getPostalTempoLabel } from '../src/lib/delivery';
 
 function hashSha256(val: string): string {
   return crypto.createHash('sha256').update(val).digest('hex');
@@ -380,6 +381,89 @@ async function runProductionAuditSuite() {
     recipientUrl: emailCtaUrl,
   });
   check('Arrival email CTA contains READ YOUR DELIVERED LETTER', finalArrivalEmailRes.success);
+
+  // -------------------------------------------------------------------------
+  // TEST 8: EXACT REQUIRED PRODUCTION DELIVERY SCENARIOS AUDIT
+  // -------------------------------------------------------------------------
+  console.log('\n--- 8. EXACT REQUIRED RECIPIENT DELIVERY CASES AUDIT ---');
+
+  // Case 1: Delivery time 2 hours in the future → sealed + accurate 2-hour countdown
+  const nowMs = Date.now();
+  const letter2hFuture = {
+    deliveryDate: new Date(nowMs + 2 * 3600 * 1000).toISOString(),
+    status: 'IN TRANSIT',
+    waitingHours: 2,
+    body: 'Protected content',
+  };
+  const { ms: ms2h } = resolveDeliveryDate(letter2hFuture);
+  const isArrived2h = nowMs >= ms2h;
+  const remainingSecs2h = isArrived2h ? 0 : Math.max(1, Math.ceil((ms2h - nowMs) / 1000));
+  const formatted2h = formatRemaining(remainingSecs2h);
+  check('Case 1: Delivery 2h in future isArrived is strictly FALSE', isArrived2h === false);
+  check('Case 1: Delivery 2h in future remaining seconds approx 7200s', remainingSecs2h >= 7195 && remainingSecs2h <= 7200);
+  check('Case 1: Delivery 2h in future format countdown contains 2h', formatted2h.includes('2h') && formatted2h !== '0m 0s');
+  check('Case 1: Postal tempo shows 2 Hours Sealed', getPostalTempoLabel(2) === '2 Hours Sealed');
+
+  // Case 2: Delivery time 1 minute in the future → accurate countdown
+  const letter1mFuture = {
+    deliveryDate: new Date(nowMs + 60 * 1000).toISOString(),
+    status: 'IN TRANSIT',
+    waitingHours: 1,
+  };
+  const { ms: ms1m } = resolveDeliveryDate(letter1mFuture);
+  const isArrived1m = nowMs >= ms1m;
+  const remainingSecs1m = isArrived1m ? 0 : Math.max(1, Math.ceil((ms1m - nowMs) / 1000));
+  const formatted1m = formatRemaining(remainingSecs1m);
+  check('Case 2: Delivery 1m in future isArrived is FALSE', isArrived1m === false);
+  check('Case 2: Delivery 1m in future remaining seconds is 60s', remainingSecs1m === 60);
+  check('Case 2: Delivery 1m in future format is 1m 0s (never 0m 0s)', formatted1m === '1m 0s');
+
+  // Case 3: Delivery time exactly now → immediately delivered
+  const letterNow = {
+    deliveryDate: new Date(nowMs).toISOString(),
+    status: 'IN TRANSIT',
+    body: 'Delivered now content',
+  };
+  const { ms: msNow } = resolveDeliveryDate(letterNow);
+  const isArrivedNow = nowMs >= msNow;
+  const remainingSecsNow = isArrivedNow ? 0 : Math.max(1, Math.ceil((msNow - nowMs) / 1000));
+  check('Case 3: Delivery time exactly now isArrived is TRUE', isArrivedNow === true);
+  check('Case 3: Delivery time exactly now remainingSeconds is 0', remainingSecsNow === 0);
+  check('Case 3: Delivery time exactly now formats to Arriving now', formatRemaining(remainingSecsNow) === 'Arriving now');
+
+  // Case 4: Delivery time 1 hour in the past → delivered/readable
+  const letter1hPast = {
+    scheduledDeliveryAt: new Date(nowMs - 3600 * 1000).toISOString(),
+    status: 'SCHEDULED',
+    body: 'Past letter content readable',
+  };
+  const { ms: msPast } = resolveDeliveryDate(letter1hPast);
+  const isArrivedPast = nowMs >= msPast;
+  check('Case 4: Delivery 1h in past resolves from scheduledDeliveryAt', msPast === nowMs - 3600 * 1000);
+  check('Case 4: Delivery 1h in past isArrived is strictly TRUE', isArrivedPast === true);
+
+  // Case 5: Refresh recipient URL → exact same state preserved
+  const tokenTest = 'TOKEN_TEST_REFRESH_99';
+  const metaBeforeRefresh = simulateDeliveryApiResponse(deliveredLetter, tokenTest, true);
+  const metaAfterRefresh = simulateDeliveryApiResponse(deliveredLetter, tokenTest, true);
+  check('Case 5: Refresh produces exact same isArrived state', metaBeforeRefresh.isArrived === metaAfterRefresh.isArrived);
+  check('Case 5: Refresh produces exact same isSealed state', metaBeforeRefresh.isSealed === metaAfterRefresh.isSealed);
+  check('Case 5: Refresh preserves recipient access token', metaBeforeRefresh.recipientAccessToken === metaAfterRefresh.recipientAccessToken);
+
+  // Case 6: Open email CTA in fresh/incognito browser (resolution via token, letter ID, and trackingCode)
+  const incognitoByToken = emulateResolveLetter(rawDeliveryToken);
+  const incognitoById = emulateResolveLetter(testLetterId);
+  const incognitoByTracking = emulateResolveLetter(testTrackingCode);
+  check('Case 6: Fresh browser resolves letter via raw delivery token', Boolean(incognitoByToken?.letter));
+  check('Case 6: Fresh browser resolves letter via letter ID CTA', Boolean(incognitoById?.letter));
+  check('Case 6: Fresh browser resolves letter via tracking code CTA', Boolean(incognitoByTracking?.letter));
+
+  // Case 7: Direct API access before delivery → letter body remains strictly inaccessible
+  const sealedDirectAccessResponse = simulateDeliveryApiResponse(transitLetter, rawDeliveryToken, false);
+  check('Case 7: Direct API access before delivery excludes body content', sealedDirectAccessResponse.letter === undefined);
+  check('Case 7: Direct API access before delivery enforces isSealed = true', sealedDirectAccessResponse.isSealed === true);
+  check('Case 7: Direct API access before delivery enforces isArrived = false', sealedDirectAccessResponse.isArrived === false);
+  check('Case 7: Direct API access before delivery enforces canUnseal = false', sealedDirectAccessResponse.canUnseal === false);
 
   console.log('\n===================================================================');
   console.log(`   ALL ${passed}/${total} AUDIT SCENARIOS PASSED WITH ZERO ERRORS! `);

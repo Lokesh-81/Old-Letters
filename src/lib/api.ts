@@ -330,13 +330,18 @@ export async function getDeliveryMeta(token: string): Promise<DeliveryMetaResult
       } catch {}
     }
 
+    const isArrived = Boolean(data.isArrived ?? data.metadata.isArrived);
     return {
-      metadata: data.metadata,
+      metadata: {
+        ...data.metadata,
+        isArrived,
+        isDelivered: isArrived,
+      },
       letter: data.letter,
-      isSealed: data.isSealed ?? !data.isArrived,
-      isArrived: data.isArrived ?? data.metadata.isArrived,
-      canUnseal: data.canUnseal ?? data.metadata.canUnseal,
-      isVerified: data.isVerified ?? false,
+      isSealed: data.isSealed ?? !isArrived,
+      isArrived,
+      canUnseal: data.canUnseal ?? isArrived,
+      isVerified: data.isVerified ?? Boolean(data.letter?.content),
     };
   } catch (err: any) {
     if (err.message && !err.message.includes('Unexpected token') && !err.message.includes('is not valid JSON')) {
