@@ -628,11 +628,20 @@ ensureGoogleStrategy();
 
 // 1. Health & Config
 app.get('/api/health', async (req, res) => {
+  let atlasConnected = isUsingAtlas();
+  if (!atlasConnected && getSanitizedMongoUri()) {
+    try {
+      await getDb();
+      atlasConnected = isUsingAtlas();
+    } catch {
+      atlasConnected = false;
+    }
+  }
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     backend: 'mongodb-atlas',
-    atlasConnected: isUsingAtlas(),
+    atlasConnected,
     emailConfigured: isEmailConfigured(),
     googleOAuthConfigured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     database: 'MongoDB Atlas Protocol',
