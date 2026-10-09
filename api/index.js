@@ -833,6 +833,80 @@ async function setupDatabaseIndexes() {
     console.warn("[OLD-LETTERS MongoDB] Index setup notice:", err);
   }
 }
+var inMemoryRateLimits = /* @__PURE__ */ new Map();
+async function consumeDistributedRateLimit(key, limit, windowMs) {
+  const now = Date.now();
+  const resetDate = new Date(now + windowMs);
+  try {
+    const db = await getDb();
+    const rateLimitsColl = db.collection("rateLimits");
+    const res = await rateLimitsColl.findOneAndUpdate(
+      { key },
+      {
+        $inc: { count: 1 },
+        $setOnInsert: {
+          firstSeen: new Date(now),
+          expiresAt: resetDate
+        }
+      },
+      {
+        upsert: true,
+        returnDocument: "after"
+      }
+    );
+    const doc = res?.value || res;
+    if (doc) {
+      const count = doc.count || 1;
+      const docExpiresAt = doc.expiresAt instanceof Date ? doc.expiresAt.getTime() : now + windowMs;
+      if (docExpiresAt < now) {
+        await rateLimitsColl.updateOne(
+          { key },
+          { $set: { count: 1, expiresAt: resetDate, firstSeen: new Date(now) } }
+        );
+        return {
+          allowed: true,
+          limit,
+          remaining: limit - 1,
+          resetSeconds: Math.ceil(windowMs / 1e3),
+          retryAfterSeconds: 0
+        };
+      }
+      const remaining2 = Math.max(0, limit - count);
+      const resetSeconds2 = Math.max(1, Math.ceil((docExpiresAt - now) / 1e3));
+      const allowed2 = count <= limit;
+      return {
+        allowed: allowed2,
+        limit,
+        remaining: remaining2,
+        resetSeconds: resetSeconds2,
+        retryAfterSeconds: allowed2 ? 0 : resetSeconds2
+      };
+    }
+  } catch (err) {
+  }
+  const rec = inMemoryRateLimits.get(key);
+  if (!rec || rec.expiresAt < now) {
+    inMemoryRateLimits.set(key, { count: 1, expiresAt: now + windowMs, firstSeen: now });
+    return {
+      allowed: true,
+      limit,
+      remaining: limit - 1,
+      resetSeconds: Math.ceil(windowMs / 1e3),
+      retryAfterSeconds: 0
+    };
+  }
+  rec.count += 1;
+  const remaining = Math.max(0, limit - rec.count);
+  const resetSeconds = Math.max(1, Math.ceil((rec.expiresAt - now) / 1e3));
+  const allowed = rec.count <= limit;
+  return {
+    allowed,
+    limit,
+    remaining,
+    resetSeconds,
+    retryAfterSeconds: allowed ? 0 : resetSeconds
+  };
+}
 
 // scripts/seed.ts
 import dotenv from "dotenv";
@@ -2331,6 +2405,103 @@ if (process.argv[1]?.endsWith("seed.ts") || process.argv[1]?.endsWith("seed.js")
   });
 }
 
+// src/lib/security.ts
+function getClientIp(req) {
+  if (req.ip) {
+    return req.ip.replace(/^::ffff:/, "");
+  }
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string") {
+    const firstIp = forwarded.split(",")[0].trim();
+    if (firstIp) return firstIp.replace(/^::ffff:/, "");
+  } else if (Array.isArray(forwarded) && forwarded[0]) {
+    return forwarded[0].trim().replace(/^::ffff:/, "");
+  }
+  const realIp = req.headers["x-real-ip"];
+  if (typeof realIp === "string" && realIp.trim()) {
+    return realIp.trim().replace(/^::ffff:/, "");
+  }
+  return (req.socket?.remoteAddress || "127.0.0.1").replace(/^::ffff:/, "");
+}
+function validateMediaSignature(buffer) {
+  if (!buffer || buffer.length < 8) {
+    return { valid: false, error: "Media payload is too small or truncated." };
+  }
+  if (buffer[0] === 127 && buffer[1] === 69 && buffer[2] === 76 && buffer[3] === 70) {
+    return { valid: false, error: "Executables and binary scripts are strictly prohibited." };
+  }
+  if (buffer[0] === 77 && buffer[1] === 90) {
+    return { valid: false, error: "Executables and binary scripts are strictly prohibited." };
+  }
+  const headerUtf8 = buffer.slice(0, 128).toString("utf8").trim().toLowerCase();
+  if (headerUtf8.startsWith("<?xml") || headerUtf8.startsWith("<svg") || headerUtf8.includes("<script") || headerUtf8.startsWith("<!doctype html") || headerUtf8.startsWith("<html")) {
+    return { valid: false, error: "SVG, HTML and XML files are strictly prohibited." };
+  }
+  if (buffer[0] === 26 && buffer[1] === 69 && buffer[2] === 223 && buffer[3] === 163) {
+    return { valid: true, detectedMime: "video/webm" };
+  }
+  if (buffer.length >= 12 && buffer.toString("utf8", 4, 8) === "ftyp") {
+    return { valid: true, detectedMime: "video/mp4" };
+  }
+  if (buffer[0] === 79 && buffer[1] === 103 && buffer[2] === 103 && buffer[3] === 83) {
+    return { valid: true, detectedMime: "audio/ogg" };
+  }
+  if (buffer.length >= 12 && buffer.toString("utf8", 0, 4) === "RIFF" && buffer.toString("utf8", 8, 12) === "WAVE") {
+    return { valid: true, detectedMime: "audio/wav" };
+  }
+  if (buffer[0] === 73 && buffer[1] === 68 && buffer[2] === 51) {
+    return { valid: true, detectedMime: "audio/mpeg" };
+  }
+  if (buffer[0] === 255 && (buffer[1] === 251 || buffer[1] === 243 || buffer[1] === 242)) {
+    return { valid: true, detectedMime: "audio/mpeg" };
+  }
+  if (buffer[0] === 255 && (buffer[1] === 241 || buffer[1] === 249)) {
+    return { valid: true, detectedMime: "audio/aac" };
+  }
+  if (buffer.length >= 8 && buffer[0] === 137 && buffer[1] === 80 && buffer[2] === 78 && buffer[3] === 71) {
+    return { valid: true, detectedMime: "image/png" };
+  }
+  if (buffer[0] === 255 && buffer[1] === 216 && buffer[2] === 255) {
+    return { valid: true, detectedMime: "image/jpeg" };
+  }
+  if (buffer.length >= 12 && buffer.toString("utf8", 0, 4) === "RIFF" && buffer.toString("utf8", 8, 12) === "WEBP") {
+    return { valid: true, detectedMime: "image/webp" };
+  }
+  return {
+    valid: false,
+    error: "Unsupported media format. Only authenticated recordings (WebM, MP4, WAV, OGG, MP3) and image enclosures (PNG, JPEG, WebP) are allowed."
+  };
+}
+function validateScreenshotUrl(urlStr) {
+  if (!urlStr || !urlStr.trim()) return { valid: true };
+  const str = urlStr.trim();
+  if (str.startsWith("data:")) {
+    if (str.startsWith("data:image/svg") || str.includes("svg+xml")) {
+      return { valid: false, error: "SVG screenshots are strictly prohibited." };
+    }
+    if (!str.startsWith("data:image/png;") && !str.startsWith("data:image/jpeg;") && !str.startsWith("data:image/webp;")) {
+      return { valid: false, error: "Only PNG, JPEG, and WebP image attachments are supported." };
+    }
+    if (str.length > 20 * 1024 * 1024) {
+      return { valid: false, error: "Payment screenshot image exceeds 15 MB limit." };
+    }
+    return { valid: true };
+  }
+  try {
+    const parsed = new URL(str);
+    if (parsed.protocol !== "https:") {
+      return { valid: false, error: "Only secure HTTPS screenshot URLs are allowed." };
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "169.254.169.254" || host.endsWith(".internal") || host.endsWith(".local") || host.startsWith("10.") || host.startsWith("192.168.") || /^172\.(1[6-9]|2\d|3[01])\./.test(host)) {
+      return { valid: false, error: "Private and internal network URLs are prohibited." };
+    }
+    return { valid: true };
+  } catch {
+    return { valid: false, error: "Invalid screenshot URL format." };
+  }
+}
+
 // src/lib/delivery.ts
 function parseToMs(val) {
   if (val === null || val === void 0 || val === "") return null;
@@ -2393,7 +2564,7 @@ app.use((req, res, next) => {
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=(), interest-cohort=()");
+  res.setHeader("Permissions-Policy", "camera=(self), microphone=(self), geolocation=(), interest-cohort=()");
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
   const cspDirectives = [
     "default-src 'self'",
@@ -2410,7 +2581,7 @@ app.use((req, res, next) => {
   ].join("; ");
   res.setHeader("Content-Security-Policy", cspDirectives);
   const origin = req.headers.origin;
-  const isAllowedOrigin = !origin || origin === APP_URL || origin === "https://oldletters.vercel.app" || origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:") || origin.endsWith(".vercel.app") || origin.includes(".run.app");
+  const isAllowedOrigin = !origin || origin === APP_URL || origin === "https://oldletters.vercel.app" || origin === "https://old-letters.vercel.app" || origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:") || (origin.startsWith("https://old-letters-") || origin.startsWith("https://oldletters-")) && origin.endsWith(".vercel.app") || origin.includes(".run.app");
   if (origin && isAllowedOrigin) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
@@ -2578,19 +2749,18 @@ var requireAdmin = async (req, res, next) => {
   }
   next();
 };
-var rateLimitStore = /* @__PURE__ */ new Map();
-function checkRateLimit(key, maxRequests = 5, windowMs = 15 * 60 * 1e3) {
-  const now = Date.now();
-  const record = rateLimitStore.get(key);
-  if (!record || record.resetAt < now) {
-    rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
+function setRateLimitHeaders(res, status) {
+  res.setHeader("RateLimit-Limit", status.limit.toString());
+  res.setHeader("RateLimit-Remaining", status.remaining.toString());
+  res.setHeader("RateLimit-Reset", status.resetSeconds.toString());
+  if (!status.allowed && status.retryAfterSeconds > 0) {
+    res.setHeader("Retry-After", status.retryAfterSeconds.toString());
   }
-  if (record.count >= maxRequests) {
-    return false;
-  }
-  record.count += 1;
-  return true;
+}
+async function checkDistributedRateLimit(req, res, key, limit = 5, windowMs = 15 * 60 * 1e3) {
+  const status = await consumeDistributedRateLimit(key, limit, windowMs);
+  setRateLimitHeaders(res, status);
+  return status.allowed;
 }
 function getGoogleOAuthConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim() || "";
@@ -2888,7 +3058,13 @@ app.post(["/api/auth/register", "/api/auth/signup", "/auth/register", "/auth/sig
     if (!password || password.length < 6) {
       return res.status(400).json({ success: false, error: "Password must be at least 6 characters." });
     }
-    if (!checkRateLimit(`register:${email}`, 6, 15 * 60 * 1e3)) {
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:register:${clientIp}`, 25, 15 * 60 * 1e3);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: "Too many registration attempts from this network. Please try again later." });
+    }
+    const emailAllowed = await checkDistributedRateLimit(req, res, `register:${email}`, 6, 15 * 60 * 1e3);
+    if (!emailAllowed) {
       return res.status(429).json({ success: false, error: "Too many registration attempts. Please try again later." });
     }
     const db = await getDb();
@@ -2979,7 +3155,13 @@ app.post(["/api/auth/login", "/auth/login"], async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ success: false, error: "Email and password required." });
     }
-    if (!checkRateLimit(`login:${email}`, 10, 15 * 60 * 1e3)) {
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:login:${clientIp}`, 30, 15 * 60 * 1e3);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: "Too many login attempts from this network. Please try again later." });
+    }
+    const emailAllowed = await checkDistributedRateLimit(req, res, `login:${email}`, 10, 15 * 60 * 1e3);
+    if (!emailAllowed) {
       return res.status(429).json({ success: false, error: "Too many login attempts. Please wait 15 minutes." });
     }
     const db = await getDb();
@@ -3624,7 +3806,13 @@ app.post("/api/auth/request-otp", async (req, res) => {
     if (!email || !email.includes("@")) {
       return res.status(400).json({ success: false, error: "Valid email address required." });
     }
-    if (!checkRateLimit(`auth_otp:${email}`, 5, 15 * 60 * 1e3)) {
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:auth_otp:${clientIp}`, 15, 15 * 60 * 1e3);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: "Too many verification code requests from this network." });
+    }
+    const emailAllowed = await checkDistributedRateLimit(req, res, `auth_otp:${email}`, 5, 15 * 60 * 1e3);
+    if (!emailAllowed) {
       return res.status(429).json({ success: false, error: "Too many OTP requests. Please wait 15 minutes." });
     }
     const db = await getDb();
@@ -4092,6 +4280,16 @@ app.post(["/api/letters/draft", "/api/letters/save-draft"], requireAuth, async (
 });
 app.post("/api/letters", requireAuth, async (req, res) => {
   try {
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:create_letter:${clientIp}`, 60, 60 * 60 * 1e3);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: "Too many letters created from this network. Please wait." });
+    }
+    const senderId = req.user.id;
+    const userAllowed = await checkDistributedRateLimit(req, res, `user:create_letter:${senderId}`, 40, 60 * 60 * 1e3);
+    if (!userAllowed) {
+      return res.status(429).json({ success: false, error: "Letter creation quota exceeded. Please wait an hour." });
+    }
     const parseResult = CreateLetterSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({
@@ -4128,7 +4326,6 @@ app.post("/api/letters", requireAuth, async (req, res) => {
     } else {
       deliveryDate = new Date(createdAt.getTime() + (input.waitingHours || 48) * 3600 * 1e3);
     }
-    const senderId = req.user.id;
     const senderEmail = (req.user?.email || input.senderEmail).toLowerCase();
     const senderName = input.senderName || req.user?.fullName || "Correspondent";
     const recipientEmail = input.recipientEmail.trim().toLowerCase();
@@ -4967,7 +5164,13 @@ app.post(["/api/delivery/request-otp", "/api/recipient/request-otp"], async (req
     if (!recipient || !recipient.email) {
       return res.status(400).json({ success: false, error: "Recipient address not registered." });
     }
-    if (!checkRateLimit(`recipient_otp:${letter._id.toString()}`, 5, 15 * 60 * 1e3)) {
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:recipient_otp:${clientIp}`, 20, 15 * 60 * 1e3);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: "Too many verification requests from this network. Please wait a few minutes." });
+    }
+    const letterAllowed = await checkDistributedRateLimit(req, res, `recipient_otp:${letter._id.toString()}`, 5, 15 * 60 * 1e3);
+    if (!letterAllowed) {
       return res.status(429).json({ success: false, error: "Too many OTP requests. Please wait 15 minutes." });
     }
     await otpColl.updateOne({ letterId: letter._id, used: false }, { $set: { used: true } });
@@ -5047,6 +5250,15 @@ app.post(["/api/delivery/verify", "/api/delivery/verify/:token", "/api/delivery/
       return res.status(404).json({ success: false, error: "Correspondence not found or link expired." });
     }
     const { letter, recipient, tokenHash } = resolved;
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:delivery_verify:${clientIp}`, 30, 15 * 60 * 1e3);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: "Too many verification attempts from this network. Please wait 15 minutes." });
+    }
+    const letterAllowed = await checkDistributedRateLimit(req, res, `verify_attempt:${letter._id.toString()}`, 10, 15 * 60 * 1e3);
+    if (!letterAllowed) {
+      return res.status(429).json({ success: false, error: "Too many verification attempts for this correspondence. Please wait 15 minutes." });
+    }
     const nowMs = Date.now();
     const now = new Date(nowMs);
     const { date: deliveryDate, ms: deliveryTimeMs } = resolveDeliveryDate(letter);
@@ -5677,6 +5889,21 @@ app.post(["/api/payments", "/api/payments/create", "/payments", "/payments/creat
       });
     }
     const input = parseResult.data;
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:payment_submit:${clientIp}`, 30, 60 * 60 * 1e3);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: "Too many payment submissions from this network. Please wait." });
+    }
+    const userAllowed = await checkDistributedRateLimit(req, res, `user:payment_submit:${req.user.id}`, 20, 60 * 60 * 1e3);
+    if (!userAllowed) {
+      return res.status(429).json({ success: false, error: "Payment submission quota exceeded. Please wait an hour." });
+    }
+    if (input.screenshotUrl) {
+      const urlCheck = validateScreenshotUrl(input.screenshotUrl);
+      if (!urlCheck.valid) {
+        return res.status(400).json({ success: false, error: urlCheck.error || "Invalid payment screenshot URL." });
+      }
+    }
     const db = await getDb();
     const paymentsColl = db.collection("payments");
     const lettersColl = db.collection("letters");
@@ -5940,8 +6167,27 @@ app.post(["/api/payments/:id/media", "/api/letters/:id/media", "/payments/:id/me
       buffer = req.body;
       mimeType = req.headers["content-type"] || (payment.mediaType === "VIDEO" ? "video/webm" : "audio/webm");
     }
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:media_upload:${clientIp}`, 30, 60 * 60 * 1e3);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: "Too many media uploads from this network. Please wait an hour." });
+    }
+    const userAllowed = await checkDistributedRateLimit(req, res, `user:media_upload:${userId}`, 20, 60 * 60 * 1e3);
+    if (!userAllowed) {
+      return res.status(429).json({ success: false, error: "Media upload quota reached. Please wait an hour." });
+    }
     if (!buffer || buffer.length === 0) {
       return res.status(400).json({ success: false, error: "No media binary received in request." });
+    }
+    if (buffer.length > 25 * 1024 * 1024) {
+      return res.status(413).json({ success: false, error: "Media attachment exceeds maximum allowed size (25 MB)." });
+    }
+    if (durationSeconds > 600) {
+      return res.status(400).json({ success: false, error: "Media recording exceeds maximum duration limit of 10 minutes." });
+    }
+    const sigCheck = validateMediaSignature(buffer);
+    if (!sigCheck.valid) {
+      return res.status(400).json({ success: false, error: sigCheck.error || "Invalid media signature." });
     }
     const mediaType = payment.mediaType || (mimeType.toLowerCase().includes("video") ? "VIDEO" : "VOICE");
     const storageKey = `media_${Date.now()}_${crypto2.randomBytes(8).toString("hex")}`;
@@ -6035,7 +6281,10 @@ app.get(["/api/admin/media/:storageKey", "/admin/media/:storageKey", "/api/media
     res.setHeader("Content-Type", media.mimeType || (media.mediaType === "VIDEO" ? "video/webm" : "audio/webm"));
     res.setHeader("Content-Length", download.buffer.length);
     res.setHeader("Accept-Ranges", "bytes");
-    res.setHeader("Cache-Control", "private, no-cache");
+    res.setHeader("Cache-Control", "private, no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'");
     res.send(download.buffer);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -6102,7 +6351,10 @@ app.get(["/api/delivery/media/:token", "/api/delivery/media/:token/:storageKey",
     res.setHeader("Content-Type", media.mimeType || (media.mediaType === "VIDEO" ? "video/webm" : "audio/webm"));
     res.setHeader("Content-Length", download.buffer.length);
     res.setHeader("Accept-Ranges", "bytes");
-    res.setHeader("Cache-Control", "private, no-cache");
+    res.setHeader("Cache-Control", "private, no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'");
     res.send(download.buffer);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -6130,7 +6382,10 @@ app.get("/api/user/media/:storageKey", requireAuth, async (req, res) => {
     res.setHeader("Content-Type", media.mimeType || (media.mediaType === "VIDEO" ? "video/webm" : "audio/webm"));
     res.setHeader("Content-Length", download.buffer.length);
     res.setHeader("Accept-Ranges", "bytes");
-    res.setHeader("Cache-Control", "private, no-cache");
+    res.setHeader("Cache-Control", "private, no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'");
     res.send(download.buffer);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -6598,6 +6853,32 @@ app.get("/api/admin/audit-logs", requireAdmin, async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+app.get("/robots.txt", (req, res) => {
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  const pubFile = path.resolve(__dirname, "public", "robots.txt");
+  const distFile = path.resolve(__dirname, "dist", "robots.txt");
+  if (fs.existsSync(pubFile)) {
+    return res.sendFile(pubFile);
+  }
+  if (fs.existsSync(distFile)) {
+    return res.sendFile(distFile);
+  }
+  return res.status(404).send("User-agent: *\nAllow: /\n");
+});
+app.get("/sitemap.xml", (req, res) => {
+  res.setHeader("Content-Type", "application/xml; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  const pubFile = path.resolve(__dirname, "public", "sitemap.xml");
+  const distFile = path.resolve(__dirname, "dist", "sitemap.xml");
+  if (fs.existsSync(pubFile)) {
+    return res.sendFile(pubFile);
+  }
+  if (fs.existsSync(distFile)) {
+    return res.sendFile(distFile);
+  }
+  return res.status(404).send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');
+});
 app.all("/api/*", (req, res) => {
   res.status(404).json({
     success: false,
@@ -6607,9 +6888,17 @@ app.all("/api/*", (req, res) => {
 app.use((err, req, res, next) => {
   console.error("[OLD-LETTERS API Error]", err);
   if (req.path.startsWith("/api")) {
-    return res.status(err.status || 500).json({
+    const isProd2 = process.env.NODE_ENV === "production";
+    const status = typeof err.status === "number" && err.status >= 400 && err.status < 600 ? err.status : 500;
+    const isClientError = status < 500;
+    const rawMsg = err.message || "";
+    let safeMessage = rawMsg;
+    if (isProd2 && (!isClientError || rawMsg.includes("mongodb") || rawMsg.includes("Mongo") || rawMsg.includes("topology"))) {
+      safeMessage = "An unexpected postal bureau error occurred. Please try again later.";
+    }
+    return res.status(status).json({
       success: false,
-      error: err.message || "An unexpected postal bureau error occurred."
+      error: safeMessage || "An unexpected postal bureau error occurred."
     });
   }
   next(err);
@@ -6626,32 +6915,6 @@ async function startServer() {
   } else {
     console.log("[OLD-LETTERS] MONGODB_URI not configured. Database initialization deferred until MONGODB_URI is set.");
   }
-  app.get("/robots.txt", (req, res) => {
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.setHeader("Cache-Control", "public, max-age=86400");
-    const pubFile = path.resolve(__dirname, "public", "robots.txt");
-    const distFile = path.resolve(__dirname, "dist", "robots.txt");
-    if (fs.existsSync(pubFile)) {
-      return res.sendFile(pubFile);
-    }
-    if (fs.existsSync(distFile)) {
-      return res.sendFile(distFile);
-    }
-    return res.status(404).send("User-agent: *\nAllow: /\n");
-  });
-  app.get("/sitemap.xml", (req, res) => {
-    res.setHeader("Content-Type", "application/xml; charset=utf-8");
-    res.setHeader("Cache-Control", "public, max-age=3600");
-    const pubFile = path.resolve(__dirname, "public", "sitemap.xml");
-    const distFile = path.resolve(__dirname, "dist", "sitemap.xml");
-    if (fs.existsSync(pubFile)) {
-      return res.sendFile(pubFile);
-    }
-    if (fs.existsSync(distFile)) {
-      return res.sendFile(distFile);
-    }
-    return res.status(404).send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');
-  });
   if (!isProd) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
@@ -6711,9 +6974,12 @@ var server_default = app;
 export {
   app,
   server_default as default,
+  getClientIp,
   parseToMs,
   resolveDeliveryDate,
-  runDeliveryScheduler
+  runDeliveryScheduler,
+  validateMediaSignature,
+  validateScreenshotUrl
 };
 /**
  * @license
@@ -6725,6 +6991,15 @@ export {
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ */
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Security & Validation Utilities for OLD-LETTERS
+ * 1. IP extraction with proxy awareness
+ * 2. Media file signature validation & anti-malware verification
+ * 3. Screenshot URL validation & SSRF prevention
  */
 /**
  * @license

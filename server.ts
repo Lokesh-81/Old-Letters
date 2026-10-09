@@ -59,6 +59,7 @@ import {
 } from './src/lib/mongodb';
 import { seedDatabase } from './scripts/seed';
 import { ADMIN_EMAILS, isAdminEmail, isUserAdminRole } from './src/lib/admin';
+import { getClientIp, validateMediaSignature, validateScreenshotUrl } from './src/lib/security';
 
 dotenv.config();
 
@@ -96,7 +97,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=(), interest-cohort=()');
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(), interest-cohort=()');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
 
   // Restrictive Content Security Policy allowing required fonts, assets, and Google Auth
@@ -121,9 +122,10 @@ app.use((req, res, next) => {
     !origin ||
     origin === APP_URL ||
     origin === 'https://oldletters.vercel.app' ||
+    origin === 'https://old-letters.vercel.app' ||
     origin.startsWith('http://localhost:') ||
     origin.startsWith('http://127.0.0.1:') ||
-    origin.endsWith('.vercel.app') ||
+    ((origin.startsWith('https://old-letters-') || origin.startsWith('https://oldletters-')) && origin.endsWith('.vercel.app')) ||
     origin.includes('.run.app');
 
   if (origin && isAllowedOrigin) {
@@ -397,21 +399,8 @@ const requireAdmin: express.RequestHandler = async (req, res, next) => {
   next();
 };
 
-// Helper to extract reliable client IP from actual proxy / serverless environment
-function getClientIp(req: express.Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string') {
-    const firstIp = forwarded.split(',')[0].trim();
-    if (firstIp) return firstIp;
-  } else if (Array.isArray(forwarded) && forwarded[0]) {
-    return forwarded[0].trim();
-  }
-  const realIp = req.headers['x-real-ip'];
-  if (typeof realIp === 'string' && realIp.trim()) {
-    return realIp.trim();
-  }
-  return req.socket.remoteAddress || '127.0.0.1';
-}
+// Re-export validated security utilities from modular security lib
+export { getClientIp, validateMediaSignature, validateScreenshotUrl };
 
 // Attach standard rate limit headers to response
 function setRateLimitHeaders(res: express.Response, status: RateLimitStatus) {
@@ -799,7 +788,13 @@ app.post(['/api/auth/register', '/api/auth/signup', '/auth/register', '/auth/sig
       return res.status(400).json({ success: false, error: 'Password must be at least 6 characters.' });
     }
 
-    if (!checkRateLimit(`register:${email}`, 6, 15 * 60 * 1000)) {
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:register:${clientIp}`, 25, 15 * 60 * 1000);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: 'Too many registration attempts from this network. Please try again later.' });
+    }
+    const emailAllowed = await checkDistributedRateLimit(req, res, `register:${email}`, 6, 15 * 60 * 1000);
+    if (!emailAllowed) {
       return res.status(429).json({ success: false, error: 'Too many registration attempts. Please try again later.' });
     }
 
@@ -903,7 +898,13 @@ app.post(['/api/auth/login', '/auth/login'], async (req, res) => {
       return res.status(400).json({ success: false, error: 'Email and password required.' });
     }
 
-    if (!checkRateLimit(`login:${email}`, 10, 15 * 60 * 1000)) {
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:login:${clientIp}`, 30, 15 * 60 * 1000);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: 'Too many login attempts from this network. Please try again later.' });
+    }
+    const emailAllowed = await checkDistributedRateLimit(req, res, `login:${email}`, 10, 15 * 60 * 1000);
+    if (!emailAllowed) {
       return res.status(429).json({ success: false, error: 'Too many login attempts. Please wait 15 minutes.' });
     }
 
@@ -1665,7 +1666,13 @@ app.post('/api/auth/request-otp', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Valid email address required.' });
     }
 
-    if (!checkRateLimit(`auth_otp:${email}`, 5, 15 * 60 * 1000)) {
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:auth_otp:${clientIp}`, 15, 15 * 60 * 1000);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: 'Too many verification code requests from this network.' });
+    }
+    const emailAllowed = await checkDistributedRateLimit(req, res, `auth_otp:${email}`, 5, 15 * 60 * 1000);
+    if (!emailAllowed) {
       return res.status(429).json({ success: false, error: 'Too many OTP requests. Please wait 15 minutes.' });
     }
 
@@ -2207,6 +2214,17 @@ app.post(['/api/letters/draft', '/api/letters/save-draft'], requireAuth, async (
 // 3. Create Letter / Schedule Post (Strictly authenticated & senderId bound)
 app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:create_letter:${clientIp}`, 60, 60 * 60 * 1000);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: 'Too many letters created from this network. Please wait.' });
+    }
+    const senderId = req.user!.id;
+    const userAllowed = await checkDistributedRateLimit(req, res, `user:create_letter:${senderId}`, 40, 60 * 60 * 1000);
+    if (!userAllowed) {
+      return res.status(429).json({ success: false, error: 'Letter creation quota exceeded. Please wait an hour.' });
+    }
+
     const parseResult = CreateLetterSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({
@@ -2251,7 +2269,6 @@ app.post('/api/letters', requireAuth, async (req: AuthenticatedRequest, res) => 
     }
 
     // CRITICAL: Always use req.user.id as senderId (never trust client body senderId)
-    const senderId = req.user!.id;
     const senderEmail = (req.user?.email || input.senderEmail).toLowerCase();
     const senderName = input.senderName || req.user?.fullName || 'Correspondent';
     const recipientEmail = input.recipientEmail.trim().toLowerCase();
@@ -3235,7 +3252,13 @@ app.post(['/api/delivery/request-otp', '/api/recipient/request-otp'], async (req
       return res.status(400).json({ success: false, error: 'Recipient address not registered.' });
     }
 
-    if (!checkRateLimit(`recipient_otp:${letter._id.toString()}`, 5, 15 * 60 * 1000)) {
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:recipient_otp:${clientIp}`, 20, 15 * 60 * 1000);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: 'Too many verification requests from this network. Please wait a few minutes.' });
+    }
+    const letterAllowed = await checkDistributedRateLimit(req, res, `recipient_otp:${letter._id.toString()}`, 5, 15 * 60 * 1000);
+    if (!letterAllowed) {
       return res.status(429).json({ success: false, error: 'Too many OTP requests. Please wait 15 minutes.' });
     }
 
@@ -3326,6 +3349,16 @@ app.post(['/api/delivery/verify', '/api/delivery/verify/:token', '/api/delivery/
     }
 
     const { letter, recipient, tokenHash } = resolved;
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:delivery_verify:${clientIp}`, 30, 15 * 60 * 1000);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: 'Too many verification attempts from this network. Please wait 15 minutes.' });
+    }
+    const letterAllowed = await checkDistributedRateLimit(req, res, `verify_attempt:${letter._id.toString()}`, 10, 15 * 60 * 1000);
+    if (!letterAllowed) {
+      return res.status(429).json({ success: false, error: 'Too many verification attempts for this correspondence. Please wait 15 minutes.' });
+    }
+
     const nowMs = Date.now();
     const now = new Date(nowMs);
     const { date: deliveryDate, ms: deliveryTimeMs } = resolveDeliveryDate(letter);
@@ -4076,6 +4109,23 @@ app.post(['/api/payments', '/api/payments/create', '/payments', '/payments/creat
     }
 
     const input = parseResult.data;
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:payment_submit:${clientIp}`, 30, 60 * 60 * 1000);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: 'Too many payment submissions from this network. Please wait.' });
+    }
+    const userAllowed = await checkDistributedRateLimit(req, res, `user:payment_submit:${req.user!.id}`, 20, 60 * 60 * 1000);
+    if (!userAllowed) {
+      return res.status(429).json({ success: false, error: 'Payment submission quota exceeded. Please wait an hour.' });
+    }
+
+    if (input.screenshotUrl) {
+      const urlCheck = validateScreenshotUrl(input.screenshotUrl);
+      if (!urlCheck.valid) {
+        return res.status(400).json({ success: false, error: urlCheck.error || 'Invalid payment screenshot URL.' });
+      }
+    }
+
     const db = await getDb();
     const paymentsColl = db.collection('payments');
     const lettersColl = db.collection('letters');
@@ -4391,8 +4441,31 @@ app.post(['/api/payments/:id/media', '/api/letters/:id/media', '/payments/:id/me
       mimeType = (req.headers['content-type'] as string) || (payment.mediaType === 'VIDEO' ? 'video/webm' : 'audio/webm');
     }
 
+    const clientIp = getClientIp(req);
+    const ipAllowed = await checkDistributedRateLimit(req, res, `ip:media_upload:${clientIp}`, 30, 60 * 60 * 1000);
+    if (!ipAllowed) {
+      return res.status(429).json({ success: false, error: 'Too many media uploads from this network. Please wait an hour.' });
+    }
+    const userAllowed = await checkDistributedRateLimit(req, res, `user:media_upload:${userId}`, 20, 60 * 60 * 1000);
+    if (!userAllowed) {
+      return res.status(429).json({ success: false, error: 'Media upload quota reached. Please wait an hour.' });
+    }
+
     if (!buffer || buffer.length === 0) {
       return res.status(400).json({ success: false, error: 'No media binary received in request.' });
+    }
+
+    if (buffer.length > 25 * 1024 * 1024) {
+      return res.status(413).json({ success: false, error: 'Media attachment exceeds maximum allowed size (25 MB).' });
+    }
+
+    if (durationSeconds > 600) {
+      return res.status(400).json({ success: false, error: 'Media recording exceeds maximum duration limit of 10 minutes.' });
+    }
+
+    const sigCheck = validateMediaSignature(buffer);
+    if (!sigCheck.valid) {
+      return res.status(400).json({ success: false, error: sigCheck.error || 'Invalid media signature.' });
     }
 
     const mediaType: 'VOICE' | 'VIDEO' =
@@ -4513,7 +4586,10 @@ app.get(['/api/admin/media/:storageKey', '/admin/media/:storageKey', '/api/media
     res.setHeader('Content-Type', media.mimeType || (media.mediaType === 'VIDEO' ? 'video/webm' : 'audio/webm'));
     res.setHeader('Content-Length', download.buffer.length);
     res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'private, no-cache');
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
     res.send(download.buffer);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -4597,7 +4673,10 @@ app.get(['/api/delivery/media/:token', '/api/delivery/media/:token/:storageKey',
     res.setHeader('Content-Type', media.mimeType || (media.mediaType === 'VIDEO' ? 'video/webm' : 'audio/webm'));
     res.setHeader('Content-Length', download.buffer.length);
     res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'private, no-cache');
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
     res.send(download.buffer);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -4634,7 +4713,10 @@ app.get('/api/user/media/:storageKey', requireAuth, async (req: AuthenticatedReq
     res.setHeader('Content-Type', media.mimeType || (media.mediaType === 'VIDEO' ? 'video/webm' : 'audio/webm'));
     res.setHeader('Content-Length', download.buffer.length);
     res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'private, no-cache');
+    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
     res.send(download.buffer);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -5174,6 +5256,35 @@ app.get('/api/admin/audit-logs', requireAdmin, async (req: AuthenticatedRequest,
   }
 });
 
+// Explicit canonical routes for robots.txt and sitemap.xml with high-cache headers
+app.get('/robots.txt', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  const pubFile = path.resolve(__dirname, 'public', 'robots.txt');
+  const distFile = path.resolve(__dirname, 'dist', 'robots.txt');
+  if (fs.existsSync(pubFile)) {
+    return res.sendFile(pubFile);
+  }
+  if (fs.existsSync(distFile)) {
+    return res.sendFile(distFile);
+  }
+  return res.status(404).send('User-agent: *\nAllow: /\n');
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  const pubFile = path.resolve(__dirname, 'public', 'sitemap.xml');
+  const distFile = path.resolve(__dirname, 'dist', 'sitemap.xml');
+  if (fs.existsSync(pubFile)) {
+    return res.sendFile(pubFile);
+  }
+  if (fs.existsSync(distFile)) {
+    return res.sendFile(distFile);
+  }
+  return res.status(404).send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');
+});
+
 // Explicit JSON 404 handler for any unmatched /api routes (prevents HTML fallthrough)
 app.all('/api/*', (req, res) => {
   res.status(404).json({
@@ -5186,9 +5297,17 @@ app.all('/api/*', (req, res) => {
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('[OLD-LETTERS API Error]', err);
   if (req.path.startsWith('/api')) {
-    return res.status(err.status || 500).json({
+    const isProd = process.env.NODE_ENV === 'production';
+    const status = (typeof err.status === 'number' && err.status >= 400 && err.status < 600) ? err.status : 500;
+    const isClientError = status < 500;
+    const rawMsg = err.message || '';
+    let safeMessage = rawMsg;
+    if (isProd && (!isClientError || rawMsg.includes('mongodb') || rawMsg.includes('Mongo') || rawMsg.includes('topology'))) {
+      safeMessage = 'An unexpected postal bureau error occurred. Please try again later.';
+    }
+    return res.status(status).json({
       success: false,
-      error: err.message || 'An unexpected postal bureau error occurred.',
+      error: safeMessage || 'An unexpected postal bureau error occurred.',
     });
   }
   next(err);
@@ -5209,35 +5328,6 @@ async function startServer() {
   } else {
     console.log('[OLD-LETTERS] MONGODB_URI not configured. Database initialization deferred until MONGODB_URI is set.');
   }
-
-  // Explicit canonical routes for robots.txt and sitemap.xml with high-cache headers
-  app.get('/robots.txt', (req, res) => {
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    const pubFile = path.resolve(__dirname, 'public', 'robots.txt');
-    const distFile = path.resolve(__dirname, 'dist', 'robots.txt');
-    if (fs.existsSync(pubFile)) {
-      return res.sendFile(pubFile);
-    }
-    if (fs.existsSync(distFile)) {
-      return res.sendFile(distFile);
-    }
-    return res.status(404).send('User-agent: *\nAllow: /\n');
-  });
-
-  app.get('/sitemap.xml', (req, res) => {
-    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    const pubFile = path.resolve(__dirname, 'public', 'sitemap.xml');
-    const distFile = path.resolve(__dirname, 'dist', 'sitemap.xml');
-    if (fs.existsSync(pubFile)) {
-      return res.sendFile(pubFile);
-    }
-    if (fs.existsSync(distFile)) {
-      return res.sendFile(distFile);
-    }
-    return res.status(404).send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');
-  });
 
   if (!isProd) {
     const { createServer: createViteServer } = await import('vite');
