@@ -10,8 +10,9 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx scripts/test-audit-fixes.ts && tsx scripts/test-production-audit.ts && tsx scripts/test-security-privacy-audit.ts && tsx scripts/test-end-to-end-production-audit.ts",
-    "test:backend": "tsx scripts/test-backend.ts"
+    "test": "tsx scripts/test-audit-fixes.ts && tsx scripts/test-production-audit.ts && tsx scripts/test-security-privacy-audit.ts && tsx scripts/test-end-to-end-production-audit.ts && tsx scripts/test-newsletter-subscription.ts",
+    "test:backend": "tsx scripts/test-backend.ts",
+    "test:newsletter": "tsx scripts/test-newsletter-subscription.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

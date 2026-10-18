@@ -1020,3 +1020,27 @@ export async function deleteBureauAccount(confirmation: string): Promise<{ succe
   });
   return safeParseJson(res, 'Failed to close Bureau account.');
 }
+
+export async function subscribeToNewsletter(
+  email: string,
+  consent: boolean = true
+): Promise<{ success: boolean; message: string; alreadySubscribed?: boolean; resubscribed?: boolean }> {
+  const res = await apiFetch('/newsletter/subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, consent }),
+  });
+  return safeParseJson(res, 'Failed to process dispatch subscription.');
+}
+
+export async function unsubscribeFromNewsletter(
+  email: string,
+  token: string
+): Promise<{ success: boolean; message: string; alreadyUnsubscribed?: boolean }> {
+  const res = await apiFetch('/newsletter/unsubscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, token }),
+  });
+  return safeParseJson(res, 'Failed to process unsubscribe request.');
+}

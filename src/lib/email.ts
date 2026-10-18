@@ -70,6 +70,7 @@ export interface SendMailOptions {
   html: string;
   text?: string;
   replyTo?: string;
+  headers?: Record<string, string>;
 }
 
 export interface EmailLogEntry {
@@ -127,6 +128,7 @@ export async function sendMail(
       html: options.html,
       text: options.text || options.subject,
       replyTo: options.replyTo || SENDER_EMAIL,
+      headers: options.headers,
     });
 
     console.log(`[OLD-LETTERS Mailroom] Email successfully dispatched to ${options.to}. Subject: "${options.subject}" (ID: ${info.messageId})`);
@@ -710,5 +712,97 @@ export async function sendPaymentIssueEmail(params: {
     subject,
     html,
     text: `OLD-LETTERS — Payment Verification Failed\n\nYour payment reference could not be verified. The UPI / UTR transaction details provided could not be confirmed.\n\nPayment ID: ${params.orderReference}\nAmount: ₹${params.amount} ${currency}\n${params.upiReference ? `UTR: ${params.upiReference}\n` : ''}Status: REJECTED\n${params.adminNote ? `Reason: ${params.adminNote}\n` : ''}\nImportant: Your letter will continue and be delivered as scheduled, but the personal voice/video enclosure will NOT accompany the letter upon arrival.`,
+  });
+}
+
+/**
+ * 7. NEWSLETTER / DISPATCH SUBSCRIPTION WELCOME EMAIL
+ */
+export async function sendNewsletterWelcomeEmail(params: {
+  email: string;
+  unsubscribeUrl: string;
+}) {
+  const subject = 'Welcome to the OLD-LETTERS Gazette · Dispatch Subscribed';
+  const html = emailWrapper(
+    'Welcome to the Correspondence Registry',
+    'DISPATCH SUBSCRIPTION CONFIRMED',
+    `
+      <p style="margin-top: 0;">Greetings,</p>
+      <p>
+        Your subscription to <strong>OLD-LETTERS Dispatches</strong> has been recorded in our postal register.
+      </p>
+      <p>
+        Here is what you will receive in your correspondence box:
+      </p>
+      <ul style="padding-left: 20px; margin: 16px 0; color: #44403c;">
+        <li style="margin-bottom: 8px;"><strong>Seasonal Stationery Releases:</strong> Announcements of bespoke archival papers, hot-wax formulations, and handcrafted seal designs.</li>
+        <li style="margin-bottom: 8px;"><strong>Epistolary Essays:</strong> Occasional reflections on the art of slow correspondence, intentional tempo, and timeless letters.</li>
+        <li style="margin-bottom: 8px;"><strong>Postal Service Notes:</strong> Important updates from the Correspondence Bureau regarding international delivery tempos and vault archives.</li>
+      </ul>
+      <p>
+        We honor your inbox with quiet restraint. We do not send promotional noise, commercial spam, or unsolicited correspondence.
+      </p>
+      <div style="background-color: #FAF9F7; border: 1px solid #EAE4DA; padding: 16px 20px; margin: 24px 0; border-radius: 2px; font-size: 12px; color: #57534E;">
+        <p style="margin: 0 0 8px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; color: #134E4A;">Your Dispatch Rights &amp; Consent</p>
+        <p style="margin: 0 0 8px 0;">
+          You subscribed with explicit action and consent. You retain full control over your address and may revoke consent at any time.
+        </p>
+        <p style="margin: 0;">
+          To unsubscribe at any time, click here: <a href="${params.unsubscribeUrl}" style="color: #134E4A; font-weight: 600; text-decoration: underline;">Unsubscribe from Dispatches</a>
+        </p>
+      </div>
+      <p style="font-size: 13px; color: #78716C; margin-bottom: 0;">
+        With highest regards,<br/>
+        <em>The Keeper of Records</em><br/>
+        <strong>OLD-LETTERS Central Mailroom</strong>
+      </p>
+    `
+  );
+
+  return sendMail({
+    to: params.email,
+    subject,
+    html,
+    text: `Welcome to the OLD-LETTERS Gazette · Dispatch Subscribed\n\nGreetings,\n\nYour subscription to OLD-LETTERS Dispatches has been confirmed. You will receive occasional updates on seasonal stationery releases, epistolary essays, and service notes.\n\nYou may unsubscribe at any time using this link:\n${params.unsubscribeUrl}\n\nOLD-LETTERS Central Mailroom`,
+    headers: {
+      'List-Unsubscribe': `<${params.unsubscribeUrl}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
+  });
+}
+
+/**
+ * 8. NEWSLETTER / DISPATCH UNSUBSCRIBED CONFIRMATION EMAIL
+ */
+export async function sendNewsletterUnsubscribedEmail(params: {
+  email: string;
+}) {
+  const subject = 'You have been unsubscribed · OLD-LETTERS';
+  const html = emailWrapper(
+    'Subscription Terminated',
+    'NOTICE OF REMOVAL',
+    `
+      <p style="margin-top: 0;">Greetings,</p>
+      <p>
+        As requested, your email (<code>${params.email}</code>) has been successfully removed from all OLD-LETTERS postal dispatches and gazette mailings.
+      </p>
+      <p>
+        You will receive no further marketing or dispatch correspondence from this registry. (Transactional notifications regarding active letters you send or receive will still be delivered).
+      </p>
+      <p>
+        If this was done in error or if you wish to rejoin in the future, you may subscribe again at any time on our website.
+      </p>
+      <p style="font-size: 13px; color: #78716C; margin-bottom: 0;">
+        Respectfully,<br/>
+        <strong>OLD-LETTERS Central Mailroom</strong>
+      </p>
+    `
+  );
+
+  return sendMail({
+    to: params.email,
+    subject,
+    html,
+    text: `You have been unsubscribed · OLD-LETTERS\n\nYour email (${params.email}) has been removed from all OLD-LETTERS dispatches.\n\nOLD-LETTERS Central Mailroom`,
   });
 }

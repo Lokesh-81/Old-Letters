@@ -19,6 +19,7 @@ import { PrivacyPolicyView } from './components/legal/PrivacyPolicyView';
 import { TermsOfServiceView } from './components/legal/TermsOfServiceView';
 import { CookieConsentBanner } from './components/legal/CookieConsentBanner';
 import { CookiePreferencesModal } from './components/legal/CookiePreferencesModal';
+import { UnsubscribeView } from './components/legal/UnsubscribeView';
 import { NotFoundView } from './components/common/NotFoundView';
 import { applySEO } from './lib/seo';
 import { fetchLetters, getDeliveryMeta, getCurrentUser, logoutUser, normalizeApiError } from './lib/api';
@@ -134,6 +135,8 @@ export default function App() {
       window.history.pushState(null, '', '/composer');
     } else if (view === 'archive') {
       window.history.pushState(null, '', '/archive');
+    } else if (view === 'unsubscribe') {
+      window.history.pushState(null, '', '/unsubscribe');
     }
     setCurrentView(view);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -179,6 +182,8 @@ export default function App() {
         setCurrentView('composer');
       } else if (path === '/archive') {
         setCurrentView('archive');
+      } else if (path === '/unsubscribe') {
+        setCurrentView('unsubscribe');
       } else if (path.startsWith('/letter/') || path.startsWith('/recipient/')) {
         // Token will be resolved below
       } else if (path === '/login' || path === '/signup') {
@@ -748,6 +753,16 @@ export default function App() {
           <NotFoundView
             onBackToHome={() => handleNavigate('landing')}
             onNavigate={handleNavigate}
+          />
+        )}
+
+        {currentView === 'unsubscribe' && (
+          <UnsubscribeView
+            initialEmail={new URLSearchParams(window.location.search).get('email') || ''}
+            initialToken={new URLSearchParams(window.location.search).get('token') || ''}
+            initialStatus={new URLSearchParams(window.location.search).get('status') || ''}
+            initialMessage={new URLSearchParams(window.location.search).get('message') || ''}
+            onBack={() => handleNavigate('landing')}
           />
         )}
 

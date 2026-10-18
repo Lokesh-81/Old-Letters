@@ -43,6 +43,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/unsubscribe",
+      "destination": "/index.html"
+    },
+    {
       "source": "/admin/:path*",
       "destination": "/index.html"
     },

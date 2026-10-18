@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { isAdminEmail, isUserAdminRole } from '../lib/admin';
 
-export type AppView = 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient' | 'cookies' | 'privacy' | 'terms' | 'profile' | 'admin' | 'not-found';
+export type AppView = 'landing' | 'composer' | 'archive' | 'how-it-works' | 'recipient' | 'cookies' | 'privacy' | 'terms' | 'profile' | 'admin' | 'not-found' | 'unsubscribe';
 
 interface NavigationProps {
   currentView: AppView;

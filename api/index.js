@@ -82,7 +82,8 @@ async function sendMail(options) {
       subject: options.subject,
       html: options.html,
       text: options.text || options.subject,
-      replyTo: options.replyTo || SENDER_EMAIL
+      replyTo: options.replyTo || SENDER_EMAIL,
+      headers: options.headers
     });
     console.log(`[OLD-LETTERS Mailroom] Email successfully dispatched to ${options.to}. Subject: "${options.subject}" (ID: ${info.messageId})`);
     return { success: true, messageId: info.messageId };
@@ -563,6 +564,96 @@ ${params.adminNote ? `Reason: ${params.adminNote}
 Important: Your letter will continue and be delivered as scheduled, but the personal voice/video enclosure will NOT accompany the letter upon arrival.`
   });
 }
+async function sendNewsletterWelcomeEmail(params) {
+  const subject = "Welcome to the OLD-LETTERS Gazette \xB7 Dispatch Subscribed";
+  const html = emailWrapper(
+    "Welcome to the Correspondence Registry",
+    "DISPATCH SUBSCRIPTION CONFIRMED",
+    `
+      <p style="margin-top: 0;">Greetings,</p>
+      <p>
+        Your subscription to <strong>OLD-LETTERS Dispatches</strong> has been recorded in our postal register.
+      </p>
+      <p>
+        Here is what you will receive in your correspondence box:
+      </p>
+      <ul style="padding-left: 20px; margin: 16px 0; color: #44403c;">
+        <li style="margin-bottom: 8px;"><strong>Seasonal Stationery Releases:</strong> Announcements of bespoke archival papers, hot-wax formulations, and handcrafted seal designs.</li>
+        <li style="margin-bottom: 8px;"><strong>Epistolary Essays:</strong> Occasional reflections on the art of slow correspondence, intentional tempo, and timeless letters.</li>
+        <li style="margin-bottom: 8px;"><strong>Postal Service Notes:</strong> Important updates from the Correspondence Bureau regarding international delivery tempos and vault archives.</li>
+      </ul>
+      <p>
+        We honor your inbox with quiet restraint. We do not send promotional noise, commercial spam, or unsolicited correspondence.
+      </p>
+      <div style="background-color: #FAF9F7; border: 1px solid #EAE4DA; padding: 16px 20px; margin: 24px 0; border-radius: 2px; font-size: 12px; color: #57534E;">
+        <p style="margin: 0 0 8px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; color: #134E4A;">Your Dispatch Rights &amp; Consent</p>
+        <p style="margin: 0 0 8px 0;">
+          You subscribed with explicit action and consent. You retain full control over your address and may revoke consent at any time.
+        </p>
+        <p style="margin: 0;">
+          To unsubscribe at any time, click here: <a href="${params.unsubscribeUrl}" style="color: #134E4A; font-weight: 600; text-decoration: underline;">Unsubscribe from Dispatches</a>
+        </p>
+      </div>
+      <p style="font-size: 13px; color: #78716C; margin-bottom: 0;">
+        With highest regards,<br/>
+        <em>The Keeper of Records</em><br/>
+        <strong>OLD-LETTERS Central Mailroom</strong>
+      </p>
+    `
+  );
+  return sendMail({
+    to: params.email,
+    subject,
+    html,
+    text: `Welcome to the OLD-LETTERS Gazette \xB7 Dispatch Subscribed
+
+Greetings,
+
+Your subscription to OLD-LETTERS Dispatches has been confirmed. You will receive occasional updates on seasonal stationery releases, epistolary essays, and service notes.
+
+You may unsubscribe at any time using this link:
+${params.unsubscribeUrl}
+
+OLD-LETTERS Central Mailroom`,
+    headers: {
+      "List-Unsubscribe": `<${params.unsubscribeUrl}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+    }
+  });
+}
+async function sendNewsletterUnsubscribedEmail(params) {
+  const subject = "You have been unsubscribed \xB7 OLD-LETTERS";
+  const html = emailWrapper(
+    "Subscription Terminated",
+    "NOTICE OF REMOVAL",
+    `
+      <p style="margin-top: 0;">Greetings,</p>
+      <p>
+        As requested, your email (<code>${params.email}</code>) has been successfully removed from all OLD-LETTERS postal dispatches and gazette mailings.
+      </p>
+      <p>
+        You will receive no further marketing or dispatch correspondence from this registry. (Transactional notifications regarding active letters you send or receive will still be delivered).
+      </p>
+      <p>
+        If this was done in error or if you wish to rejoin in the future, you may subscribe again at any time on our website.
+      </p>
+      <p style="font-size: 13px; color: #78716C; margin-bottom: 0;">
+        Respectfully,<br/>
+        <strong>OLD-LETTERS Central Mailroom</strong>
+      </p>
+    `
+  );
+  return sendMail({
+    to: params.email,
+    subject,
+    html,
+    text: `You have been unsubscribed \xB7 OLD-LETTERS
+
+Your email (${params.email}) has been removed from all OLD-LETTERS dispatches.
+
+OLD-LETTERS Central Mailroom`
+  });
+}
 
 // src/types/backend.ts
 import { z } from "zod";
@@ -621,6 +712,16 @@ var RecipientVerifySchema = z.object({
   verificationMethod: z.enum(["otp", "passphrase", "open"]).optional(),
   otp: z.string().length(6).optional(),
   passphrase: z.string().optional()
+});
+var NewsletterSubscribeSchema = z.object({
+  email: z.string().trim().min(1, "Email address is required").max(254, "Email address cannot exceed 254 characters").email("Please enter a valid email address"),
+  consent: z.literal(true, {
+    message: "Explicit consent is required to receive OLD-LETTERS dispatches"
+  })
+});
+var NewsletterUnsubscribeSchema = z.object({
+  email: z.string().trim().email("Valid email address required"),
+  token: z.string().trim().min(8, "Valid unsubscribe token required")
 });
 
 // src/lib/mongodb.ts
@@ -828,6 +929,10 @@ async function setupDatabaseIndexes() {
     await adminUsers.createIndex({ email: 1 }, { unique: true, sparse: true });
     const letterTemplates = db.collection("letterTemplates");
     await letterTemplates.createIndex({ slug: 1 }, { unique: true, sparse: true });
+    const subscribers = db.collection("subscribers");
+    await subscribers.createIndex({ email: 1 }, { unique: true });
+    await subscribers.createIndex({ unsubscribeToken: 1 }, { unique: true, sparse: true });
+    await subscribers.createIndex({ status: 1 });
     console.log("[OLD-LETTERS MongoDB] Collections & Indexes established.");
   } catch (err) {
     console.warn("[OLD-LETTERS MongoDB] Index setup notice:", err);
@@ -2946,6 +3051,221 @@ app.get("/api/config/payment", (req, res) => {
     upiDisplayName: process.env.UPI_DISPLAY_NAME || "OLD-LETTERS CORRESPONDENCE",
     paymentQrUrl: process.env.PAYMENT_QR_URL || "/assets/upi-qr.png"
   });
+});
+var inMemorySubscribers = /* @__PURE__ */ new Map();
+async function findSubscriberDoc(email) {
+  try {
+    const db = await getDb();
+    return await db.collection("subscribers").findOne({ email });
+  } catch {
+    return inMemorySubscribers.get(email) || null;
+  }
+}
+async function insertSubscriberDoc(doc) {
+  try {
+    const db = await getDb();
+    await db.collection("subscribers").insertOne(doc);
+  } catch {
+    inMemorySubscribers.set(doc.email, doc);
+  }
+}
+async function updateSubscriberDoc(email, updateFields) {
+  try {
+    const db = await getDb();
+    await db.collection("subscribers").updateOne(
+      { email },
+      { $set: updateFields }
+    );
+  } catch {
+    const existing = inMemorySubscribers.get(email);
+    if (existing) {
+      inMemorySubscribers.set(email, { ...existing, ...updateFields });
+    }
+  }
+}
+app.post(["/api/newsletter/subscribe", "/api/subscribe"], async (req, res) => {
+  const ip = getClientIp(req);
+  const allowed = await checkDistributedRateLimit(req, res, `newsletter-sub:${ip}`, 5, 10 * 60 * 1e3);
+  if (!allowed) {
+    return res.status(429).json({
+      error: "Too many subscription attempts from this network. Please wait a few moments before trying again."
+    });
+  }
+  const parseResult = NewsletterSubscribeSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    const errorMsg = parseResult.error.issues?.map((e) => e.message).join(", ") || parseResult.error.errors?.[0]?.message || "Invalid subscription details provided.";
+    return res.status(400).json({ error: errorMsg });
+  }
+  const normalizedEmail = parseResult.data.email.toLowerCase().trim();
+  const ipHash = crypto2.createHash("sha256").update(ip + (process.env.SESSION_SECRET || "salt")).digest("hex");
+  try {
+    const existing = await findSubscriberDoc(normalizedEmail);
+    if (existing && existing.status === "SUBSCRIBED") {
+      return res.status(200).json({
+        success: true,
+        alreadySubscribed: true,
+        message: "You are already subscribed to OLD-LETTERS dispatches. Thank you for your continued readership!"
+      });
+    }
+    const unsubscribeToken = crypto2.randomBytes(24).toString("hex");
+    const unsubscribeUrl = `${APP_URL}/unsubscribe?token=${unsubscribeToken}&email=${encodeURIComponent(normalizedEmail)}`;
+    if (existing && existing.status === "UNSUBSCRIBED") {
+      await updateSubscriberDoc(normalizedEmail, {
+        status: "SUBSCRIBED",
+        consentGiven: true,
+        consentAt: /* @__PURE__ */ new Date(),
+        resubscribedAt: /* @__PURE__ */ new Date(),
+        unsubscribeToken,
+        ipHash,
+        updatedAt: /* @__PURE__ */ new Date()
+      });
+      sendNewsletterWelcomeEmail({
+        email: normalizedEmail,
+        unsubscribeUrl
+      }).catch((err) => console.error("[Newsletter] Welcome email error:", err));
+      return res.status(200).json({
+        success: true,
+        alreadySubscribed: false,
+        resubscribed: true,
+        message: "Welcome back! Your subscription to OLD-LETTERS dispatches has been restored.",
+        ...process.env.NODE_ENV !== "production" ? { devUnsubscribeToken: unsubscribeToken } : {}
+      });
+    }
+    const newDoc = {
+      email: normalizedEmail,
+      status: "SUBSCRIBED",
+      consentGiven: true,
+      consentAt: /* @__PURE__ */ new Date(),
+      ipHash,
+      unsubscribeToken,
+      createdAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date()
+    };
+    await insertSubscriberDoc(newDoc);
+    sendNewsletterWelcomeEmail({
+      email: normalizedEmail,
+      unsubscribeUrl
+    }).catch((err) => console.error("[Newsletter] Welcome email error:", err));
+    return res.status(201).json({
+      success: true,
+      alreadySubscribed: false,
+      message: "Welcome to OLD-LETTERS. You are now subscribed to our dispatches.",
+      ...process.env.NODE_ENV !== "production" ? { devUnsubscribeToken: unsubscribeToken } : {}
+    });
+  } catch (err) {
+    console.error("[Newsletter] Subscription error:", err);
+    return res.status(500).json({
+      error: "An internal error occurred while processing your subscription. Please try again."
+    });
+  }
+});
+app.post(["/api/newsletter/unsubscribe", "/api/unsubscribe"], async (req, res) => {
+  const ip = getClientIp(req);
+  const allowed = await checkDistributedRateLimit(req, res, `newsletter-unsub:${ip}`, 10, 10 * 60 * 1e3);
+  if (!allowed) {
+    return res.status(429).json({
+      error: "Too many unsubscribe attempts from this network. Please wait a few moments before trying again."
+    });
+  }
+  const parseResult = NewsletterUnsubscribeSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    const errorMsg = parseResult.error.issues?.map((e) => e.message).join(", ") || parseResult.error.errors?.[0]?.message || "Valid email and unsubscribe token are required.";
+    return res.status(400).json({ error: errorMsg });
+  }
+  const normalizedEmail = parseResult.data.email.toLowerCase().trim();
+  const token = parseResult.data.token.trim();
+  try {
+    const subscriber = await findSubscriberDoc(normalizedEmail);
+    if (!subscriber || subscriber.unsubscribeToken !== token) {
+      return res.status(400).json({
+        error: "Invalid or expired unsubscribe link. Please check your link or contact the Mailroom."
+      });
+    }
+    if (subscriber.status === "UNSUBSCRIBED") {
+      return res.status(200).json({
+        success: true,
+        alreadyUnsubscribed: true,
+        message: "You have already been unsubscribed from OLD-LETTERS dispatches."
+      });
+    }
+    await updateSubscriberDoc(normalizedEmail, {
+      status: "UNSUBSCRIBED",
+      unsubscribedAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date()
+    });
+    sendNewsletterUnsubscribedEmail({
+      email: normalizedEmail
+    }).catch((err) => console.error("[Newsletter] Unsubscribe email notice error:", err));
+    return res.status(200).json({
+      success: true,
+      message: "You have been successfully unsubscribed from OLD-LETTERS dispatches."
+    });
+  } catch (err) {
+    console.error("[Newsletter] Unsubscribe error:", err);
+    return res.status(500).json({
+      error: "An internal error occurred while processing your unsubscribe request. Please try again."
+    });
+  }
+});
+app.get(["/api/newsletter/unsubscribe", "/api/unsubscribe"], async (req, res) => {
+  const email = typeof req.query.email === "string" ? req.query.email.trim().toLowerCase() : "";
+  const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
+  const acceptsJson = req.headers.accept?.includes("application/json");
+  if (!email || !token) {
+    if (acceptsJson) {
+      return res.status(400).json({ error: "Missing email or unsubscribe token." });
+    }
+    return res.redirect(`${APP_URL}/unsubscribe?status=error&message=${encodeURIComponent("Missing email or unsubscribe token.")}`);
+  }
+  try {
+    const subscriber = await findSubscriberDoc(email);
+    if (!subscriber || subscriber.unsubscribeToken !== token) {
+      if (acceptsJson) {
+        return res.status(400).json({ error: "Invalid or expired unsubscribe link." });
+      }
+      return res.redirect(`${APP_URL}/unsubscribe?status=error&message=${encodeURIComponent("Invalid or expired unsubscribe link.")}`);
+    }
+    if (subscriber.status !== "UNSUBSCRIBED") {
+      await updateSubscriberDoc(email, {
+        status: "UNSUBSCRIBED",
+        unsubscribedAt: /* @__PURE__ */ new Date(),
+        updatedAt: /* @__PURE__ */ new Date()
+      });
+      sendNewsletterUnsubscribedEmail({
+        email
+      }).catch((err) => console.error("[Newsletter] Unsubscribe email error:", err));
+    }
+    if (acceptsJson) {
+      return res.status(200).json({
+        success: true,
+        message: "You have been successfully unsubscribed from OLD-LETTERS dispatches."
+      });
+    }
+    return res.redirect(`${APP_URL}/unsubscribe?status=success&email=${encodeURIComponent(email)}`);
+  } catch (err) {
+    if (acceptsJson) {
+      return res.status(500).json({ error: "Internal server error while unsubscribing." });
+    }
+    return res.redirect(`${APP_URL}/unsubscribe?status=error&message=${encodeURIComponent("A server error occurred while processing your request.")}`);
+  }
+});
+app.get("/api/newsletter/status", async (req, res) => {
+  const email = typeof req.query.email === "string" ? req.query.email.trim().toLowerCase() : "";
+  if (!email) {
+    return res.status(400).json({ error: "Email parameter required." });
+  }
+  try {
+    const subscriber = await findSubscriberDoc(email);
+    if (!subscriber) {
+      return res.json({ subscribed: false, status: "NOT_FOUND" });
+    }
+    return res.json({
+      subscribed: subscriber.status === "SUBSCRIBED",
+      status: subscriber.status
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Failed to retrieve status." });
+  }
 });
 app.get(["/api/auth/me", "/api/me", "/auth/me"], async (req, res) => {
   res.setHeader("Cache-Control", "private, no-cache, no-store, must-revalidate");
@@ -6991,7 +7311,8 @@ async function startServer() {
       "/archive",
       "/recipient",
       "/login",
-      "/signup"
+      "/signup",
+      "/unsubscribe"
     ]);
     app.get("*", (req, res) => {
       const cleanPath = req.path.toLowerCase().replace(/\/+$/, "") || "/";

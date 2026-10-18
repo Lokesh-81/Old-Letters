@@ -1,12 +1,16 @@
 'use client';
 
-import { type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { motion, type Variants } from 'motion/react';
 import {
   ArrowRight,
+  Check,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import LogoIcon from '@/assets/logo-icon';
 import { KineticTextReveal } from './kinetic-text-reveal';
+import { subscribeToNewsletter } from '../../lib/api';
 
 interface LinkItem {
   label: string;
@@ -30,7 +34,7 @@ interface Footer23Props {
   heroAlt?: string;
   emailPlaceholder?: string;
   subscribeLabel?: string;
-  onSubscribe?: (email: string) => void;
+  onSubscribe?: (email: string) => Promise<any> | void;
   columns?: NavColumn[];
   language?: string;
   onWriteClick?: () => void;
@@ -159,7 +163,7 @@ export default function Footer23({
   heroImage = 'https://assets.watermelon.sh/footer-23-bg.avif',
   heroAlt = 'Sunlit landscape with serene golden horizon',
   emailPlaceholder = 'Enter your email for dispatch updates',
-  subscribeLabel = 'Inscribe',
+  subscribeLabel = 'Subscribe',
   onSubscribe,
   columns = defaultColumns,
   onWriteClick,
@@ -169,10 +173,67 @@ export default function Footer23({
   onSelectStationery,
   onOpenCookiePreferences,
 }: Footer23Props) {
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  const [email, setEmail] = useState('');
+  const [consent, setConsent] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<{
+    type: 'success' | 'error' | 'info';
+    message: string;
+  } | null>(null);
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    onSubscribe?.(String(fd.get('email') ?? ''));
+    setFeedback(null);
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setFeedback({ type: 'error', message: 'Please enter your email address.' });
+      return;
+    }
+
+    if (!consent) {
+      setFeedback({
+        type: 'error',
+        message: 'Please check the consent box to receive OLD-LETTERS dispatches.',
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      if (onSubscribe) {
+        await onSubscribe(trimmedEmail);
+        setEmail('');
+        setConsent(false);
+        setFeedback({
+          type: 'success',
+          message: 'Thank you. You are now subscribed to OLD-LETTERS dispatches.',
+        });
+      } else {
+        const res = await subscribeToNewsletter(trimmedEmail, true);
+        if (res.alreadySubscribed) {
+          setFeedback({
+            type: 'info',
+            message: res.message || 'You are already subscribed to OLD-LETTERS dispatches.',
+          });
+        } else {
+          setEmail('');
+          setConsent(false);
+          setFeedback({
+            type: 'success',
+            message: res.message || 'Welcome to OLD-LETTERS. You are now subscribed to our dispatches.',
+          });
+        }
+      }
+    } catch (err: any) {
+      const msg =
+        typeof err?.message === 'string' && err.message
+          ? err.message
+          : 'Unable to reach the postal server. Please check your connection and try again.';
+      setFeedback({ type: 'error', message: msg });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -249,7 +310,7 @@ export default function Footer23({
         {/* Left: logo + subscribe */}
         <motion.div
           variants={midItem}
-          className="flex flex-col gap-4 md:max-w-xs"
+          className="flex flex-col gap-3.5 md:max-w-xs"
         >
           {/* Brand */}
           <div className="flex items-center gap-1.5">
@@ -259,25 +320,85 @@ export default function Footer23({
             </span>
           </div>
 
+          {/* Postal Dispatches Explanation */}
+          <p className="text-[12px] text-zinc-600 font-serif leading-relaxed">
+            Periodic dispatches of slow correspondence, seasonal stationery releases, and postal essays. No spam, ever.
+          </p>
+
           {/* Subscribe form */}
-          <form onSubmit={handleSubmit} className="flex w-full max-w-xs gap-0">
-            <label htmlFor="footer23-email" className="sr-only">
-              Email address
+          <form onSubmit={handleSubmit} className="flex flex-col w-full max-w-xs gap-2" noValidate={false}>
+            <div className="flex w-full gap-0">
+              <label htmlFor="footer23-email" className="sr-only">
+                Email address for postal dispatches
+              </label>
+              <input
+                id="footer23-email"
+                name="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={emailPlaceholder}
+                required
+                disabled={isSubmitting}
+                aria-label="Email address for dispatch updates"
+                className="h-9 w-full border-2 border-zinc-300 bg-white px-3 text-[0.8125rem] text-zinc-900 placeholder:text-zinc-400 focus:border-teal-900 focus:outline-none disabled:bg-stone-100 disabled:cursor-not-allowed"
+              />
+              <motion.button
+                type="submit"
+                disabled={isSubmitting}
+                aria-label={subscribeLabel}
+                className="group mt-0 h-9 cursor-pointer border-2 border-l-0 border-teal-900 bg-teal-900 px-3.5 text-sm font-normal text-white transition-[background-color] hover:bg-teal-800 active:scale-95 disabled:bg-teal-950/60 disabled:cursor-not-allowed flex items-center justify-center min-w-[84px]"
+              >
+                {isSubmitting ? (
+                  <span className="inline-flex items-center gap-1 font-mono text-xs">
+                    <Loader2 className="size-3.5 animate-spin" />
+                  </span>
+                ) : (
+                  <span>{subscribeLabel}</span>
+                )}
+              </motion.button>
+            </div>
+
+            {/* Explicit Consent Checkbox */}
+            <label className="flex items-start gap-2 cursor-pointer text-[11px] text-zinc-600 select-none">
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
+                required
+                disabled={isSubmitting}
+                className="mt-0.5 accent-teal-900 size-3.5 rounded-none border-zinc-300 cursor-pointer shrink-0"
+              />
+              <span className="leading-tight font-sans">
+                I agree to receive occasional OLD-LETTERS dispatches. You can unsubscribe at any time.
+              </span>
             </label>
-            <input
-              id="footer23-email"
-              name="email"
-              type="email"
-              placeholder={emailPlaceholder}
-              required
-              className="h-9 w-full border-2 border-zinc-300 bg-white px-3 text-[0.8125rem] text-zinc-900 placeholder:text-zinc-400 focus:border-teal-900 focus:outline-none"
-            />
-            <motion.button
-              type="submit"
-              className="group mt-0 h-9 cursor-pointer border-2 border-l-0 border-teal-900 bg-teal-900 px-3 text-sm font-normal text-white transition-[background-color] hover:bg-teal-800 active:scale-95"
-            >
-              {subscribeLabel}
-            </motion.button>
+
+            {/* Accessible Feedback message */}
+            {feedback && (
+              <div
+                role="status"
+                aria-live="polite"
+                className={`text-[11px] p-2 border rounded-none font-sans leading-relaxed ${
+                  feedback.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                    : feedback.type === 'info'
+                    ? 'bg-amber-50 text-amber-900 border-amber-200'
+                    : 'bg-rose-50 text-rose-900 border-rose-200'
+                }`}
+              >
+                <div className="flex items-start gap-1.5">
+                  {feedback.type === 'success' ? (
+                    <Check className="size-3.5 text-emerald-700 shrink-0 mt-0.5" />
+                  ) : feedback.type === 'info' ? (
+                    <AlertCircle className="size-3.5 text-amber-700 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="size-3.5 text-rose-700 shrink-0 mt-0.5" />
+                  )}
+                  <span>{feedback.message}</span>
+                </div>
+              </div>
+            )}
           </form>
 
           {/* Correspondence Office Mailroom Contact */}

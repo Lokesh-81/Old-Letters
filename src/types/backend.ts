@@ -195,3 +195,39 @@ export interface BureauPaymentItem {
   createdAt: string;
   updatedAt?: string;
 }
+
+// Newsletter Subscription Schemas
+export const NewsletterSubscribeSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, 'Email address is required')
+    .max(254, 'Email address cannot exceed 254 characters')
+    .email('Please enter a valid email address'),
+  consent: z.literal(true, {
+    message: 'Explicit consent is required to receive OLD-LETTERS dispatches',
+  }),
+});
+
+export type NewsletterSubscribeInput = z.infer<typeof NewsletterSubscribeSchema>;
+
+export const NewsletterUnsubscribeSchema = z.object({
+  email: z.string().trim().email('Valid email address required'),
+  token: z.string().trim().min(8, 'Valid unsubscribe token required'),
+});
+
+export type NewsletterUnsubscribeInput = z.infer<typeof NewsletterUnsubscribeSchema>;
+
+export interface NewsletterSubscriptionResponse {
+  success: boolean;
+  message: string;
+  alreadySubscribed?: boolean;
+  resubscribed?: boolean;
+}
+
+export interface NewsletterUnsubscribeResponse {
+  success: boolean;
+  message: string;
+  alreadyUnsubscribed?: boolean;
+}
+

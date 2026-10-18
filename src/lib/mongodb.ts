@@ -212,6 +212,20 @@ export interface AuditLogDoc extends Document {
   metadata?: any;
 }
 
+export interface SubscriberDoc extends Document {
+  _id: ObjectId;
+  email: string;
+  status: 'SUBSCRIBED' | 'UNSUBSCRIBED';
+  consentGiven: boolean;
+  consentAt: Date;
+  ipHash?: string;
+  unsubscribeToken: string;
+  createdAt: Date;
+  updatedAt: Date;
+  unsubscribedAt?: Date;
+  resubscribedAt?: Date;
+}
+
 // Global cached client connection across serverless warm invocations
 declare global {
   // eslint-disable-next-line no-var
@@ -551,6 +565,12 @@ export async function setupDatabaseIndexes(): Promise<void> {
     // 9. letterTemplates indexes
     const letterTemplates = db.collection('letterTemplates');
     await letterTemplates.createIndex({ slug: 1 }, { unique: true, sparse: true });
+
+    // 10. subscribers indexes
+    const subscribers = db.collection('subscribers');
+    await subscribers.createIndex({ email: 1 }, { unique: true });
+    await subscribers.createIndex({ unsubscribeToken: 1 }, { unique: true, sparse: true });
+    await subscribers.createIndex({ status: 1 });
 
     console.log('[OLD-LETTERS MongoDB] Collections & Indexes established.');
   } catch (err) {

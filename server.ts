@@ -24,6 +24,8 @@ import {
   sendPaymentSubmittedSenderEmail,
   sendPaymentApprovedEmail,
   sendPaymentIssueEmail,
+  sendNewsletterWelcomeEmail,
+  sendNewsletterUnsubscribedEmail,
 } from './src/lib/email';
 import {
   CreateLetterSchema,
@@ -32,6 +34,8 @@ import {
   RecipientVerifySchema,
   CURRENT_TERMS_VERSION,
   CURRENT_PRIVACY_VERSION,
+  NewsletterSubscribeSchema,
+  NewsletterUnsubscribeSchema,
 } from './src/types/backend';
 import {
   getDb,
@@ -41,6 +45,7 @@ import {
   ObjectId,
   LetterDoc,
   UserDoc,
+  SubscriberDoc,
   DeliveryTokenDoc,
   OtpCodeDoc,
   PaymentDoc,
@@ -655,6 +660,273 @@ app.get('/api/config/payment', (req, res) => {
     upiDisplayName: process.env.UPI_DISPLAY_NAME || 'OLD-LETTERS CORRESPONDENCE',
     paymentQrUrl: process.env.PAYMENT_QR_URL || '/assets/upi-qr.png',
   });
+});
+
+// ====================================================================
+// NEWSLETTER & DISPATCH SUBSCRIPTION ROUTES
+// ====================================================================
+
+// Fallback in-memory subscribers store when MongoDB Atlas connection is not configured
+const inMemorySubscribers = new Map<string, any>();
+
+async function findSubscriberDoc(email: string): Promise<any | null> {
+  try {
+    const db = await getDb();
+    return await db.collection<SubscriberDoc>('subscribers').findOne({ email });
+  } catch {
+    return inMemorySubscribers.get(email) || null;
+  }
+}
+
+async function insertSubscriberDoc(doc: any): Promise<void> {
+  try {
+    const db = await getDb();
+    await db.collection<SubscriberDoc>('subscribers').insertOne(doc);
+  } catch {
+    inMemorySubscribers.set(doc.email, doc);
+  }
+}
+
+async function updateSubscriberDoc(email: string, updateFields: Record<string, any>): Promise<void> {
+  try {
+    const db = await getDb();
+    await db.collection<SubscriberDoc>('subscribers').updateOne(
+      { email },
+      { $set: updateFields }
+    );
+  } catch {
+    const existing = inMemorySubscribers.get(email);
+    if (existing) {
+      inMemorySubscribers.set(email, { ...existing, ...updateFields });
+    }
+  }
+}
+
+// 1. Subscribe to Postal Dispatches
+app.post(['/api/newsletter/subscribe', '/api/subscribe'], async (req, res) => {
+  const ip = getClientIp(req);
+  const allowed = await checkDistributedRateLimit(req, res, `newsletter-sub:${ip}`, 5, 10 * 60 * 1000);
+  if (!allowed) {
+    return res.status(429).json({
+      error: 'Too many subscription attempts from this network. Please wait a few moments before trying again.',
+    });
+  }
+
+  const parseResult = NewsletterSubscribeSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    const errorMsg =
+      (parseResult.error as any).issues?.map((e: any) => e.message).join(', ') ||
+      (parseResult.error as any).errors?.[0]?.message ||
+      'Invalid subscription details provided.';
+    return res.status(400).json({ error: errorMsg });
+  }
+
+  const normalizedEmail = parseResult.data.email.toLowerCase().trim();
+  const ipHash = crypto.createHash('sha256').update(ip + (process.env.SESSION_SECRET || 'salt')).digest('hex');
+
+  try {
+    const existing = await findSubscriberDoc(normalizedEmail);
+
+    if (existing && existing.status === 'SUBSCRIBED') {
+      return res.status(200).json({
+        success: true,
+        alreadySubscribed: true,
+        message: 'You are already subscribed to OLD-LETTERS dispatches. Thank you for your continued readership!',
+      });
+    }
+
+    const unsubscribeToken = crypto.randomBytes(24).toString('hex');
+    const unsubscribeUrl = `${APP_URL}/unsubscribe?token=${unsubscribeToken}&email=${encodeURIComponent(normalizedEmail)}`;
+
+    if (existing && existing.status === 'UNSUBSCRIBED') {
+      await updateSubscriberDoc(normalizedEmail, {
+        status: 'SUBSCRIBED',
+        consentGiven: true,
+        consentAt: new Date(),
+        resubscribedAt: new Date(),
+        unsubscribeToken,
+        ipHash,
+        updatedAt: new Date(),
+      });
+
+      sendNewsletterWelcomeEmail({
+        email: normalizedEmail,
+        unsubscribeUrl,
+      }).catch((err) => console.error('[Newsletter] Welcome email error:', err));
+
+      return res.status(200).json({
+        success: true,
+        alreadySubscribed: false,
+        resubscribed: true,
+        message: 'Welcome back! Your subscription to OLD-LETTERS dispatches has been restored.',
+        ...(process.env.NODE_ENV !== 'production' ? { devUnsubscribeToken: unsubscribeToken } : {}),
+      });
+    }
+
+    const newDoc: Omit<SubscriberDoc, '_id'> = {
+      email: normalizedEmail,
+      status: 'SUBSCRIBED',
+      consentGiven: true,
+      consentAt: new Date(),
+      ipHash,
+      unsubscribeToken,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    await insertSubscriberDoc(newDoc);
+
+    sendNewsletterWelcomeEmail({
+      email: normalizedEmail,
+      unsubscribeUrl,
+    }).catch((err) => console.error('[Newsletter] Welcome email error:', err));
+
+    return res.status(201).json({
+      success: true,
+      alreadySubscribed: false,
+      message: 'Welcome to OLD-LETTERS. You are now subscribed to our dispatches.',
+      ...(process.env.NODE_ENV !== 'production' ? { devUnsubscribeToken: unsubscribeToken } : {}),
+    });
+  } catch (err: any) {
+    console.error('[Newsletter] Subscription error:', err);
+    return res.status(500).json({
+      error: 'An internal error occurred while processing your subscription. Please try again.',
+    });
+  }
+});
+
+// 2. Unsubscribe from Postal Dispatches (POST)
+app.post(['/api/newsletter/unsubscribe', '/api/unsubscribe'], async (req, res) => {
+  const ip = getClientIp(req);
+  const allowed = await checkDistributedRateLimit(req, res, `newsletter-unsub:${ip}`, 10, 10 * 60 * 1000);
+  if (!allowed) {
+    return res.status(429).json({
+      error: 'Too many unsubscribe attempts from this network. Please wait a few moments before trying again.',
+    });
+  }
+
+  const parseResult = NewsletterUnsubscribeSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    const errorMsg =
+      (parseResult.error as any).issues?.map((e: any) => e.message).join(', ') ||
+      (parseResult.error as any).errors?.[0]?.message ||
+      'Valid email and unsubscribe token are required.';
+    return res.status(400).json({ error: errorMsg });
+  }
+
+  const normalizedEmail = parseResult.data.email.toLowerCase().trim();
+  const token = parseResult.data.token.trim();
+
+  try {
+    const subscriber = await findSubscriberDoc(normalizedEmail);
+
+    if (!subscriber || subscriber.unsubscribeToken !== token) {
+      return res.status(400).json({
+        error: 'Invalid or expired unsubscribe link. Please check your link or contact the Mailroom.',
+      });
+    }
+
+    if (subscriber.status === 'UNSUBSCRIBED') {
+      return res.status(200).json({
+        success: true,
+        alreadyUnsubscribed: true,
+        message: 'You have already been unsubscribed from OLD-LETTERS dispatches.',
+      });
+    }
+
+    await updateSubscriberDoc(normalizedEmail, {
+      status: 'UNSUBSCRIBED',
+      unsubscribedAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    sendNewsletterUnsubscribedEmail({
+      email: normalizedEmail,
+    }).catch((err) => console.error('[Newsletter] Unsubscribe email notice error:', err));
+
+    return res.status(200).json({
+      success: true,
+      message: 'You have been successfully unsubscribed from OLD-LETTERS dispatches.',
+    });
+  } catch (err: any) {
+    console.error('[Newsletter] Unsubscribe error:', err);
+    return res.status(500).json({
+      error: 'An internal error occurred while processing your unsubscribe request. Please try again.',
+    });
+  }
+});
+
+// 3. Unsubscribe from Postal Dispatches (GET - Direct email click link)
+app.get(['/api/newsletter/unsubscribe', '/api/unsubscribe'], async (req, res) => {
+  const email = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
+  const token = typeof req.query.token === 'string' ? req.query.token.trim() : '';
+
+  const acceptsJson = req.headers.accept?.includes('application/json');
+
+  if (!email || !token) {
+    if (acceptsJson) {
+      return res.status(400).json({ error: 'Missing email or unsubscribe token.' });
+    }
+    return res.redirect(`${APP_URL}/unsubscribe?status=error&message=${encodeURIComponent('Missing email or unsubscribe token.')}`);
+  }
+
+  try {
+    const subscriber = await findSubscriberDoc(email);
+
+    if (!subscriber || subscriber.unsubscribeToken !== token) {
+      if (acceptsJson) {
+        return res.status(400).json({ error: 'Invalid or expired unsubscribe link.' });
+      }
+      return res.redirect(`${APP_URL}/unsubscribe?status=error&message=${encodeURIComponent('Invalid or expired unsubscribe link.')}`);
+    }
+
+    if (subscriber.status !== 'UNSUBSCRIBED') {
+      await updateSubscriberDoc(email, {
+        status: 'UNSUBSCRIBED',
+        unsubscribedAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      sendNewsletterUnsubscribedEmail({
+        email,
+      }).catch((err) => console.error('[Newsletter] Unsubscribe email error:', err));
+    }
+
+    if (acceptsJson) {
+      return res.status(200).json({
+        success: true,
+        message: 'You have been successfully unsubscribed from OLD-LETTERS dispatches.',
+      });
+    }
+
+    return res.redirect(`${APP_URL}/unsubscribe?status=success&email=${encodeURIComponent(email)}`);
+  } catch (err) {
+    if (acceptsJson) {
+      return res.status(500).json({ error: 'Internal server error while unsubscribing.' });
+    }
+    return res.redirect(`${APP_URL}/unsubscribe?status=error&message=${encodeURIComponent('A server error occurred while processing your request.')}`);
+  }
+});
+
+// 4. Newsletter Subscription Status (Public read check)
+app.get('/api/newsletter/status', async (req, res) => {
+  const email = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
+  if (!email) {
+    return res.status(400).json({ error: 'Email parameter required.' });
+  }
+
+  try {
+    const subscriber = await findSubscriberDoc(email);
+    if (!subscriber) {
+      return res.json({ subscribed: false, status: 'NOT_FOUND' });
+    }
+    return res.json({
+      subscribed: subscriber.status === 'SUBSCRIBED',
+      status: subscriber.status,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to retrieve status.' });
+  }
 });
 
 // ====================================================================
@@ -5411,6 +5683,7 @@ async function startServer() {
       '/recipient',
       '/login',
       '/signup',
+      '/unsubscribe',
     ]);
 
     app.get('*', (req, res) => {
