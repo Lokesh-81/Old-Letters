@@ -367,23 +367,18 @@ export async function getMongoClient(): Promise<MongoClient> {
   // Validate presence and validity of MONGODB_URI
   validateMongoUri(uri, isProd);
 
-  // If already connected and cached, verify vitality with ping command
+  // Reuse the warm serverless connection without issuing a MongoDB ping on
+  // every API request. The driver's pool detects broken sockets when operations
+  // run; pinging here adds an extra round trip and database work per invocation.
   if (globalThis._mongoClient) {
-    try {
-      await globalThis._mongoClient.db(process.env.MONGODB_DB_NAME || 'oldletters').command({ ping: 1 });
-      return globalThis._mongoClient;
-    } catch {
-      console.warn('[OLD-LETTERS MongoDB] Stale connection detected, reconnecting...');
-      globalThis._mongoClient = undefined;
-      globalThis._mongoClientPromise = undefined;
-    }
+    return globalThis._mongoClient;
   }
 
   // Reuse existing in-flight connection promise or initiate a new one
   if (!globalThis._mongoClientPromise) {
     const client = new MongoClient(uri, {
-      maxPoolSize: 10,
-      minPoolSize: 1,
+      maxPoolSize: 5,
+      minPoolSize: 0,
       serverSelectionTimeoutMS: 8000,
       connectTimeoutMS: 10000,
       socketTimeoutMS: 45000,

@@ -3882,7 +3882,34 @@ export async function runDeliveryScheduler(db: any) {
     deliveredLetters: [] as any[],
   };
 
-  const activeScheduledLetters = await lettersColl.find({ status: 'SCHEDULED' }).toArray();
+  // Only inspect letters that can have a lifecycle email due in this tick.
+  // This avoids loading every scheduled letter on every 15-minute cron invocation.
+  const halfwayCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const preArrivalCutoff = new Date(now.getTime() + 30 * 60 * 1000);
+  const activeScheduledLetters = await lettersColl.find({
+    status: 'SCHEDULED',
+    $or: [
+      { deliveryDate: { $gt: now, $lte: preArrivalCutoff } },
+      { deliveryDate: { $gt: preArrivalCutoff }, postedAt: { $lte: halfwayCutoff } },
+      {
+        deliveryDate: { $gt: preArrivalCutoff },
+        postedAt: { $exists: false },
+        createdAt: { $lte: halfwayCutoff },
+      },
+      { deliveryDate: { $exists: false }, scheduledDeliveryAt: { $gt: now, $lte: preArrivalCutoff } },
+      {
+        deliveryDate: { $exists: false },
+        scheduledDeliveryAt: { $gt: preArrivalCutoff },
+        postedAt: { $lte: halfwayCutoff },
+      },
+      {
+        deliveryDate: { $exists: false },
+        scheduledDeliveryAt: { $gt: preArrivalCutoff },
+        postedAt: { $exists: false },
+        createdAt: { $lte: halfwayCutoff },
+      },
+    ],
+  }).toArray();
 
   for (const letter of activeScheduledLetters) {
     const { date: deliveryDate, ms: deliveryTimeMs } = resolveDeliveryDate(letter);
@@ -4085,8 +4112,22 @@ export async function runDeliveryScheduler(db: any) {
   // ----------------------------------------------------
   // EMAIL 5 — EXACT ARRIVAL (Arrival / Opening Eligible)
   // ----------------------------------------------------
+  // Query due records in MongoDB instead of loading every active letter and
+  // filtering the full collection in application memory.
   const candidateScheduledLetters = await lettersColl.find({
     status: { $in: ['SCHEDULED', 'IN TRANSIT', 'IN_TRANSIT'] },
+    $or: [
+      { deliveryDate: { $lte: now } },
+      {
+        deliveryDate: { $exists: false },
+        scheduledDeliveryAt: { $lte: now },
+      },
+      {
+        deliveryDate: { $exists: false },
+        scheduledDeliveryAt: { $exists: false },
+        createdAt: { $lte: now },
+      },
+    ],
   }).toArray();
 
   const dueLetters = candidateScheduledLetters.filter((letter: any) => {
